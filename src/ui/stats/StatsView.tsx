@@ -33,7 +33,7 @@ export function StatsView() {
     >
       <div
         style={{
-          borderBottom: '1px solid #e5e7eb',
+
           background: 'white',
           borderRadius: '12px 12px 0 0',
           padding: '0 16px',

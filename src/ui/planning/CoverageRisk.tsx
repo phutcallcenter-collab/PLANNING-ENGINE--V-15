@@ -1,6 +1,7 @@
 'use client'
 
-import { DailyCoverageDeficit, ShiftType } from "@/domain/planning/coverageDeficit";
+import { DailyCoverageDeficit } from "@/domain/planning/coverageDeficit"
+import { ShiftType } from "@/domain/calendar/types"
 import React from "react";
 import { Tooltip } from "../components/Tooltip";
 

@@ -1,12 +1,11 @@
-// src/ui/theme/cellTheme.ts
 import { VisualVariant } from '@/application/ui-adapters/cellState'
-import { XCircle, Sun } from 'lucide-react'
+import { XCircle, Sun, LucideIcon } from 'lucide-react'
 
 export interface CellTheme {
     bg: string
     fg: string
     border?: string
-    icon?: React.ComponentType<{ size?: number }>
+    icon?: LucideIcon
 }
 
 /**

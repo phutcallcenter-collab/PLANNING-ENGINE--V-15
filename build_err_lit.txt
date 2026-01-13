@@ -1,0 +1,66 @@
+﻿
+> control-de-puntos@0.1.0 build
+> next build
+
+  Ôû▓ Next.js 14.2.35
+
+   Creating an optimized production build ...
+ Ô£ô Compiled successfully
+   Linting and checking validity of types ...
+node.exe : Failed to 
+compile.
+En línea: 1 Carácter: 1
++ & "C:\Program 
+Files\nodejs/node.exe" 
+"C:\Program 
+Files\nodejs/node_mo 
+...
++ ~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~
+~~
+    + CategoryInfo     
+         : NotSpecifi  
+  ed: (Failed to com   
+ pile.:String) [],     
+RemoteException
+    + FullyQualifiedEr 
+   rorId : NativeComm  
+  andError
+ 
+
+./src/ui/stats/StatsTab
+s.tsx:39:9
+Type error: An object 
+literal cannot have 
+multiple properties 
+with the same name.
+
+[0m [90m 37 |[39m   
+      
+padding[33m:[39m 
+[32m'0 16px'[39m[33m
+,[39m[0m
+[0m [90m 38 |[39m   
+      
+border[33m:[39m 
+[32m'1px solid #e5e7eb
+'[39m[33m,[39m[0m
+[0m[31m[1m>[22m[39
+m[90m 39 |[39m       
+  borderBottom[33m:[3
+9m [32m'none'[39m[33
+m,[39m[0m
+[0m [90m    |[39m   
+      [31m[1m^[22m[
+39m[0m
+[0m [90m 40 |[39m   
+    }}[0m
+[0m [90m 41 |[39m   
+  [33m>[39m[0m
+[0m [90m 42 |[39m   
+    {tabs[33m.[39mmap
+(tab [33m=>[39m ([0m
+Next.js build worker 
+exited with code: 1 
+and signal: null

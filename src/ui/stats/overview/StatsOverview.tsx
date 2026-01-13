@@ -79,7 +79,7 @@ const OverviewHeader = ({
 
 export function StatsOverview() {
   const [currentDate, setCurrentDate] = useState(new Date())
-  
+
   const { incidents, representatives, swaps, calendar, coverageRules, weeklyPlans: allWeeklyPlans, allCalendarDaysForRelevantMonths } = useAppStore(state => ({
     incidents: state.incidents,
     representatives: state.representatives,
@@ -89,29 +89,29 @@ export function StatsOverview() {
     weeklyPlans: state.historyEvents.filter(e => e.category === 'PLANNING').map(e => e.metadata?.weeklyPlan), // This needs a proper source
     allCalendarDaysForRelevantMonths: state.allCalendarDaysForRelevantMonths,
   }))
-  
+
   const monthISO = useMemo(() => format(currentDate, 'yyyy-MM'), [currentDate])
   const monthLabel = useMemo(() => format(currentDate, 'MMMM yyyy', { locale: es }), [currentDate])
-  
+
   // TEMPORARY & HONEST LIMITATION:
   // StatsOverview currently aggregates from available weekly plans in the store.
   // A robust solution requires a historical `getWeeklyPlansForRange` from a persisted source.
   // This component will NOT reconstruct or infer plans.
   const weeklyPlansForMonth = useMemo(() => {
     // This is a placeholder for a real historical query
-    return allWeeklyPlans.filter(p => p && p.weekStart.startsWith(monthISO)) as WeeklyPlan[]
+    return allWeeklyPlans.filter(p => p?.weekStart?.startsWith(monthISO)) as WeeklyPlan[]
   }, [allWeeklyPlans, monthISO]);
 
 
   const stats = useMemo(() => {
     return getStatsOverview({
-        month: monthISO,
-        incidents,
-        representatives,
-        swaps,
-        weeklyPlans: weeklyPlansForMonth,
-        monthDays: allCalendarDaysForRelevantMonths.filter(d => d.date.startsWith(monthISO)),
-        coverageRules
+      month: monthISO,
+      incidents,
+      representatives,
+      swaps,
+      weeklyPlans: weeklyPlansForMonth,
+      monthDays: allCalendarDaysForRelevantMonths.filter(d => d.date.startsWith(monthISO)),
+      coverageRules
     });
   }, [monthISO, incidents, representatives, swaps, weeklyPlansForMonth, allCalendarDaysForRelevantMonths, coverageRules]);
 
@@ -123,13 +123,13 @@ export function StatsOverview() {
   const tooltips = {
     totalIncidents: "Suma de todas las incidencias registradas durante el mes (errores, tardanzas y ausencias).",
     peopleAtRisk: (
-      <div style={{maxWidth: '250px', lineHeight: 1.4}}>
+      <div style={{ maxWidth: '250px', lineHeight: 1.4 }}>
         Cantidad de personas que superaron los límites definidos:
-        <ul style={{paddingLeft: '20px', margin: '4px 0 0'}}>
-            <li>≥ 3 tardanzas</li>
-            <li>≥ 2 errores</li>
-            <li>≥ 2 ausencias</li>
-            <li>o ≥ 10 puntos acumulados</li>
+        <ul style={{ paddingLeft: '20px', margin: '4px 0 0' }}>
+          <li>≥ 3 tardanzas</li>
+          <li>≥ 2 errores</li>
+          <li>≥ 2 ausencias</li>
+          <li>o ≥ 10 puntos acumulados</li>
         </ul>
       </div>
     ),
@@ -151,9 +151,9 @@ export function StatsOverview() {
           gap: '1rem',
         }}
       >
-        <StatCard 
-          label="Total Incidencias" 
-          value={stats.totalIncidents} 
+        <StatCard
+          label="Total Incidencias"
+          value={stats.totalIncidents}
           Icon={BarChart}
           variant={stats.totalIncidents > 0 ? 'warning' : 'neutral'}
           tooltipContent={tooltips.totalIncidents}
@@ -180,7 +180,7 @@ export function StatsOverview() {
           tooltipContent={tooltips.totalSwaps}
         />
       </div>
-       <div
+      <div
         style={{
           marginTop: '16px',
           padding: '24px',
@@ -190,10 +190,10 @@ export function StatsOverview() {
           border: '1px solid #e5e7eb',
           color: '#4b5563',
         }}
-       >
-        <h3 style={{marginTop: 0, fontWeight: 600}}>Más estadísticas próximamente</h3>
-        <p style={{margin: 0, fontSize: '14px'}}>Las vistas de Carga de Trabajo y Reportes detallados están en desarrollo.</p>
-       </div>
+      >
+        <h3 style={{ marginTop: 0, fontWeight: 600 }}>Más estadísticas próximamente</h3>
+        <p style={{ margin: 0, fontSize: '14px' }}>Las vistas de Carga de Trabajo y Reportes detallados están en desarrollo.</p>
+      </div>
     </div>
   )
 }

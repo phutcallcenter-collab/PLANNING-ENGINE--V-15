@@ -14,9 +14,12 @@ import {
 } from 'lucide-react'
 import {
   validateSwapOperation,
-  EffectiveSwapContext,
+  SwapValidationContext,
 } from '@/domain/swaps/validateSwapOperation'
-import { buildDailyEffectiveContext } from '@/domain/swaps/buildDailyEffectiveContext'
+import {
+  buildDailyEffectiveContext,
+  EffectiveSwapContext,
+} from '@/domain/swaps/buildDailyEffectiveContext'
 import { repName } from '@/application/presenters/humanize'
 
 interface SwapModalProps {
@@ -101,7 +104,7 @@ export function SwapModal({
 
   const validationError = useMemo(() => {
     if (!type || !date) return null
-    return validateSwapOperation(type, fromId, toId, effectiveShift, validationContext)
+    return validateSwapOperation(type, fromId, toId, effectiveShift, validationContext as unknown as SwapValidationContext)
   }, [type, fromId, toId, date, effectiveShift, validationContext])
 
   const canSubmit = useMemo(() => {

@@ -115,10 +115,9 @@ export function CoverageRiskView() {
       .filter(
         e =>
           e.category === 'PLANNING' &&
-          e.metadata?.weeklyPlan &&
-          e.metadata.weeklyPlan.weekStart.startsWith(monthISO)
+          (e.metadata as any)?.weeklyPlan?.weekStart?.startsWith(monthISO)
       )
-      .map(e => e.metadata.weeklyPlan)
+      .map(e => (e.metadata as any).weeklyPlan)
   }, [historyEvents, monthISO])
 
   const riskSummary = useMemo(() => {

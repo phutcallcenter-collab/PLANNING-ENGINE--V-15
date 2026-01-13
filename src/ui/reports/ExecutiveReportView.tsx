@@ -20,8 +20,8 @@ export default function ExecutiveReportView({
 
   return (
     <div style={{ padding: 24, fontFamily: 'sans-serif', background: '#f9fafb' }}>
-      <h1 style={{color: '#111827'}}>Reporte Ejecutivo</h1>
-      <p style={{color: '#374151', borderBottom: '1px solid #e5e7eb', paddingBottom: 16}}>
+      <h1 style={{ color: '#111827' }}>Reporte Ejecutivo</h1>
+      <p style={{ color: '#374151', borderBottom: '1px solid #e5e7eb', paddingBottom: 16 }}>
         Periodo: <strong>{report.period.from}</strong> → <strong>{report.period.to}</strong>
       </p>
 
@@ -29,25 +29,25 @@ export default function ExecutiveReportView({
 
         <div>
           <section style={{ marginBottom: 24 }}>
-            <h3 style={{color: '#1f2937'}}>Resumen Global de Incidencias</h3>
-            <pre style={{ background: 'white', padding: 16, borderRadius: 8, border: '1px solid #e5e7eb' }}>{JSON.stringify(report.global, null, 2)}</pre>
+            <h3 style={{ color: '#1f2937' }}>Resumen Global de Incidencias</h3>
+            <pre style={{ background: 'white', padding: 16, borderRadius: 8, border: '1px solid #e5e7eb' }}>{JSON.stringify(report.kpis, null, 2)}</pre>
           </section>
 
           <section>
-            <h3 style={{color: '#1f2937'}}>Candidatos Potenciales (0-1 Incidencias Punitivas)</h3>
+            <h3 style={{ color: '#1f2937' }}>Candidatos Potenciales (0-1 Incidencias Punitivas)</h3>
             <pre style={{ background: 'white', padding: 16, borderRadius: 8, border: '1px solid #e5e7eb' }}>{JSON.stringify(report.candidates, null, 2)}</pre>
           </section>
         </div>
 
         <div>
           <section style={{ marginBottom: 24 }}>
-            <h3 style={{color: '#1f2937'}}>Personal que Requiere Atención (2-4 Incidencias)</h3>
-            <pre style={{ background: 'white', padding: 16, borderRadius: 8, border: '1px solid #e5e7eb' }}>{JSON.stringify(report.people.needsAttention, null, 2)}</pre>
+            <h3 style={{ color: '#1f2937' }}>Personal que Requiere Atención (2-4 Incidencias)</h3>
+            <pre style={{ background: 'white', padding: 16, borderRadius: 8, border: '1px solid #e5e7eb' }}>{JSON.stringify(report.needsAttention.filter(p => p.incidents >= 2 && p.incidents <= 4), null, 2)}</pre>
           </section>
-          
+
           <section>
-            <h3 style={{color: '#1f2937'}}>Personal con Incidencias Recurrentes (5+ Incidencias)</h3>
-            <pre style={{ background: 'white', padding: 16, borderRadius: 8, border: '1px solid #e5e7eb' }}>{JSON.stringify(report.people.recurrent, null, 2)}</pre>
+            <h3 style={{ color: '#1f2937' }}>Personal con Incidencias Recurrentes (5+ Incidencias)</h3>
+            <pre style={{ background: 'white', padding: 16, borderRadius: 8, border: '1px solid #e5e7eb' }}>{JSON.stringify(report.needsAttention.filter(p => p.incidents >= 5), null, 2)}</pre>
           </section>
         </div>
       </div>

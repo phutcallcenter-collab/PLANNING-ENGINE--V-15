@@ -14,6 +14,7 @@ const categoryStyles: Record<
   CALENDAR: { bg: '#fef3c7', text: '#92400e' },
   PLANNING: { bg: '#e0e7ff', text: '#312e81' },
   SYSTEM: { bg: '#f3f4f6', text: '#4b5563' },
+  SETTINGS: { bg: '#f3f4f6', text: '#374151' },
 }
 
 const HistoryEventCard = ({ event }: { event: HistoryEvent }) => {
