@@ -548,24 +548,26 @@ export function PlanningSection() {
           {weeklyPlan ? (
             <div
               style={{
-                display: 'grid',
-                gridTemplateColumns: '1fr 340px',
+                display: 'flex',
+                overflowX: 'hidden', // Containment
                 gap: '40px',
                 alignItems: 'start',
               }}
             >
-              <PlanView
-                weeklyPlan={weeklyPlan}
-                weekDays={weekDays}
-                agents={agentsToRender}
-                activeShift={activeShift}
-                assignmentsMap={assignmentsMap}
-                onCellClick={(repId, date) => togglePlanOverride(repId, date)}
-                onCellContextMenu={handleCellContextMenu}
-                onEditDay={setEditingDay}
-              />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <PlanView
+                  weeklyPlan={weeklyPlan}
+                  weekDays={weekDays}
+                  agents={agentsToRender}
+                  activeShift={activeShift}
+                  assignmentsMap={assignmentsMap}
+                  onCellClick={(repId, date) => togglePlanOverride(repId, date)}
+                  onCellContextMenu={handleCellContextMenu}
+                  onEditDay={setEditingDay}
+                />
+              </div>
 
-              <aside style={{ position: 'sticky', top: '20px' }}>
+              <aside style={{ position: 'sticky', top: '20px', width: '340px', flexShrink: 0 }}>
                 <div
                   style={{
                     display: 'flex',
