@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { useAppStore } from '@/store/useAppStore'
 import { useEditMode } from '@/hooks/useEditMode'
 import { HolidayManagement } from './HolidayManagement'
@@ -19,6 +19,10 @@ import { useToast } from '../components/ToastProvider'
 import { downloadJson } from '@/application/backup/export'
 import { parseBackup } from '@/application/backup/import'
 import { BackupPayload } from '@/application/backup/types'
+import {
+    getLastBackupTimestamp,
+    getLastRestoreTimestamp,
+} from '@/persistence/localStorage'
 
 export function SettingsView() {
   const [activeSection, setActiveSection] = useState<
@@ -34,6 +38,17 @@ export function SettingsView() {
       importState: s.importState,
     })
   )
+
+  // State to hold the timestamps
+  const [lastBackup, setLastBackup] = useState<string | null>(null)
+  const [lastRestore, setLastRestore] = useState<string | null>(null)
+
+  // Effect to read timestamps from localStorage on component mount
+  useEffect(() => {
+    setLastBackup(getLastBackupTimestamp())
+    setLastRestore(getLastRestoreTimestamp())
+  }, [])
+
 
   const handleReset = async () => {
     const confirmed = await showConfirm({
@@ -71,12 +86,14 @@ export function SettingsView() {
     const data = exportState()
     downloadJson(
       `planning-backup-${new Date().toISOString().split('T')[0]}.json`,
-      {
-        ...data,
-        exportedAt: new Date().toISOString(),
-        appVersion: data.version,
-      }
+      data
     )
+    setLastBackup(new Date().toISOString())
+    showToast({
+      title: 'Éxito',
+      message: 'Respaldo generado y descargado.',
+      type: 'success',
+    })
   }
 
   const handleImport = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -100,6 +117,7 @@ export function SettingsView() {
       const text = await file.text()
       const parsed = parseBackup(text)
       importState(parsed)
+      setLastRestore(new Date().toISOString())
       showToast({
         title: 'Éxito',
         message: 'Estado importado correctamente.',
@@ -118,6 +136,21 @@ export function SettingsView() {
       event.target.value = ''
     }
   }
+
+  const formatDate = (isoString: string | null) => {
+    if (!isoString) return 'Nunca';
+    try {
+      return new Date(isoString).toLocaleString('es-ES', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+      });
+    } catch {
+      return 'Fecha inválida';
+    }
+  };
 
   const tabStyle = (isActive: boolean): React.CSSProperties => ({
     padding: '10px 20px',
@@ -299,6 +332,15 @@ export function SettingsView() {
                 <Download size={16} />
                 Exportar Respaldo
               </button>
+            </div>
+            {/* Historial de Respaldo */}
+            <div style={{ marginTop: '16px', fontSize: '13px', color: '#6b7280', display: 'flex', flexDirection: 'column', gap: '8px', paddingTop: '12px', borderTop: '1px solid #f3f4f6' }}>
+                <div>
+                    <strong>Último respaldo:</strong> {formatDate(lastBackup)}
+                </div>
+                <div>
+                    <strong>Última restauración:</strong> {formatDate(lastRestore)}
+                </div>
             </div>
           </div>
 

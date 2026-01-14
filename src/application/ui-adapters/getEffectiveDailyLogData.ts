@@ -44,7 +44,7 @@ export function getEffectiveDailyLogData(
 
             switch (duty.role) {
                 case 'BASE':
-                    logStatus = duty.shouldWork ? 'WORKING' : 'OFF' // Should be WORKING if base
+                    logStatus = duty.shouldWork ? 'WORKING' : 'OFF'
                     break
                 case 'COVERING':
                     logStatus = 'COVERING'
@@ -53,7 +53,7 @@ export function getEffectiveDailyLogData(
                     logStatus = 'DOUBLE'
                     break
                 case 'SWAPPED_IN':
-                    logStatus = 'SWAPPED_IN' // Specific type of working
+                    logStatus = 'SWAPPED_IN'
                     break
                 case 'COVERED':
                     logStatus = 'COVERED'
@@ -62,13 +62,11 @@ export function getEffectiveDailyLogData(
                     logStatus = 'SWAPPED_OUT'
                     break
                 case 'NONE':
-                    // If base was working but now NONE, check reason
-                    // AUSENCIA means they should have worked but didn't show up
-                    // VACACIONES/LICENCIA are justified absences
                     if (duty.reason === 'AUSENCIA') {
                         logStatus = 'ABSENT'
                     } else if (duty.reason && ['VACACIONES', 'LICENCIA'].includes(duty.reason)) {
-                        logStatus = 'ABSENT'  // Justified absences are still absences
+                        // People on formal leave should be OFF, not ABSENT, for this view
+                        logStatus = 'OFF'
                     } else {
                         logStatus = 'OFF'
                     }

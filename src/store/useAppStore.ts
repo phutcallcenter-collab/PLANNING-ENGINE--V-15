@@ -19,6 +19,10 @@ import {
 import { createInitialState, createBaseSchedule } from '@/domain/state'
 import { loadState, saveState } from '@/persistence/storage'
 import {
+    setLastBackupTimestamp,
+    setLastRestoreTimestamp,
+} from '@/persistence/localStorage'
+import {
   getYear,
   getMonth,
   addDays,
@@ -163,7 +167,7 @@ export type AppState = PlanningBaseState & {
   executeUndo: (id: string) => void
 
   // Backup/Restore
-  exportState: () => PlanningBaseState
+  exportState: () => BackupPayload
   importState: (data: BackupPayload) => { success: boolean; message: string }
 }
 
@@ -317,7 +321,7 @@ export const useAppStore = create<AppState>()(
     },
 
     resetState: async keepFormalIncidents => {
-      const { showConfirm } = get()
+      const { showConfirm, addAuditEvent } = get()
       const confirmed = await showConfirm({
         title: '⚠️ ¿Reiniciar la planificación?',
         description:
@@ -327,6 +331,12 @@ export const useAppStore = create<AppState>()(
       })
 
       if (confirmed) {
+        addAuditEvent({
+          actor: { id: 'admin', name: 'Administrador' },
+          action: 'APP_STATE_RESET',
+          target: { entity: 'SYSTEM' },
+          context: { reason: 'Reinicio de estado desde el panel de ajustes.' },
+        })
         set(state => {
           const freshState = createInitialState()
           let incidentsToKeep: Incident[] = []
@@ -826,6 +836,15 @@ export const useAppStore = create<AppState>()(
       set({ vacationConfirmationState: null })
     },
     exportState: () => {
+      const now = new Date().toISOString()
+      const { addAuditEvent } = get();
+      addAuditEvent({
+        actor: { id: 'admin', name: 'Administrador' },
+        action: 'DATA_EXPORTED',
+        target: { entity: 'SYSTEM' },
+        context: { reason: `Exportación de estado completo desde el panel de ajustes en ${now}.` },
+      });
+      setLastBackupTimestamp(now)
       const {
         representatives,
         incidents,
@@ -839,18 +858,24 @@ export const useAppStore = create<AppState>()(
       } = get()
 
       return {
-        representatives,
-        incidents,
-        calendar,
-        coverageRules,
-        swaps,
-        specialSchedules,
-        historyEvents,
-        auditLog,
-        version,
+        ...{
+          representatives,
+          incidents,
+          calendar,
+          coverageRules,
+          swaps,
+          specialSchedules,
+          historyEvents,
+          auditLog,
+          version,
+        },
+        exportedAt: now,
+        appVersion: version,
       }
     },
     importState: (data: BackupPayload) => {
+      const now = new Date().toISOString()
+      const { addAuditEvent } = get();
       const safeState: PlanningBaseState = {
         ...createInitialState(),
         representatives: Array.isArray(data.representatives)
@@ -876,6 +901,14 @@ export const useAppStore = create<AppState>()(
           undoStack: [],
         })
       })
+
+      addAuditEvent({
+        actor: { id: 'admin', name: 'Administrador' },
+        action: 'DATA_IMPORTED',
+        target: { entity: 'SYSTEM' },
+        context: { reason: `Importación de estado desde archivo de respaldo en ${now}.` },
+      });
+      setLastRestoreTimestamp(now)
 
       get()._generateCalendarDays()
 

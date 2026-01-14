@@ -90,7 +90,7 @@ export function CoverageChart({
         }}
       >
         {dates.map(date => {
-          const { actual, required, status, reason } = data[date]
+          const { actual, required, status } = data[date]
 
           const barHeight = maxCoverage > 0 ? (actual / maxCoverage) * 100 : 0
           const isDeficit = status === 'DEFICIT'
@@ -104,20 +104,11 @@ export function CoverageChart({
           const tooltipContent = (
             <div>
               <div style={{ fontWeight: 600 }}>
-                Presentes: {actual} | Requerido: {required}
+                Presentes: {actual}
               </div>
-              {reason && (
-                <div
-                  style={{
-                    marginTop: 4,
-                    fontSize: 11,
-                    color: '#cbd5e1',
-                    maxWidth: 200,
-                  }}
-                >
-                  {reason}
-                </div>
-              )}
+              <div style={{ fontWeight: 600 }}>
+                Requeridos: {required}
+              </div>
             </div>
           )
 

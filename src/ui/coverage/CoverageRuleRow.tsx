@@ -46,8 +46,8 @@ export function CoverageRuleRow({
         border: '1px solid var(--border-subtle)',
       }}
     >
-      <div>
-        <div style={{ fontWeight: 600, color: 'var(--text-main)' }}>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontWeight: 600, color: 'var(--text-main)', wordBreak: 'break-word' }}>
           {rule.label || label}
         </div>
         <div style={{ fontSize: '14px', color: '#4b5563', marginTop: '2px' }}>
@@ -55,7 +55,7 @@ export function CoverageRuleRow({
           <strong style={{ color: 'var(--text-main)' }}>{rule.required}</strong> personas
         </div>
       </div>
-      <div style={{ display: 'flex', gap: '8px' }}>
+      <div style={{ display: 'flex', gap: '8px', flexShrink: 0, marginLeft: '16px' }}>
         <button
           onClick={onEdit}
           style={{
@@ -88,4 +88,3 @@ export function CoverageRuleRow({
     </div>
   )
 }
-
