@@ -31,4 +31,21 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
-node_modules
+
+# Build errors and debugging files
+build_*.txt
+current_*.txt
+error_*.txt
+latest_*.txt
+next_error.txt
+
+# Test output files (keep test source files)
+test_*.txt
+test_*.log
+full_suite_output.txt
+
+# Temporary fix scripts
+*.ps1
+
+# Modified marker
+.modified
