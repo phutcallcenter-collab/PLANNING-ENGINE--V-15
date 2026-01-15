@@ -11,6 +11,8 @@ interface ShiftSectionProps {
     onAddSchedule: (repId: string) => void
     addingScheduleFor: string | null
     advancedEditMode: boolean // 🔒 Controla si el drag está habilitado
+    managingMixedFor: string | null
+    onManageMixed: (repId: string | null) => void
 }
 
 export function ShiftSection({
@@ -19,7 +21,9 @@ export function ShiftSection({
     onEdit,
     onAddSchedule,
     addingScheduleFor,
-    advancedEditMode
+    advancedEditMode,
+    managingMixedFor,
+    onManageMixed
 }: ShiftSectionProps) {
     const reorderRepresentatives = useAppStore(s => s.reorderRepresentatives)
 
@@ -73,6 +77,8 @@ export function ShiftSection({
                                     onAddSchedule={onAddSchedule}
                                     addingScheduleFor={addingScheduleFor}
                                     advancedEditMode={advancedEditMode}
+                                    managingMixedFor={managingMixedFor}
+                                    onManageMixed={onManageMixed}
                                 />
                             ))}
                         </div>
@@ -88,6 +94,8 @@ export function ShiftSection({
                             onAddSchedule={onAddSchedule}
                             addingScheduleFor={addingScheduleFor}
                             advancedEditMode={advancedEditMode}
+                            managingMixedFor={managingMixedFor}
+                            onManageMixed={onManageMixed}
                         />
                     ))}
                 </div>

@@ -94,6 +94,7 @@ export function PlanningSection() {
     showMixedShiftConfirmModal,
     allCalendarDaysForRelevantMonths,
     pushUndo,
+    effectivePeriods,
   } = useAppStore(s => ({
     representatives: s.representatives ?? [],
     coverageRules: s.coverageRules,
@@ -110,6 +111,7 @@ export function PlanningSection() {
     swaps: s.swaps,
     allCalendarDaysForRelevantMonths: s.allCalendarDaysForRelevantMonths,
     pushUndo: s.pushUndo,
+    effectivePeriods: s.effectivePeriods ?? [],
   }))
 
   const activeRepresentatives = useMemo(
@@ -306,7 +308,8 @@ export function PlanningSection() {
       swaps,
       incidents,
       allCalendarDaysForRelevantMonths,
-      representatives
+      representatives,
+      effectivePeriods
     )
   }, [
     weeklyPlan,
@@ -314,6 +317,7 @@ export function PlanningSection() {
     incidents,
     allCalendarDaysForRelevantMonths,
     representatives,
+    effectivePeriods,
   ])
 
   const agentsToRender = useMemo(() => {

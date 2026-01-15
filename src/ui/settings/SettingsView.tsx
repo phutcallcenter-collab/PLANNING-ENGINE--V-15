@@ -19,10 +19,11 @@ import { useToast } from '../components/ToastProvider'
 import { downloadJson } from '@/application/backup/export'
 import { parseBackup } from '@/application/backup/import'
 import { BackupPayload } from '@/application/backup/types'
+import { BackupManagement } from './BackupManagement'
 
 export function SettingsView() {
   const [activeSection, setActiveSection] = useState<
-    'representatives' | 'holidays' | 'system'
+    'representatives' | 'holidays' | 'backups' | 'system'
   >('representatives')
   const { mode, toggle } = useEditMode()
   const { showToast } = useToast()
@@ -184,6 +185,13 @@ export function SettingsView() {
           Feriados
         </button>
         <button
+          style={tabStyle(activeSection === 'backups')}
+          onClick={() => setActiveSection('backups')}
+        >
+          <Download size={16} />
+          Backups
+        </button>
+        <button
           style={tabStyle(activeSection === 'system')}
           onClick={() => setActiveSection('system')}
         >
@@ -195,6 +203,7 @@ export function SettingsView() {
       {/* Content */}
       {activeSection === 'representatives' && <RepresentativeManagement />}
       {activeSection === 'holidays' && <HolidayManagement />}
+      {activeSection === 'backups' && <BackupManagement />}
       {activeSection === 'system' && (
         <div>
           <h2

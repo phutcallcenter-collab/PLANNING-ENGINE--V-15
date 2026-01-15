@@ -34,7 +34,7 @@ const initialCalendarState: CalendarState = {
   specialDays: [
     // 2024
     { date: '2024-12-25', kind: 'HOLIDAY', label: 'Navidad' },
-    
+
     // 2025
     { date: '2025-01-01', kind: 'HOLIDAY', label: 'Año Nuevo' },
     { date: '2025-01-06', kind: 'HOLIDAY', label: 'Día de los Reyes Magos' },
@@ -48,7 +48,7 @@ const initialCalendarState: CalendarState = {
     { date: '2025-09-24', kind: 'HOLIDAY', label: 'Día de las Mercedes' },
     { date: '2025-11-06', kind: 'HOLIDAY', label: 'Día de la Constitución' },
     { date: '2025-12-25', kind: 'HOLIDAY', label: 'Navidad' },
-    
+
     // 2026
     { date: '2026-01-01', kind: 'HOLIDAY', label: 'Año Nuevo' },
     { date: '2026-01-06', kind: 'HOLIDAY', label: 'Día de los Reyes Magos' },
@@ -81,6 +81,7 @@ export function createInitialState(): PlanningBaseState {
     representatives: initialRepresentatives,
     incidents: initialIncidents,
     specialSchedules: initialSpecialSchedules,
+    effectivePeriods: [],
     calendar: initialCalendarState,
     coverageRules: initialCoverageRules,
     version: CURRENT_VERSION,

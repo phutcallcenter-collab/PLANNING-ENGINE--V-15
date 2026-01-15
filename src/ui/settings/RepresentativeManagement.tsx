@@ -223,6 +223,7 @@ export function RepresentativeManagement() {
 
   const [editingRep, setEditingRep] = useState<Representative | null>(null)
   const [addingScheduleFor, setAddingScheduleFor] = useState<string | null>(null);
+  const [managingMixedFor, setManagingMixedFor] = useState<string | null>(null);
   const [showInactive, setShowInactive] = useState(false)
   const [activeShift, setActiveShift] = useState<ShiftType | 'ALL'>('DAY') // Iniciar en DAY
 
@@ -376,6 +377,8 @@ export function RepresentativeManagement() {
             onAddSchedule={setAddingScheduleFor}
             addingScheduleFor={addingScheduleFor}
             advancedEditMode={advancedEditMode}
+            managingMixedFor={managingMixedFor}
+            onManageMixed={setManagingMixedFor}
           />
         )}
 

@@ -61,7 +61,7 @@ export function CoverageRuleModal({ rule, onSave, onClose }: Props) {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    zIndex: 1000,
+    zIndex: 9999,
   }
 
   const modalContentStyle: React.CSSProperties = {
@@ -80,6 +80,8 @@ export function CoverageRuleModal({ rule, onSave, onClose }: Props) {
     borderRadius: '6px',
     boxSizing: 'border-box',
     marginTop: '8px',
+    background: 'var(--bg-muted)',
+    color: 'var(--text-main)',
   }
 
   const buttonStyle: React.CSSProperties = {
@@ -178,7 +180,7 @@ export function CoverageRuleModal({ rule, onSave, onClose }: Props) {
             onClick={handleSubmit}
             style={{
               ...buttonStyle,
-              background: '#111827',
+              background: 'var(--accent)',
               color: 'white',
             }}
           >

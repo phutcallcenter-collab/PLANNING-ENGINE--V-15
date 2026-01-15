@@ -1,4 +1,4 @@
-import { WeeklyPlan, SwapEvent, Incident, ISODate, ShiftType, DayInfo, Representative } from '@/domain/types'
+import { WeeklyPlan, SwapEvent, Incident, ISODate, ShiftType, DayInfo, Representative, EffectiveSchedulePeriod } from '@/domain/types'
 import { resolveEffectiveDuty, EffectiveDutyResult } from '@/domain/swaps/resolveEffectiveDuty'
 import { resolvePunitiveResponsibility } from '@/domain/incidents/resolvePunitiveResponsibility'
 
@@ -31,14 +31,15 @@ export function getEffectiveDailyLogData(
     incidents: Incident[],
     date: ISODate,
     allCalendarDays: DayInfo[],
-    representatives: Representative[]
+    representatives: Representative[],
+    effectivePeriods: EffectiveSchedulePeriod[] = []
 ): DailyLogEntry[] {
     const result: DailyLogEntry[] = []
 
     for (const agent of weeklyPlan.agents) {
         for (const shift of ['DAY', 'NIGHT'] as ShiftType[]) {
-            const duty = resolveEffectiveDuty(weeklyPlan, swaps, incidents, date, shift, agent.representativeId, allCalendarDays, representatives)
-            const isResponsible = resolvePunitiveResponsibility(weeklyPlan, swaps, incidents, date, shift, agent.representativeId, allCalendarDays, representatives)
+            const duty = resolveEffectiveDuty(weeklyPlan, swaps, incidents, date, shift, agent.representativeId, allCalendarDays, representatives, effectivePeriods)
+            const isResponsible = resolvePunitiveResponsibility(weeklyPlan, swaps, incidents, date, shift, agent.representativeId, allCalendarDays, representatives, effectivePeriods)
 
             let logStatus: LogStatus = 'OFF'
 

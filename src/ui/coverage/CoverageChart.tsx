@@ -72,6 +72,8 @@ export function CoverageChart({
         borderRadius: '8px',
         border: '1px solid #e5e7eb',
         position: 'relative',
+        maxWidth: '100%',
+        overflow: 'hidden',
       }}
     >
       <h3 style={{ marginTop: 0, marginBottom: '20px', color: '#111827' }}>
@@ -87,6 +89,8 @@ export function CoverageChart({
           borderBottom: '1px solid #d1d5db',
           paddingLeft: '10px',
           position: 'relative',
+          maxWidth: '100%',
+          overflowX: 'auto',
         }}
       >
         {dates.map(date => {
@@ -101,8 +105,18 @@ export function CoverageChart({
 
           const countColor = isDeficit ? 'hsl(350, 80%, 50%)' : '#111827'
 
+          const dateObj = new Date(date + 'T12:00:00Z')
+          const dayName = dateObj.toLocaleDateString('es-ES', { weekday: 'long' })
+          const formattedDate = dateObj.toLocaleDateString('es-ES', {
+            day: 'numeric',
+            month: 'long'
+          })
+
           const tooltipContent = (
             <div>
+              <div style={{ fontWeight: 700, marginBottom: 6, textTransform: 'capitalize' }}>
+                {dayName}, {formattedDate}
+              </div>
               <div style={{ fontWeight: 600 }}>
                 Presentes: {actual} | Requerido: {required}
               </div>
@@ -161,6 +175,10 @@ export function CoverageChart({
                   fontSize: '12px',
                   color: '#6b7280',
                   whiteSpace: 'nowrap',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  maxWidth: '60px',
+                  textAlign: 'center',
                 }}
               >
                 {new Date(date + 'T12:00:00Z').toLocaleDateString('es-ES', {

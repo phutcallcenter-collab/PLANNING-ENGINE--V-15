@@ -15,6 +15,9 @@ import {
   ShiftAssignment,
   RepresentativeRole,
   SpecialSchedule,
+  EffectiveSchedulePeriod,
+  WeeklyPattern,
+  DailyDuty,
 } from '@/domain/types'
 import { createInitialState, createBaseSchedule } from '@/domain/state'
 import { loadState, saveState } from '@/persistence/storage'
@@ -35,6 +38,7 @@ import { AuditEvent } from '@/domain/audit/types'
 import { recordAuditEvent } from '@/domain/audit/auditRecorder'
 import * as humanize from '@/application/presenters/humanize'
 import { BackupPayload } from '@/application/backup/types'
+import { validateNoOverlap } from '@/domain/planning/effectivePeriodHelpers'
 
 // --- UI Slice Types ---
 type ConfirmIntent = 'danger' | 'warning' | 'info'
@@ -147,6 +151,11 @@ export type AppState = PlanningBaseState & {
   // Special Schedule Actions
   addSpecialSchedule: (data: Omit<SpecialSchedule, 'id'>) => void
   removeSpecialSchedule: (id: string) => void
+
+  // Effective Period Actions
+  addEffectivePeriod: (data: Omit<EffectiveSchedulePeriod, 'id' | 'createdAt'>) => { success: boolean; error?: string }
+  updateEffectivePeriod: (id: string, updates: Partial<Omit<EffectiveSchedulePeriod, 'id' | 'representativeId'>>) => { success: boolean; error?: string }
+  deleteEffectivePeriod: (id: string) => void
 
   // History Actions
   addHistoryEvent: (data: Omit<HistoryEvent, 'id' | 'timestamp'>) => void
@@ -770,6 +779,65 @@ export const useAppStore = create<AppState>()(
         )
       })
     },
+
+    // ===============================================
+    // Effective Period Actions
+    // ===============================================
+    addEffectivePeriod: data => {
+      const { effectivePeriods } = get()
+
+      // Validate no overlap
+      const error = validateNoOverlap(effectivePeriods, data)
+      if (error) {
+        return { success: false, error }
+      }
+
+      set(state => {
+        const newPeriod: EffectiveSchedulePeriod = {
+          id: `ep-${crypto.randomUUID()}`,
+          createdAt: new Date().toISOString().split('T')[0],
+          ...data,
+        }
+        state.effectivePeriods.push(newPeriod)
+      })
+
+      return { success: true }
+    },
+
+    updateEffectivePeriod: (id, updates) => {
+      const { effectivePeriods } = get()
+      const existing = effectivePeriods.find(p => p.id === id)
+
+      if (!existing) {
+        return { success: false, error: 'Período no encontrado' }
+      }
+
+      // Create updated period for validation
+      const updated = { ...existing, ...updates }
+
+      // Validate no overlap (excluding this period)
+      const error = validateNoOverlap(effectivePeriods, updated, id)
+      if (error) {
+        return { success: false, error }
+      }
+
+      set(state => {
+        const period = state.effectivePeriods.find(p => p.id === id)
+        if (period) {
+          Object.assign(period, updates)
+        }
+      })
+
+      return { success: true }
+    },
+
+    deleteEffectivePeriod: id => {
+      set(state => {
+        state.effectivePeriods = state.effectivePeriods.filter(
+          p => p.id !== id
+        )
+      })
+    },
     openDetailModal: (personId, month) => {
       set({ detailModalState: { isOpen: true, personId, month } })
     },
@@ -833,6 +901,7 @@ export const useAppStore = create<AppState>()(
         coverageRules,
         swaps,
         specialSchedules,
+        effectivePeriods,
         historyEvents,
         auditLog,
         version,
@@ -845,6 +914,7 @@ export const useAppStore = create<AppState>()(
         coverageRules,
         swaps,
         specialSchedules,
+        effectivePeriods,
         historyEvents,
         auditLog,
         version,
@@ -863,6 +933,7 @@ export const useAppStore = create<AppState>()(
         historyEvents: data.historyEvents ?? [],
         auditLog: data.auditLog ?? [],
         specialSchedules: data.specialSchedules ?? [],
+        effectivePeriods: data.effectivePeriods ?? [],
         version: DOMAIN_VERSION,
       }
 
@@ -893,6 +964,7 @@ export const stateToPersist = (state: AppState): PlanningBaseState => {
     coverageRules,
     swaps,
     specialSchedules,
+    effectivePeriods,
     historyEvents,
     auditLog,
     version,
@@ -904,6 +976,7 @@ export const stateToPersist = (state: AppState): PlanningBaseState => {
     coverageRules,
     swaps,
     specialSchedules,
+    effectivePeriods,
     historyEvents,
     auditLog,
     version,

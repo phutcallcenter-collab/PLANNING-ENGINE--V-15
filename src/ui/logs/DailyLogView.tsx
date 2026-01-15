@@ -166,7 +166,8 @@ export function DailyLogView() {
     planningAnchorDate,
     setPlanningAnchorDate,
     swaps,
-    isLoading
+    isLoading,
+    effectivePeriods
   } = useAppStore(s => ({
     incidents: s.incidents,
     allCalendarDaysForRelevantMonths: s.allCalendarDaysForRelevantMonths,
@@ -175,6 +176,7 @@ export function DailyLogView() {
     setPlanningAnchorDate: s.setPlanningAnchorDate,
     swaps: s.swaps,
     isLoading: s.isLoading,
+    effectivePeriods: s.effectivePeriods ?? [],
   }))
 
   // 🎯 SIEMPRE empezar en el día actual (hoy)
@@ -216,7 +218,8 @@ export function DailyLogView() {
       incidents,
       logDate,
       allCalendarDaysForRelevantMonths,
-      representatives
+      representatives,
+      effectivePeriods
     )
   }, [
     weeklyPlan,
@@ -225,7 +228,8 @@ export function DailyLogView() {
     logDate,
     allCalendarDaysForRelevantMonths,
     representatives,
-    isLoading
+    isLoading,
+    effectivePeriods,
   ])
 
   const {
@@ -268,7 +272,21 @@ export function DailyLogView() {
     const repMap = new Map(representatives.map(r => [r.id, r]))
 
     const representativesInShift = activeEntries
-      .filter(e => e.logStatus !== 'OFF' || e.isResponsible) // Show relevant people
+      .filter(e => {
+        // Always show if not OFF
+        if (e.logStatus !== 'OFF') {
+          // For ABSENT status (license/vacation), only show in their base shift
+          if (e.logStatus === 'ABSENT' && e.details && ['VACACIONES', 'LICENCIA'].includes(e.details)) {
+            const rep = repMap.get(e.representativeId)
+            if (rep && rep.baseShift !== e.shift) {
+              return false // Don't show in non-base shift
+            }
+          }
+          return true
+        }
+        // Show OFF only if responsible
+        return e.isResponsible
+      })
       .map(e => repMap.get(e.representativeId))
       .filter((r): r is Representative => !!r)
 
