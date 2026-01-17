@@ -21,18 +21,18 @@ export const MANAGER_DUTY_UI = {
         bg: '#DCFCE7',
         fg: '#166534',
     },
-    MONITORING: {
+    MONITOR: {
         label: 'Mon',
         bg: '#F3E8FF',
         fg: '#6B21A8',
     },
-    VACATION: {
+    VACACIONES: {
         label: 'VAC',
         bg: '#ECFEFF',
         fg: '#0E7490',
         border: '#67E8F9',
     },
-    LICENSE: {
+    LICENCIA: {
         label: 'LIC',
         bg: '#F5F3FF',
         fg: '#5B21B6',
@@ -42,6 +42,21 @@ export const MANAGER_DUTY_UI = {
         label: '—',
         fg: '#9CA3AF',
         bg: 'transparent',
+    },
+    EMPTY: {
+        label: ' ',
+        fg: '#9CA3AF',
+        bg: 'transparent',
+    },
+    AUS_JUST: {
+        label: 'AJ',
+        bg: '#FEF2F2',
+        fg: '#991B1B',
+    },
+    AUS_UNJUST: {
+        label: 'AI',
+        bg: '#FEF2F2',
+        fg: '#991B1B',
     },
 } as const
 

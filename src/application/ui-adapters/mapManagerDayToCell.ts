@@ -5,6 +5,7 @@ export interface ManagerCellState {
     label: string
     tooltip?: string
     isEditable: boolean
+    note?: string
 }
 
 export function mapManagerDayToCell(
@@ -17,6 +18,7 @@ export function mapManagerDayToCell(
             label: 'VAC',
             tooltip: day.note ? `Vacaciones\n📝 ${day.note}` : 'Vacaciones',
             isEditable: false,
+            note: day.note // Add note mapping
         }
     }
 
@@ -26,6 +28,7 @@ export function mapManagerDayToCell(
             label: 'LIC',
             tooltip: day.note ? `Licencia\n📝 ${day.note}` : 'Licencia',
             isEditable: false,
+            note: day.note // Add note mapping
         }
     }
 
@@ -36,6 +39,7 @@ export function mapManagerDayToCell(
             label: '—',
             tooltip: note ? `📝 ${note}` : undefined,
             isEditable: true,
+            note: note // Add note mapping
         }
     }
 
@@ -45,6 +49,7 @@ export function mapManagerDayToCell(
             label: 'OFF',
             tooltip: 'Día Libre (Sin asignación)',
             isEditable: true,
+            note: day.note // Add note mapping
         }
     }
 
@@ -73,5 +78,6 @@ export function mapManagerDayToCell(
             ? `${labels[duty] || duty}\n📝 ${day.note}`
             : undefined,
         isEditable: true,
+        note: day.note // Add note mapping
     }
 }

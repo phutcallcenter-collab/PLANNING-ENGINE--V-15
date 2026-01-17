@@ -38,6 +38,8 @@ export function BackupManagement() {
                 effectivePeriods,
                 historyEvents,
                 auditLog,
+                managers,
+                managementSchedules,
                 version,
             }
             exportBackup(state)
@@ -59,6 +61,8 @@ export function BackupManagement() {
                 // Restore state - add required metadata
                 const payload = {
                     ...state,
+                    managers: state.managers || [],
+                    managementSchedules: state.managementSchedules || {},
                     exportedAt: new Date().toISOString(),
                     appVersion: 1,
                 }
@@ -86,6 +90,8 @@ export function BackupManagement() {
                 effectivePeriods,
                 historyEvents,
                 auditLog,
+                managers,
+                managementSchedules,
                 version,
             }
             saveBackupToLocalStorage(state)
@@ -110,6 +116,8 @@ export function BackupManagement() {
             // Add required metadata
             const payload = {
                 ...state,
+                managers: state.managers || [],
+                managementSchedules: state.managementSchedules || {},
                 exportedAt: new Date().toISOString(),
                 appVersion: 1,
             }

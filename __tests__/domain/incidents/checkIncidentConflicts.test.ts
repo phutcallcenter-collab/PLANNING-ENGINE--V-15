@@ -7,43 +7,44 @@ describe('checkIncidentConflicts', () => {
     id: 'rep1',
     name: 'Juan Pérez',
     baseShift: 'DAY',
-    vacationDaysPerYear: 14,
-    usedVacationDays: 0,
+    role: 'SALES',
+    isActive: true,
+    orderIndex: 0,
     baseSchedule: ['WORKING', 'WORKING', 'WORKING', 'WORKING', 'WORKING', 'OFF', 'OFF'], // Sat-Sun off
   }
 
   // Complete calendar for January 2025 (needed for resolveIncidentDates)
   const regularDays: DayInfo[] = [
     // Week 1
-    { date: '2025-01-01', dayOfWeek: 3, type: 'HOLIDAY' }, // New Year
-    { date: '2025-01-02', dayOfWeek: 4, type: 'REGULAR' },
-    { date: '2025-01-03', dayOfWeek: 5, type: 'REGULAR' },
-    { date: '2025-01-04', dayOfWeek: 6, type: 'REGULAR' },
-    { date: '2025-01-05', dayOfWeek: 0, type: 'REGULAR' },
+    { date: '2025-01-01', dayOfWeek: 3, kind: 'HOLIDAY', isSpecial: true }, // New Year
+    { date: '2025-01-02', dayOfWeek: 4, kind: 'WORKING', isSpecial: false },
+    { date: '2025-01-03', dayOfWeek: 5, kind: 'WORKING', isSpecial: false },
+    { date: '2025-01-04', dayOfWeek: 6, kind: 'WORKING', isSpecial: false },
+    { date: '2025-01-05', dayOfWeek: 0, kind: 'WORKING', isSpecial: false },
     // Week 2
-    { date: '2025-01-06', dayOfWeek: 1, type: 'HOLIDAY' }, // Three Kings Day
-    { date: '2025-01-07', dayOfWeek: 2, type: 'REGULAR' },
-    { date: '2025-01-08', dayOfWeek: 3, type: 'REGULAR' },
-    { date: '2025-01-09', dayOfWeek: 4, type: 'REGULAR' },
-    { date: '2025-01-10', dayOfWeek: 5, type: 'REGULAR' },
-    { date: '2025-01-11', dayOfWeek: 6, type: 'REGULAR' },
-    { date: '2025-01-12', dayOfWeek: 0, type: 'REGULAR' },
+    { date: '2025-01-06', dayOfWeek: 1, kind: 'HOLIDAY', isSpecial: true }, // Three Kings Day
+    { date: '2025-01-07', dayOfWeek: 2, kind: 'WORKING', isSpecial: false },
+    { date: '2025-01-08', dayOfWeek: 3, kind: 'WORKING', isSpecial: false },
+    { date: '2025-01-09', dayOfWeek: 4, kind: 'WORKING', isSpecial: false },
+    { date: '2025-01-10', dayOfWeek: 5, kind: 'WORKING', isSpecial: false },
+    { date: '2025-01-11', dayOfWeek: 6, kind: 'WORKING', isSpecial: false },
+    { date: '2025-01-12', dayOfWeek: 0, kind: 'WORKING', isSpecial: false },
     // Week 3
-    { date: '2025-01-13', dayOfWeek: 1, type: 'REGULAR' },
-    { date: '2025-01-14', dayOfWeek: 2, type: 'REGULAR' },
-    { date: '2025-01-15', dayOfWeek: 3, type: 'REGULAR' },
-    { date: '2025-01-16', dayOfWeek: 4, type: 'REGULAR' },
-    { date: '2025-01-17', dayOfWeek: 5, type: 'REGULAR' },
-    { date: '2025-01-18', dayOfWeek: 6, type: 'REGULAR' },
-    { date: '2025-01-19', dayOfWeek: 0, type: 'REGULAR' },
+    { date: '2025-01-13', dayOfWeek: 1, kind: 'WORKING', isSpecial: false },
+    { date: '2025-01-14', dayOfWeek: 2, kind: 'WORKING', isSpecial: false },
+    { date: '2025-01-15', dayOfWeek: 3, kind: 'WORKING', isSpecial: false },
+    { date: '2025-01-16', dayOfWeek: 4, kind: 'WORKING', isSpecial: false },
+    { date: '2025-01-17', dayOfWeek: 5, kind: 'WORKING', isSpecial: false },
+    { date: '2025-01-18', dayOfWeek: 6, kind: 'WORKING', isSpecial: false },
+    { date: '2025-01-19', dayOfWeek: 0, kind: 'WORKING', isSpecial: false },
     // Week 4
-    { date: '2025-01-20', dayOfWeek: 1, type: 'REGULAR' },
-    { date: '2025-01-21', dayOfWeek: 2, type: 'HOLIDAY' }, // Altagracia
-    { date: '2025-01-22', dayOfWeek: 3, type: 'REGULAR' },
-    { date: '2025-01-23', dayOfWeek: 4, type: 'REGULAR' },
-    { date: '2025-01-24', dayOfWeek: 5, type: 'REGULAR' },
-    { date: '2025-01-25', dayOfWeek: 6, type: 'REGULAR' },
-    { date: '2025-01-26', dayOfWeek: 0, type: 'REGULAR' },
+    { date: '2025-01-20', dayOfWeek: 1, kind: 'WORKING', isSpecial: false },
+    { date: '2025-01-21', dayOfWeek: 2, kind: 'HOLIDAY', isSpecial: true }, // Altagracia
+    { date: '2025-01-22', dayOfWeek: 3, kind: 'WORKING', isSpecial: false },
+    { date: '2025-01-23', dayOfWeek: 4, kind: 'WORKING', isSpecial: false },
+    { date: '2025-01-24', dayOfWeek: 5, kind: 'WORKING', isSpecial: false },
+    { date: '2025-01-25', dayOfWeek: 6, kind: 'WORKING', isSpecial: false },
+    { date: '2025-01-26', dayOfWeek: 0, kind: 'WORKING', isSpecial: false },
   ]
 
   it('should detect active vacation conflict', () => {

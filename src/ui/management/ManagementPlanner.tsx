@@ -51,10 +51,10 @@ export function ManagementPlanner() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-      <header style={{ 
-        display: 'flex', 
-        justifyContent: 'space-between', 
-        alignItems: 'center' 
+      <header style={{
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center'
       }}>
         <h2 style={{ margin: 0, fontSize: '20px', fontWeight: 600 }}>
           Horario Gerencial
@@ -64,19 +64,19 @@ export function ManagementPlanner() {
         </span>
       </header>
 
-      <div style={{ 
-        display: 'grid', 
-        gridTemplateColumns: '180px repeat(7, 1fr)', 
-        gap: '8px' 
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: '180px repeat(7, 1fr)',
+        gap: '8px'
       }}>
         {/* Header row */}
         <div style={{ fontWeight: 600, padding: '8px' }}>Supervisor</div>
         {weekDays.map(d => (
-          <div 
+          <div
             key={d.date}
-            style={{ 
-              textAlign: 'center', 
-              fontSize: '12px', 
+            style={{
+              textAlign: 'center',
+              fontSize: '12px',
               fontWeight: 600,
               padding: '8px',
             }}
@@ -87,26 +87,26 @@ export function ManagementPlanner() {
 
         {/* Manager rows */}
         {managers.length === 0 ? (
-          <div style={{ 
-            gridColumn: '1 / -1', 
-            textAlign: 'center', 
+          <div style={{
+            gridColumn: '1 / -1',
+            textAlign: 'center',
             padding: '24px',
-            color: '#9ca3af' 
+            color: '#9ca3af'
           }}>
             No hay gerentes activos
           </div>
         ) : (
           managers.map(manager => {
             const agentPlan = weeklyPlan.agents.find(a => a.representativeId === manager.id)
-            
+
             return (
               <React.Fragment key={manager.id}>
                 <div style={{ fontWeight: 600, padding: '8px' }}>{manager.name}</div>
                 {weekDays.map(day => {
                   const assignment = agentPlan?.days[day.date]
-                  
+
                   return (
-                    <div 
+                    <div
                       key={day.date}
                       style={{
                         padding: '8px',
@@ -115,9 +115,9 @@ export function ManagementPlanner() {
                         fontWeight: 600,
                       }}
                     >
-                      {assignment?.assignment.type === 'SINGLE' && assignment.assignment.shift}
-                      {assignment?.assignment.type === 'BOTH' && 'BOTH'}
-                      {assignment?.assignment.type === 'OFF' && 'OFF'}
+                      {assignment?.assignment?.type === 'SINGLE' && assignment?.assignment?.shift}
+                      {assignment?.assignment?.type === 'BOTH' && 'BOTH'}
+                      {assignment?.assignment?.type === 'NONE' && 'OFF'}
                       {!assignment && '—'}
                     </div>
                   )

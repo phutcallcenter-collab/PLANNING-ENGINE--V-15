@@ -1,7 +1,7 @@
 
-
 import { buildWeeklySchedule } from '../../../src/domain/planning/buildWeeklySchedule'
-import type { DayInfo, Representative, Incident } from '../../../src/domain/types'
+import type { Representative, Incident } from '../../../src/domain/types'
+import { DayInfo, DayKind } from '@/domain/calendar/types'
 import { ShiftAssignment } from '../../../src/domain/planning/shiftAssignment'
 
 describe('buildWeeklySchedule – reglas de planificación', () => {
@@ -10,18 +10,27 @@ describe('buildWeeklySchedule – reglas de planificación', () => {
       id: 'a1',
       name: 'Ana',
       baseShift: 'DAY',
+      role: 'SALES',
+      isActive: true,
+      orderIndex: 0,
       baseSchedule: { 1: 'WORKING' }, // Works Monday
     },
     {
       id: 'a2',
       name: 'Luis',
       baseShift: 'DAY',
+      role: 'SALES',
+      isActive: true,
+      orderIndex: 0,
       baseSchedule: { 1: 'WORKING' }, // Works Monday
     },
     {
       id: 'a3',
       name: 'Eva',
       baseShift: 'DAY',
+      role: 'SALES',
+      isActive: true,
+      orderIndex: 0,
       baseSchedule: { 1: 'WORKING' }, // Works Monday
     },
   ]
@@ -29,25 +38,25 @@ describe('buildWeeklySchedule – reglas de planificación', () => {
   const monday: DayInfo = {
     date: '2024-04-01',
     dayOfWeek: 1, // Monday
-    kind: 'WORKING',
+    kind: 'WORKING' as DayKind,
     isSpecial: false,
   }
 
   const saturday: DayInfo = {
     date: '2024-04-06',
     dayOfWeek: 6, // Saturday
-    kind: 'WORKING',
+    kind: 'WORKING' as DayKind,
     isSpecial: false,
   }
 
   const week = [
     monday,
-    { date: '2024-04-02', dayOfWeek: 2, kind: 'WORKING', isSpecial: false },
-    { date: '2024-04-03', dayOfWeek: 3, kind: 'WORKING', isSpecial: false },
-    { date: '2024-04-04', dayOfWeek: 4, kind: 'WORKING', isSpecial: false },
-    { date: '2024-04-05', dayOfWeek: 5, kind: 'WORKING', isSpecial: false },
+    { date: '2024-04-02', dayOfWeek: 2, kind: 'WORKING' as DayKind, isSpecial: false },
+    { date: '2024-04-03', dayOfWeek: 3, kind: 'WORKING' as DayKind, isSpecial: false },
+    { date: '2024-04-04', dayOfWeek: 4, kind: 'WORKING' as DayKind, isSpecial: false },
+    { date: '2024-04-05', dayOfWeek: 5, kind: 'WORKING' as DayKind, isSpecial: false },
     saturday,
-    { date: '2024-04-07', dayOfWeek: 0, kind: 'WORKING', isSpecial: false },
+    { date: '2024-04-07', dayOfWeek: 0, kind: 'WORKING' as DayKind, isSpecial: false },
   ]
   const fullCalendar = week
 
@@ -145,13 +154,13 @@ describe('buildWeeklySchedule – reglas de planificación', () => {
 
 describe('buildWeeklySchedule – Lógica de Turnos Mixtos (HARDENED)', () => {
   const week: DayInfo[] = [
-    { date: '2024-04-01', dayOfWeek: 1, kind: 'WORKING', isSpecial: false }, // Mon
-    { date: '2024-04-02', dayOfWeek: 2, kind: 'WORKING', isSpecial: false }, // Tue
-    { date: '2024-04-03', dayOfWeek: 3, kind: 'WORKING', isSpecial: false }, // Wed
-    { date: '2024-04-04', dayOfWeek: 4, kind: 'WORKING', isSpecial: false }, // Thu
-    { date: '2024-04-05', dayOfWeek: 5, kind: 'WORKING', isSpecial: false }, // Fri
-    { date: '2024-04-06', dayOfWeek: 6, kind: 'WORKING', isSpecial: false }, // Sat
-    { date: '2024-04-07', dayOfWeek: 0, kind: 'WORKING', isSpecial: false }, // Sun
+    { date: '2024-04-01', dayOfWeek: 1, kind: 'WORKING' as DayKind, isSpecial: false }, // Mon
+    { date: '2024-04-02', dayOfWeek: 2, kind: 'WORKING' as DayKind, isSpecial: false }, // Tue
+    { date: '2024-04-03', dayOfWeek: 3, kind: 'WORKING' as DayKind, isSpecial: false }, // Wed
+    { date: '2024-04-04', dayOfWeek: 4, kind: 'WORKING' as DayKind, isSpecial: false }, // Thu
+    { date: '2024-04-05', dayOfWeek: 5, kind: 'WORKING' as DayKind, isSpecial: false }, // Fri
+    { date: '2024-04-06', dayOfWeek: 6, kind: 'WORKING' as DayKind, isSpecial: false }, // Sat
+    { date: '2024-04-07', dayOfWeek: 0, kind: 'WORKING' as DayKind, isSpecial: false }, // Sun
   ]
 
   const fullCalendar = week
@@ -162,6 +171,9 @@ describe('buildWeeklySchedule – Lógica de Turnos Mixtos (HARDENED)', () => {
         id: 'r1',
         name: 'Juan',
         baseShift: 'DAY',
+        role: 'SALES',
+        isActive: true,
+        orderIndex: 0,
         baseSchedule: {
           1: 'WORKING',
           2: 'WORKING',
@@ -188,6 +200,9 @@ describe('buildWeeklySchedule – Lógica de Turnos Mixtos (HARDENED)', () => {
         id: 'r1',
         name: 'Juan',
         baseShift: 'DAY',
+        role: 'SALES',
+        isActive: true,
+        orderIndex: 0,
         baseSchedule: { 5: 'WORKING', 6: 'WORKING', 0: 'WORKING' },
         mixProfile: { type: 'WEEKDAY' },
       },
@@ -216,6 +231,9 @@ describe('buildWeeklySchedule – Lógica de Turnos Mixtos (HARDENED)', () => {
         id: 'r1',
         name: 'Juan',
         baseShift: 'DAY',
+        role: 'SALES',
+        isActive: true,
+        orderIndex: 0,
         baseSchedule: { 1: 'OFF' }, // Monday OFF
         mixProfile: { type: 'WEEKDAY' },
       },
@@ -234,6 +252,9 @@ describe('buildWeeklySchedule – Lógica de Turnos Mixtos (HARDENED)', () => {
         id: 'r1',
         name: 'Juan',
         baseShift: 'DAY',
+        role: 'SALES',
+        isActive: true,
+        orderIndex: 0,
         baseSchedule: { 1: 'WORKING' },
         mixProfile: { type: 'WEEKDAY' },
       },
@@ -264,6 +285,9 @@ describe('buildWeeklySchedule – Lógica de Turnos Mixtos (HARDENED)', () => {
       id: 'r1',
       name: 'Juan',
       baseShift: 'DAY',
+      role: 'SALES',
+      isActive: true,
+      orderIndex: 0,
       baseSchedule: { 1: 'WORKING' },
       mixProfile: { type: 'WEEKDAY' },
     }]
@@ -294,6 +318,9 @@ describe('buildWeeklySchedule – Lógica de Turnos Mixtos (HARDENED)', () => {
         id: 'r1',
         name: 'Juan',
         baseShift: 'DAY',
+        role: 'SALES',
+        isActive: true,
+        orderIndex: 0,
         baseSchedule: { 1: 'WORKING' },
         mixProfile: { type: 'WEEKDAY' },
       },
@@ -323,6 +350,9 @@ describe('buildWeeklySchedule – Lógica de Turnos Mixtos (HARDENED)', () => {
         id: 'r1',
         name: 'Juan (Mix)',
         baseShift: 'DAY',
+        role: 'SALES',
+        isActive: true,
+        orderIndex: 0,
         baseSchedule: { 1: 'WORKING', 5: 'WORKING' }, // Trabaja Lunes, Viernes
         mixProfile: { type: 'WEEKDAY' }, // Mixto Lun-Jue
       },
@@ -354,6 +384,9 @@ describe('buildWeeklySchedule – Lógica de Turnos Mixtos (HARDENED)', () => {
       id: 'r1',
       name: 'Rep Con Licencia',
       baseShift: 'DAY',
+      role: 'SALES',
+      isActive: true,
+      orderIndex: 0,
       baseSchedule: { 1: 'WORKING' },
     }]
 
@@ -394,12 +427,15 @@ describe('buildWeeklySchedule – Lógica de Turnos Mixtos (HARDENED)', () => {
         id: 'irene',
         name: 'Irene (Mix WE)',
         baseShift: 'NIGHT',
+        role: 'SALES',
+        isActive: true,
+        orderIndex: 0,
         baseSchedule: { 0: 'WORKING', 1: 'WORKING', 2: 'WORKING', 3: 'WORKING', 4: 'WORKING', 5: 'WORKING', 6: 'WORKING' },
         mixProfile: { type: 'WEEKEND' }, // Mix Fri-Sun
       },
     ]
 
-    const wednesday: DayInfo = { date: '2024-04-03', dayOfWeek: 3, kind: 'WORKING', isSpecial: false }
+    const wednesday: DayInfo = { date: '2024-04-03', dayOfWeek: 3, kind: 'WORKING' as DayKind, isSpecial: false }
 
     const incidents: Incident[] = [
       {
@@ -427,6 +463,9 @@ describe('buildWeeklySchedule – Lógica de Turnos Mixtos (HARDENED)', () => {
         id: 'irene',
         name: 'Irene (Mix WE)',
         baseShift: 'NIGHT',
+        role: 'SALES',
+        isActive: true,
+        orderIndex: 0,
         baseSchedule: { 0: 'WORKING', 1: 'WORKING', 2: 'WORKING', 3: 'WORKING', 4: 'WORKING', 5: 'WORKING', 6: 'WORKING' },
         mixProfile: { type: 'WEEKEND' }, // Mix Fri-Sun
       },
@@ -450,6 +489,7 @@ describe('buildWeeklySchedule – Lógica de Turnos Mixtos (HARDENED)', () => {
     const day = plan.agents.find(a => a.representativeId === 'irene')?.days[mondayDate];
 
     expect(day).toBeDefined();
+    if (!day) throw new Error('Day not found');
     expect(day.source).toBe('OVERRIDE');
     expect(day.assignment).toEqual({ type: 'SINGLE', shift: 'DAY' });
     expect(day.status).toBe('WORKING');

@@ -15,17 +15,20 @@ describe('resolveIncidentDates - Holiday Handling', () => {
       6: 'WORKING',
     },
     baseShift: 'DAY',
+    role: 'SALES',
+    isActive: true,
+    orderIndex: 0,
   }
 
   const createCalendarDays = (startDate: string, count: number, holidays: string[] = []): DayInfo[] => {
     const days: DayInfo[] = []
     const start = new Date(startDate + 'T00:00:00Z')
-    
+
     for (let i = 0; i < count; i++) {
       const date = new Date(start)
       date.setUTCDate(start.getUTCDate() + i)
       const isoDate = date.toISOString().split('T')[0]
-      
+
       days.push({
         date: isoDate,
         dayOfWeek: date.getUTCDay(),
@@ -33,7 +36,7 @@ describe('resolveIncidentDates - Holiday Handling', () => {
         isSpecial: holidays.includes(isoDate),
       })
     }
-    
+
     return days
   }
 
@@ -41,7 +44,7 @@ describe('resolveIncidentDates - Holiday Handling', () => {
     // Crear calendario con 30 días, incluyendo 2 feriados
     const holidays = ['2025-01-15', '2025-01-20']
     const calendarDays = createCalendarDays('2025-01-10', 30, holidays)
-    
+
     const incident: Incident = {
       id: 'vac-1',
       representativeId: 'rep-1',
@@ -57,15 +60,15 @@ describe('resolveIncidentDates - Holiday Handling', () => {
     console.log('Total de días:', result.dates.length)
     console.log('Fecha inicio:', result.start)
     console.log('Fecha fin:', result.end)
-    
+
     // VACACIONES debe contar 14 días LABORALES
     // Saltando: Domingos (día base OFF) y feriados
     expect(result.dates.length).toBe(14)
-    
+
     // Verificar que NO incluye los feriados
     expect(result.dates).not.toContain('2025-01-15')
     expect(result.dates).not.toContain('2025-01-20')
-    
+
     // Verificar que NO incluye los domingos (día base OFF)
     expect(result.dates).not.toContain('2025-01-12') // Domingo
     expect(result.dates).not.toContain('2025-01-19') // Domingo
@@ -74,7 +77,7 @@ describe('resolveIncidentDates - Holiday Handling', () => {
   it('VACACIONES debe contar solo días que NO sean feriados ni días base OFF', () => {
     const holidays = ['2025-02-01', '2025-02-05'] // 2 feriados
     const calendarDays = createCalendarDays('2025-02-01', 30, holidays)
-    
+
     const incident: Incident = {
       id: 'vac-2',
       representativeId: 'rep-1',
@@ -85,16 +88,16 @@ describe('resolveIncidentDates - Holiday Handling', () => {
     }
 
     const result = resolveIncidentDates(incident, calendarDays, mockRep)
-    
+
     console.log('Fechas de vacaciones:', result.dates)
-    
+
     // Debe tener exactamente 14 días laborales
     expect(result.dates.length).toBe(14)
-    
+
     // No debe incluir los feriados
     expect(result.dates).not.toContain('2025-02-01') // Feriado
     expect(result.dates).not.toContain('2025-02-05') // Feriado
-    
+
     // No debe incluir domingos (día base OFF)
     const domingos = result.dates.filter(date => {
       const d = new Date(date + 'T00:00:00Z')
@@ -106,7 +109,7 @@ describe('resolveIncidentDates - Holiday Handling', () => {
   it('LICENCIA debe contar TODOS los días calendario (incluyendo feriados)', () => {
     const holidays = ['2025-03-05']
     const calendarDays = createCalendarDays('2025-03-01', 30, holidays)
-    
+
     const incident: Incident = {
       id: 'lic-1',
       representativeId: 'rep-1',
@@ -117,10 +120,10 @@ describe('resolveIncidentDates - Holiday Handling', () => {
     }
 
     const result = resolveIncidentDates(incident, calendarDays, mockRep)
-    
+
     // LICENCIA debe contar 7 días consecutivos, sin importar si son feriados
     expect(result.dates.length).toBe(7)
-    
+
     // DEBE incluir el feriado
     expect(result.dates).toContain('2025-03-05')
   })
@@ -134,7 +137,7 @@ describe('resolveIncidentDates - Holiday Handling', () => {
       '2025-01-26', // Duarte
     ]
     const calendarDays = createCalendarDays('2025-01-02', 60, holidays)
-    
+
     const incident: Incident = {
       id: 'vac-real',
       representativeId: 'rep-1',
@@ -145,31 +148,31 @@ describe('resolveIncidentDates - Holiday Handling', () => {
     }
 
     const result = resolveIncidentDates(incident, calendarDays, mockRep)
-    
+
     console.log('Caso real - Fechas de vacaciones:', result.dates)
     console.log('Caso real - Inicio:', result.start, 'Fin:', result.end)
-    
+
     // Debe tener exactamente 14 días laborales
     expect(result.dates.length).toBe(14)
-    
+
     // NO debe incluir feriados
     expect(result.dates).not.toContain('2025-01-06')  // Reyes Magos
     expect(result.dates).not.toContain('2025-01-21') // Altagracia
     expect(result.dates).not.toContain('2025-01-26') // Duarte
-    
+
     // NO debe incluir domingos (días base OFF)
     const domingos = result.dates.filter(date => {
       const d = new Date(date + 'T00:00:00Z')
       return d.getUTCDay() === 0
     })
     expect(domingos.length).toBe(0)
-    
+
     // Verificar que la fecha final es posterior a startDate + 14 días
     // (porque se saltaron feriados y domingos)
     const startDate = new Date('2025-01-02T00:00:00Z')
     const endDate = new Date(result.end + 'T00:00:00Z')
     const daysDifference = Math.floor((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24))
-    
+
     // Debe ser mayor a 14 porque se saltaron días
     expect(daysDifference).toBeGreaterThan(14)
   })

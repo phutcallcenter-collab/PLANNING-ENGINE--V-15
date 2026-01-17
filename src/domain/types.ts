@@ -48,7 +48,8 @@ export type { AuditEvent }
 export type { SwapEvent, SwapType }
 export type { ShiftAssignment }
 export type { EffectiveSchedulePeriod, WeeklyPattern, DailyDuty } from './planning/effectiveSchedulePeriod'
-export type { Manager, ManagerSchedule, ManagerDuty, ManagerAssignment } from './management/types'
+import { Manager, ManagerSchedule, ManagerDuty, ManagerAssignment } from './management/types'
+export type { Manager, ManagerSchedule, ManagerDuty, ManagerAssignment }
 
 /**
  * Define el alcance de una regla de cobertura.

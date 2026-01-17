@@ -19,11 +19,11 @@ export function ManagerRow({
     <>
       <div style={{ fontWeight: 600, padding: '8px' }}>{name}</div>
       {cells.map((cell, idx) => (
-        <ManagerCell 
-          key={idx} 
+        <ManagerCell
+          key={idx}
           cell={cell}
           onDutyChange={onDutyChange ? (duty) => onDutyChange(dates[idx], duty) : undefined}
-          isBlocked={cell.variant === 'VACATION' || cell.variant === 'LICENSE'}
+          isBlocked={cell.state === 'VACACIONES' || cell.state === 'LICENCIA'}
         />
       ))}
     </>

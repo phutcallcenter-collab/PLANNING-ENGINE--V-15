@@ -4,6 +4,8 @@ import { useAppStore } from '@/store/useAppStore'
 import { useWeekNavigator } from '@/hooks/useWeekNavigator'
 import { useWeeklyPlan } from '@/hooks/useWeeklyPlan'
 import { PlanRow } from '@/ui/planning/PlanRow'
+import { getEffectiveAssignmentsForPlanner } from '@/application/ui-adapters/getEffectiveAssignmentsForPlanner'
+import { useMemo } from 'react'
 
 /**
  * 🧩 PLANNER GERENCIAL — Vista filtrada del planner operativo
@@ -30,10 +32,18 @@ export function ManagerPlanner() {
     representatives,
     planningAnchorDate,
     setPlanningAnchorDate,
+    incidents,
+    swaps,
+    allCalendarDaysForRelevantMonths,
+    effectivePeriods,
   } = useAppStore(s => ({
     representatives: s.representatives,
     planningAnchorDate: s.planningAnchorDate,
     setPlanningAnchorDate: s.setPlanningAnchorDate,
+    incidents: s.incidents,
+    swaps: s.swaps,
+    allCalendarDaysForRelevantMonths: s.allCalendarDaysForRelevantMonths,
+    effectivePeriods: s.effectivePeriods ?? [],
   }))
 
   const { weekDays, label } = useWeekNavigator(
@@ -47,14 +57,33 @@ export function ManagerPlanner() {
     r => r.role === 'MANAGER' && r.isActive !== false
   )
 
+  const assignmentsMap = useMemo(() => {
+    if (!weeklyPlan) return {}
+    return getEffectiveAssignmentsForPlanner(
+      weeklyPlan,
+      swaps,
+      incidents,
+      allCalendarDaysForRelevantMonths,
+      representatives,
+      effectivePeriods
+    )
+  }, [
+    weeklyPlan,
+    representatives,
+    swaps,
+    incidents,
+    allCalendarDaysForRelevantMonths,
+    effectivePeriods,
+  ])
+
   if (!weeklyPlan) return null
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-      <header style={{ 
-        display: 'flex', 
-        justifyContent: 'space-between', 
-        alignItems: 'center' 
+      <header style={{
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center'
       }}>
         <h2 style={{ margin: 0, fontSize: '20px', fontWeight: 600 }}>
           Horario Gerencial
@@ -64,19 +93,19 @@ export function ManagerPlanner() {
         </span>
       </header>
 
-      <div style={{ 
-        display: 'grid', 
-        gridTemplateColumns: '180px repeat(7, 1fr)', 
-        gap: '8px' 
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: '180px repeat(7, 1fr)',
+        gap: '8px'
       }}>
         {/* Header row */}
         <div style={{ fontWeight: 600, padding: '8px' }}>Supervisor</div>
         {weekDays.map(d => (
-          <div 
+          <div
             key={d.date}
-            style={{ 
-              textAlign: 'center', 
-              fontSize: '12px', 
+            style={{
+              textAlign: 'center',
+              fontSize: '12px',
               fontWeight: 600,
               padding: '8px',
             }}
@@ -87,11 +116,11 @@ export function ManagerPlanner() {
 
         {/* Manager rows */}
         {managers.length === 0 ? (
-          <div style={{ 
-            gridColumn: '1 / -1', 
-            textAlign: 'center', 
+          <div style={{
+            gridColumn: '1 / -1',
+            textAlign: 'center',
             padding: '24px',
-            color: '#9ca3af' 
+            color: '#9ca3af'
           }}>
             No hay gerentes activos
           </div>
@@ -99,10 +128,13 @@ export function ManagerPlanner() {
           managers.map(manager => (
             <PlanRow
               key={manager.id}
-              representative={manager}
+              agent={manager}
               weekDays={weekDays}
               weeklyPlan={weeklyPlan}
-              activeShift="DAY" // Irrelevante para gerencia
+              activeShift="DAY"
+              assignmentsMap={assignmentsMap}
+              onCellClick={() => { }}
+              onCellContextMenu={() => { }}
             />
           ))
         )}

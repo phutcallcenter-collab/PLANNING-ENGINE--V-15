@@ -9,7 +9,8 @@ describe('validateSwapDoesNotCauseConflict', () => {
       isActive: true,
       baseShift: 'DAY',
       baseSchedule: { 0: 'OFF', 1: 'WORKING', 2: 'WORKING', 3: 'WORKING', 4: 'WORKING', 5: 'OFF', 6: 'OFF' },
-      role: 'REPRESENTATIVE',
+      role: 'SALES',
+      orderIndex: 0,
     },
     {
       id: 'rep-b',
@@ -17,7 +18,8 @@ describe('validateSwapDoesNotCauseConflict', () => {
       isActive: true,
       baseShift: 'NIGHT',
       baseSchedule: { 0: 'OFF', 1: 'WORKING', 2: 'WORKING', 3: 'WORKING', 4: 'WORKING', 5: 'OFF', 6: 'OFF' },
-      role: 'REPRESENTATIVE',
+      role: 'SALES',
+      orderIndex: 0,
     },
     {
       id: 'rep-c',
@@ -25,7 +27,8 @@ describe('validateSwapDoesNotCauseConflict', () => {
       isActive: true,
       baseShift: 'DAY',
       baseSchedule: { 0: 'OFF', 1: 'OFF', 2: 'OFF', 3: 'OFF', 4: 'OFF', 5: 'OFF', 6: 'OFF' },
-      role: 'REPRESENTATIVE',
+      role: 'SALES',
+      orderIndex: 0,
     },
   ]
 
@@ -45,7 +48,7 @@ describe('validateSwapDoesNotCauseConflict', () => {
         shift: 'DAY',
         fromRepresentativeId: 'rep-a',
         toRepresentativeId: 'rep-b', // Bruno ya trabaja NIGHT
-        createdAt: Date.now(),
+        createdAt: '2026-01-01T00:00:00Z',
       }
 
       expect(() => {
@@ -66,7 +69,7 @@ describe('validateSwapDoesNotCauseConflict', () => {
         shift: 'DAY',
         fromRepresentativeId: 'rep-a',
         toRepresentativeId: 'rep-c', // Carlos está OFF
-        createdAt: Date.now(),
+        createdAt: '2026-01-01T00:00:00Z',
       }
 
       expect(() => {
@@ -87,7 +90,7 @@ describe('validateSwapDoesNotCauseConflict', () => {
         shift: 'NIGHT',
         fromRepresentativeId: 'rep-b',
         toRepresentativeId: 'rep-c', // Carlos ya cubre NIGHT
-        createdAt: Date.now(),
+        createdAt: '2026-01-01T00:00:00Z',
       }
 
       const proposedSwap: SwapEvent = {
@@ -97,7 +100,7 @@ describe('validateSwapDoesNotCauseConflict', () => {
         shift: 'DAY',
         fromRepresentativeId: 'rep-a',
         toRepresentativeId: 'rep-c', // Carlos intenta cubrir DAY también
-        createdAt: Date.now() + 1,
+        createdAt: '2026-01-01T00:00:01Z',
       }
 
       expect(() => {
@@ -119,7 +122,7 @@ describe('validateSwapDoesNotCauseConflict', () => {
         date: '2026-01-15',
         shift: 'NIGHT',
         representativeId: 'rep-a', // Ana ya trabaja DAY
-        createdAt: Date.now(),
+        createdAt: '2026-01-01T00:00:00Z',
       }
 
       expect(() => {
@@ -139,7 +142,7 @@ describe('validateSwapDoesNotCauseConflict', () => {
         date: '2026-01-15',
         shift: 'DAY',
         representativeId: 'rep-c', // Carlos está OFF
-        createdAt: Date.now(),
+        createdAt: '2026-01-01T00:00:00Z',
       }
 
       expect(() => {
@@ -160,7 +163,7 @@ describe('validateSwapDoesNotCauseConflict', () => {
         shift: 'DAY',
         fromRepresentativeId: 'rep-a',
         toRepresentativeId: 'rep-c', // Carlos cubre DAY
-        createdAt: Date.now(),
+        createdAt: '2026-01-01T00:00:00Z',
       }
 
       const proposedSwap: SwapEvent = {
@@ -169,7 +172,7 @@ describe('validateSwapDoesNotCauseConflict', () => {
         date: '2026-01-15',
         shift: 'NIGHT',
         representativeId: 'rep-c', // Carlos intenta doblar NIGHT
-        createdAt: Date.now() + 1,
+        createdAt: '2026-01-01T00:00:01Z',
       }
 
       expect(() => {
@@ -193,7 +196,7 @@ describe('validateSwapDoesNotCauseConflict', () => {
         fromShift: 'NIGHT', // Ana trabaja DAY, no NIGHT
         toRepresentativeId: 'rep-b',
         toShift: 'DAY', // Bruno trabaja NIGHT, no DAY
-        createdAt: Date.now(),
+        createdAt: '2026-01-01T00:00:00Z',
       }
 
       expect(() => {
@@ -215,7 +218,7 @@ describe('validateSwapDoesNotCauseConflict', () => {
         fromShift: 'DAY', // Ana trabaja DAY ✓
         toRepresentativeId: 'rep-b',
         toShift: 'NIGHT', // Bruno trabaja NIGHT ✓
-        createdAt: Date.now(),
+        createdAt: '2026-01-01T00:00:00Z',
       }
 
       expect(() => {
@@ -242,7 +245,7 @@ describe('validateSwapDoesNotCauseConflict', () => {
         shift: 'DAY',
         fromRepresentativeId: 'rep-a',
         toRepresentativeId: 'rep-c',
-        createdAt: Date.now(),
+        createdAt: '2026-01-01T00:00:00Z',
       }
 
       const proposedSwap: SwapEvent = {
@@ -252,7 +255,7 @@ describe('validateSwapDoesNotCauseConflict', () => {
         shift: 'NIGHT',
         fromRepresentativeId: 'rep-b',
         toRepresentativeId: 'rep-c', // Carlos ya cubre DAY
-        createdAt: Date.now() + 1,
+        createdAt: '2026-01-01T00:00:01Z',
       }
 
       expect(() => {

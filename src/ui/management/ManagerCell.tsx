@@ -4,21 +4,21 @@ import { MANAGER_DUTY_UI } from './managerDutyUI'
 import { ManagerDutySelector } from './ManagerDutySelector'
 import { ManagerDuty } from '@/domain/management/types'
 
-export function ManagerCell({ 
+export function ManagerCell({
   cell,
   onDutyChange,
   isBlocked,
-}: { 
+}: {
   cell: ManagerCellState
   onDutyChange?: (duty: ManagerDuty | null) => void
   isBlocked?: boolean
 }) {
   const [isEditing, setIsEditing] = useState(false)
-  const uiConfig = MANAGER_DUTY_UI[cell.variant]
+  const uiConfig = MANAGER_DUTY_UI[cell.state]
 
   const handleClick = () => {
     // No abrir si está bloqueado (VAC/LIC) o no hay handler
-    if (isBlocked || !onDutyChange || cell.variant === 'VACATION' || cell.variant === 'LICENSE') {
+    if (isBlocked || !onDutyChange || cell.state === 'VACACIONES' || cell.state === 'LICENCIA') {
       return
     }
     setIsEditing(true)
@@ -39,7 +39,7 @@ export function ManagerCell({
     return (
       <div style={{ height: '42px', padding: '2px' }}>
         <ManagerDutySelector
-          value={cell.variant === 'OFF' ? null : (cell.variant as ManagerDuty)}
+          value={(cell.state === 'OFF' || cell.state === 'EMPTY') ? null : (cell.state as ManagerDuty)}
           onChange={handleChange}
           onCancel={handleCancel}
         />
@@ -47,7 +47,7 @@ export function ManagerCell({
     )
   }
 
-  const isClickable = !isBlocked && onDutyChange && cell.variant !== 'VACATION' && cell.variant !== 'LICENSE'
+  const isClickable = !isBlocked && onDutyChange && cell.state !== 'VACACIONES' && cell.state !== 'LICENCIA'
 
   return (
     <div
@@ -71,7 +71,7 @@ export function ManagerCell({
     >
       <span>{cell.label}</span>
 
-      {cell.note && cell.variant !== 'VACATION' && cell.variant !== 'LICENSE' && (
+      {cell.note && cell.state !== 'VACACIONES' && cell.state !== 'LICENCIA' && (
         <span
           style={{
             color: '#9ca3af',
