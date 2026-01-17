@@ -1,0 +1,258 @@
+:root {
+  /* Backgrounds */
+  --bg-app: #ffffff;
+  --bg-panel: #ffffff;
+  --bg-muted: #f9fafb;
+
+  /* Text */
+  --text-main: #111827;
+  --text-muted: #6b7280;
+
+  /* Borders */
+  --border-subtle: #e5e7eb;
+  --border-strong: #d1d5db;
+
+  /* Accent */
+  --accent: #2563eb;
+  --accent-muted: #93c5fd;
+
+  /* Danger */
+  --bg-danger: #fef2f2;
+  --text-danger: #991b1b;
+  --border-danger: #fecaca;
+
+  /* Warning */
+  --bg-warning: #fefce8;
+  --text-warning: #a16207;
+  --border-warning: #fde047;
+}
+
+[data-theme='dark'] {
+  /* Backgrounds */
+  --bg-app: #0f172a;
+  --bg-panel: #1e293b;
+  --bg-muted: #0f1729;
+
+  /* Text */
+  --text-main: #e5e7eb;
+  --text-muted: #9ca3af;
+
+  /* Borders */
+  --border-subtle: #334155;
+  --border-strong: #475569;
+
+  /* Accent */
+  --accent: #60a5fa;
+  --accent-muted: #1e3a8a;
+
+  /* Danger */
+  --bg-danger: #3f1f1f;
+  --text-danger: #fca5a5;
+  --border-danger: #7f1d1d;
+
+  /* Warning */
+  --bg-warning: #422006;
+  --text-warning: #fbbf24;
+  --border-warning: #92400e;
+}
+
+/* ========================================
+   GLOBAL DARK MODE ARCHITECTURE
+   ======================================== */
+
+/* STEP 1: HTML + BODY base layer */
+html,
+body,
+.app-body {
+  background: var(--bg-app);
+  color: var(--text-main);
+  margin: 0;
+  padding: 0;
+}
+
+/* Root app container */
+.app-root {
+  background: var(--bg-app);
+  color: var(--text-main);
+  min-height: 100vh;
+}
+
+/* =========================
+   VISUAL LAYERS (CRITICAL)
+   ========================= */
+
+/* App chrome: navbars, headers, top bars */
+.app-root header,
+.app-root nav,
+.app-root .topbar,
+.app-root .tabs {
+  background: var(--bg-app);
+}
+
+/* Main working areas */
+.app-root main,
+.app-root .content,
+.app-root .page-content {
+  background: var(--bg-muted);
+}
+
+/* Any large view container */
+.app-root [class*="View"],
+.app-root [class*="Page"],
+.app-root [class*="Section"] {
+  background: var(--bg-muted);
+}
+
+/* Real panels / cards */
+.panel,
+.card,
+.settings-panel,
+.stats-panel {
+  background: var(--bg-panel);
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+}
+
+/* TEXT HIERARCHY (clean, not aggressive) */
+.app-root h1,
+.app-root h2,
+.app-root h3,
+.app-root h4,
+.app-root h5,
+.app-root h6 {
+  color: var(--text-main);
+}
+
+/* Default readable text */
+.app-root p,
+.app-root label {
+  color: var(--text-main);
+}
+
+/* Secondary text only when intended */
+.app-root .muted,
+.app-root small,
+.app-root .text-muted {
+  color: var(--text-muted);
+}
+
+/* INPUTS AND FORMS */
+.app-root input,
+.app-root textarea,
+.app-root select {
+  background: var(--bg-muted);
+  color: var(--text-main);
+  border: 1px solid var(--border-subtle);
+}
+
+.app-root input::placeholder,
+.app-root textarea::placeholder {
+  color: var(--text-muted);
+  opacity: 0.7;
+}
+
+/* Buttons without explicit styling */
+.app-root button:not([style*="background"]) {
+  background: var(--bg-panel);
+  color: var(--text-main);
+  border: 1px solid var(--border-strong);
+}
+
+/* Disabled / empty states */
+.app-root button:disabled,
+.app-root input:disabled,
+.app-root textarea:disabled {
+  background: var(--bg-muted);
+  color: var(--text-muted);
+  border-color: var(--border-subtle);
+}
+
+/* Global border color normalization (specific selectors for performance) */
+.app-root button,
+.app-root input,
+.app-root textarea,
+.app-root select,
+.app-root div[class*="panel"],
+.app-root div[class*="card"] {
+  border-color: var(--border-subtle);
+}
+
+/* Danger zone styling in dark mode */
+[data-theme='dark'] .danger,
+[data-theme='dark'] .zone-danger {
+  background: var(--bg-danger);
+  color: var(--text-danger);
+  border-color: var(--border-danger);
+}
+
+/* FINAL HACK: Neutralize inline white backgrounds in dark mode ONLY */
+[data-theme='dark'] [style*="background: white"],
+[data-theme='dark'] [style*="background:#fff"],
+[data-theme='dark'] [style*="background: '#ffffff'"],
+[data-theme='dark'] [style*="background: rgb(255"] {
+  background: var(--bg-panel) !important;
+}
+
+/* Ensure dark mode enforcement */
+[data-theme='dark'] .app-root {
+  background: var(--bg-app);
+  color: var(--text-main);
+}
+
+/* ========================================
+   FINAL LAYOUT LOCK (NO WHITE ZONES)
+   ======================================== */
+
+/* Any direct child of app-root inherits a dark surface */
+.app-root>* {
+  background-color: var(--bg-muted);
+}
+
+/* Nested layout containers */
+.app-root>*>* {
+  background-color: inherit;
+}
+
+/* App chrome stays darker (re-declare explicit intent) */
+.app-root header,
+.app-root nav,
+.app-root .topbar {
+  background: var(--bg-app);
+}
+
+/* Panels float above content (re-declare explicit intent) */
+.panel,
+.card,
+.settings-panel,
+.stats-panel {
+  background: var(--bg-panel);
+}
+
+/* ========================================
+   LAYOUT OVERFLOW PROTECTION
+   ======================================== */
+.main-content {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
+  /* Prevent page-level horizontal scroll */
+  min-width: 0;
+  /* Flexbox safety net */
+}
+
+/* Planner Container (inside PlanningSection) */
+.planner-wrapper {
+  display: flex;
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
+  /* Contain scrollbar impact */
+  gap: 24px;
+  align-items: flex-start;
+}
+
+.planner-grid-container {
+  flex: 1;
+  min-width: 0;
+  /* 🔥 CRITICAL for proper shrinking */
+}

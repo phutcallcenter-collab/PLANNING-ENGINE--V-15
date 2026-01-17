@@ -1,0 +1,836 @@
+import React, { useState, useMemo, useEffect } from 'react'
+import { useAppStore } from '@/store/useAppStore'
+import { ISODate, ShiftType, SwapType, WeeklyPlan, SwapEvent } from '@/domain/types'
+import {
+  Sun,
+  Moon,
+  Shield,
+  ArrowLeftRight,
+  Copy,
+  AlertTriangle,
+  CheckCircle2,
+  X,
+} from 'lucide-react'
+import {
+  validateSwapOperation,
+  SwapValidationContext,
+} from '@/domain/swaps/validateSwapOperation'
+import { resolveIncidentDates } from '@/domain/incidents/resolveIncidentDates'
+import { repName, swapDescription } from '@/application/presenters/humanize'
+
+interface SwapModalProps {
+  weeklyPlan: WeeklyPlan // 🎯 Plan viene de arriba, no se carga aquí
+  initialDate?: ISODate
+  initialShift?: ShiftType
+  initialRepId?: string
+  existingSwap?: SwapEvent
+  onClose: () => void
+}
+
+export function SwapModal({
+  weeklyPlan,
+  initialDate,
+  initialShift,
+  initialRepId,
+  existingSwap,
+  onClose,
+}: SwapModalProps) {
+  const {
+    representatives,
+    addSwap,
+    removeSwap,
+    planningAnchorDate,
+    incidents,
+    allCalendarDaysForRelevantMonths,
+    addHistoryEvent,
+  } = useAppStore(s => ({
+    representatives: s.representatives,
+    addSwap: s.addSwap,
+    removeSwap: s.removeSwap,
+    planningAnchorDate: s.planningAnchorDate,
+    incidents: s.incidents,
+    allCalendarDaysForRelevantMonths: s.allCalendarDaysForRelevantMonths,
+    addHistoryEvent: s.addHistoryEvent,
+  }))
+
+  const [date, setDate] = useState<ISODate>(initialDate || planningAnchorDate)
+  const [shift, setShift] = useState<ShiftType>(initialShift || 'DAY')
+
+  /**
+   * 🎯 Construir contexto de validación CORRECTAMENTE
+   * Con la asignación real para que el dominio determine la disponibilidad.
+   */
+  const validationContext = useMemo((): SwapValidationContext => {
+    if (!weeklyPlan) return { daily: {} }
+
+    const dailyContext: SwapValidationContext['daily'] = {}
+
+    for (const agent of weeklyPlan.agents) {
+      const day = agent.days[date]
+      const assignment = day?.assignment ?? null
+      const shouldWork = !!assignment && assignment.type !== 'NONE'
+
+      const rep = representatives.find(r => r.id === agent.representativeId)
+
+      const blockingIncident = incidents.find(i => {
+        if (i.representativeId !== agent.representativeId) return false
+        if (!['VACACIONES', 'LICENCIA'].includes(i.type)) return false
+
+        const resolved = resolveIncidentDates(
+          i,
+          allCalendarDaysForRelevantMonths,
+          rep
+        )
+        return resolved.dates.includes(date)
+      })
+
+      dailyContext[agent.representativeId] = {
+        assignment,
+        shouldWork,
+        incidentType: blockingIncident
+          ? blockingIncident.type === 'VACACIONES'
+            ? 'VACATION'
+            : 'LEAVE'
+          : undefined,
+      }
+    }
+
+    return { daily: dailyContext }
+  }, [
+    weeklyPlan,
+    date,
+    representatives,
+    incidents,
+    allCalendarDaysForRelevantMonths,
+  ])
+
+  const [type, setType] = useState<SwapType>('COVER')
+  const [fromId, setFromId] = useState<string>(initialRepId || '')
+  const [toId, setToId] = useState<string>('')
+  const [note, setNote] = useState('')
+
+  const effectiveShift = useMemo(() => {
+    if (type === 'COVER' && fromId && validationContext.daily[fromId]) {
+      const day = validationContext.daily[fromId]
+      if (day.assignment?.type === 'SINGLE') {
+        return day.assignment.shift
+      }
+    }
+    return shift
+  }, [type, fromId, shift, validationContext])
+
+  /**
+   * 🎯 VALIDACIÓN PURA DEL DOMINIO
+   * La UI NO duplica reglas. Solo construye contexto y delega.
+   */
+  const validationError = useMemo(() => {
+    if (!type || !date) return null
+    return validateSwapOperation(type, fromId, toId, effectiveShift, validationContext)
+  }, [type, fromId, toId, date, effectiveShift, validationContext])
+
+  const canSubmit = useMemo(() => {
+    if (validationError) return false
+    if (type === 'COVER' || type === 'SWAP') return !!(fromId && toId && date)
+    if (type === 'DOUBLE') return !!(toId && date)
+    return false
+  }, [type, fromId, toId, validationError, date])
+
+  const previewText = useMemo(() => {
+    if (!canSubmit || (!fromId && type !== 'DOUBLE') || !toId) return null
+    const fromName = repName(representatives, fromId)
+    const toName = repName(representatives, toId)
+
+    if (type === 'COVER') {
+      const shiftName = effectiveShift === 'DAY' ? 'Día' : 'Noche'
+      return (
+        <>
+          <strong>{toName}</strong> cubrirá el turno <strong>{shiftName}</strong>{' '}
+          de <strong>{fromName}</strong>.
+          <br />
+          <span style={{ fontSize: '12px', color: '#6b7280' }}>
+            Este cambio aplica para el día seleccionado.
+          </span>
+        </>
+      )
+    }
+    if (type === 'SWAP') {
+      const fromAssignment = validationContext.daily[fromId!]?.assignment
+      const toAssignment = validationContext.daily[toId]?.assignment
+
+      if (fromAssignment?.type === 'SINGLE' && toAssignment?.type === 'SINGLE') {
+        return (
+          <>
+            <strong>{fromName}</strong> (Turno {fromAssignment.shift}) y <strong>{toName}</strong> (Turno {toAssignment.shift}) intercambian sus turnos.
+          </>
+        )
+      }
+      return 'Intercambio de turnos.'
+    }
+    if (type === 'DOUBLE') {
+      const shiftName = shift === 'DAY' ? 'Día' : 'Noche'
+      return (
+        <>
+          <strong>{toName}</strong> hará un turno DOBLE en{' '}
+          <strong>{shiftName}</strong>.
+          <br />
+          <span style={{ fontSize: '12px', color: '#6b7280' }}>
+            Se cuenta como +1 en la cobertura.
+          </span>
+        </>
+      )
+    }
+    return null
+  }, [type, fromId, toId, canSubmit, shift, effectiveShift, validationContext, representatives])
+
+  const handleSubmit = () => {
+    if (!canSubmit || (!fromId && type !== 'DOUBLE')) return
+
+    if (type === 'COVER' && fromId) {
+      addSwap({
+        type: 'COVER',
+        date,
+        shift: effectiveShift,
+        fromRepresentativeId: fromId,
+        toRepresentativeId: toId,
+        note,
+      } as any)
+    } else if (type === 'DOUBLE' && toId) {
+      addSwap({
+        type: 'DOUBLE',
+        date,
+        shift,
+        representativeId: toId,
+        note,
+      } as any)
+    } else if (type === 'SWAP' && fromId && toId) {
+      const fromAssignment = validationContext.daily[fromId]?.assignment
+      const toAssignment = validationContext.daily[toId]?.assignment
+      if(fromAssignment?.type === 'SINGLE' && toAssignment?.type === 'SINGLE') {
+        addSwap({
+          type: 'SWAP',
+          date,
+          fromRepresentativeId: fromId,
+          fromShift: fromAssignment.shift,
+          toRepresentativeId: toId,
+          toShift: toAssignment.shift,
+          note,
+        } as any)
+      }
+    }
+    onClose()
+  }
+
+  const handleDeleteSwap = () => {
+    if (!existingSwap) return
+    
+    removeSwap(existingSwap.id)
+    addHistoryEvent({
+      category: 'PLANNING',
+      title: 'Cambio de turno eliminado',
+      description: swapDescription(existingSwap, representatives),
+      metadata: { swap: existingSwap },
+    })
+    onClose()
+  }
+
+  const getSwapDescription = () => {
+    if (!existingSwap) return ''
+    
+    if (existingSwap.type === 'COVER') {
+      const fromName = repName(representatives, existingSwap.fromRepresentativeId)
+      const toName = repName(representatives, existingSwap.toRepresentativeId)
+      const shiftName = existingSwap.shift === 'DAY' ? 'Día' : 'Noche'
+      return `${toName} está cubriendo el turno ${shiftName} de ${fromName}`
+    }
+    
+    if (existingSwap.type === 'DOUBLE') {
+      const personName = repName(representatives, existingSwap.representativeId)
+      const shiftName = existingSwap.shift === 'DAY' ? 'Día' : 'Noche'
+      return `${personName} tiene un turno doble en ${shiftName}`
+    }
+    
+    if (existingSwap.type === 'SWAP') {
+      const fromName = repName(representatives, existingSwap.fromRepresentativeId)
+      const toName = repName(representatives, existingSwap.toRepresentativeId)
+      return `${fromName} y ${toName} intercambiaron turnos`
+    }
+    
+    return ''
+  }
+
+  if (!weeklyPlan) return null
+
+  // --- Render ---
+  const formattedDate = new Date(date + 'T12:00:00Z').toLocaleDateString(
+    'es-ES',
+    {
+      weekday: 'long',
+      day: 'numeric',
+      month: 'long',
+    }
+  )
+
+  const overlayStyle = {
+    position: 'fixed' as const,
+    inset: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    backdropFilter: 'blur(4px)',
+    display: 'flex' as const,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+    zIndex: 50,
+    padding: '16px',
+  }
+
+  const modalStyle = {
+    backgroundColor: 'white',
+    borderRadius: '12px',
+    boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+    width: '100%',
+    maxWidth: '500px',
+    overflow: 'hidden' as const,
+    display: 'flex' as const,
+    flexDirection: 'column' as const,
+    maxHeight: '90vh',
+  }
+
+  const headerStyle = {
+    backgroundColor: '#f9fafb',
+    padding: '16px 24px',
+    borderBottom: '1px solid #f3f4f6',
+    display: 'flex' as const,
+    justifyContent: 'space-between' as const,
+    alignItems: 'flex-start' as const,
+  }
+
+  const btnCloseStyle = {
+    color: '#9ca3af',
+    background: 'none',
+    border: 'none',
+    cursor: 'pointer' as const,
+    padding: '4px',
+  }
+
+  const inputStyle = {
+    width: '100%',
+    padding: '10px',
+    backgroundColor: '#f9fafb',
+    border: '1px solid #e5e7eb',
+    borderRadius: '8px',
+    fontSize: '14px',
+    outline: 'none' as const,
+    boxSizing: 'border-box' as const,
+  }
+
+  const labelStyle = {
+    display: 'block' as const,
+    fontSize: '11px',
+    fontWeight: 600,
+    color: '#6b7280',
+    textTransform: 'uppercase' as const,
+    letterSpacing: '0.05em',
+    marginBottom: '6px',
+  }
+
+  return (
+    <div style={overlayStyle} onClick={onClose}>
+      <div style={modalStyle} onClick={e => e.stopPropagation()}>
+        {/* Header */}
+        <div style={headerStyle}>
+          <div>
+            <h2
+              style={{
+                fontSize: '18px',
+                fontWeight: 700,
+                color: '#111827',
+                margin: 0,
+              }}
+            >
+              {existingSwap ? 'Cambio de Turno Existente' : 'Gestión de Cobertura'}
+            </h2>
+            <div
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '8px',
+                marginTop: '8px',
+              }}
+            >
+              {/* Mostrar fecha formateada */}
+              <div style={{ fontSize: '13px', color: '#6b7280' }}>
+                {formattedDate}
+              </div>
+            </div>
+          </div>
+          <button onClick={onClose} style={btnCloseStyle}>
+            <X size={20} />
+          </button>
+        </div>
+
+        {/* Body */}
+        <div style={{ padding: '24px', overflow: 'auto', flex: 1 }}>
+          {existingSwap ? (
+            // Vista de eliminación
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+              <div
+                style={{
+                  background: '#fef3c7',
+                  border: '1px solid #fcd34d',
+                  borderRadius: '8px',
+                  padding: '16px',
+                  display: 'flex',
+                  gap: '12px',
+                }}
+              >
+                <AlertTriangle size={24} color="#b45309" style={{ flexShrink: 0 }} />
+                <div>
+                  <div style={{ fontWeight: 600, color: '#92400e', marginBottom: '4px' }}>
+                    Cambio de turno activo
+                  </div>
+                  <div style={{ fontSize: '14px', color: '#78350f' }}>
+                    {getSwapDescription()}
+                  </div>
+                  {existingSwap.note && (
+                    <div style={{ fontSize: '13px', color: '#78350f', marginTop: '8px', fontStyle: 'italic' }}>
+                      Nota: {existingSwap.note}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div style={{ fontSize: '14px', color: '#6b7280', lineHeight: '1.6' }}>
+                Si eliminas este cambio, la celda volverá a su estado original según el plan base 
+                (WORKING u OFF dependiendo de la asignación programada).
+              </div>
+            </div>
+          ) : (
+            // Vista de creación (contenido original)
+            <>
+              {/* Selector de Turno */}
+              <div style={{ display: 'flex', gap: '8px', marginBottom: '24px' }}>
+                <button
+                  onClick={() => setShift('DAY')}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                    padding: '4px 8px',
+                    borderRadius: '4px',
+                    fontSize: '12px',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    border:
+                      shift === 'DAY'
+                        ? '1px solid #fcd34d'
+                        : '1px solid #e5e7eb',
+                    backgroundColor: shift === 'DAY' ? '#fffbeb' : 'white',
+                    color: shift === 'DAY' ? '#b45309' : '#6b7280',
+                  }}
+                >
+                  <Sun size={12} /> Día
+                </button>
+                <button
+                  onClick={() => setShift('NIGHT')}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                    padding: '4px 8px',
+                    borderRadius: '4px',
+                    fontSize: '12px',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    border:
+                      shift === 'NIGHT'
+                        ? '1px solid #c7d2fe'
+                        : '1px solid #e5e7eb',
+                    backgroundColor: shift === 'NIGHT' ? '#eef2ff' : 'white',
+                    color: shift === 'NIGHT' ? '#4338ca' : '#6b7280',
+                  }}
+                >
+                  <Moon size={12} /> Noche
+                </button>
+              </div>
+
+              {/* Type Selectors */}
+              <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: '1fr 1fr 1fr',
+              gap: '12px',
+              marginBottom: '24px',
+            }}
+          >
+            <TypeCard
+              active={type === 'COVER'}
+              onClick={() => setType('COVER')}
+              icon={Shield}
+              label="Cubrir"
+              color="blue"
+            />
+            <TypeCard
+              active={type === 'SWAP'}
+              onClick={() => setType('SWAP')}
+              icon={ArrowLeftRight}
+              label="Intercambio"
+              color="green"
+            />
+            <TypeCard
+              active={type === 'DOUBLE'}
+              onClick={() => setType('DOUBLE')}
+              icon={Copy}
+              label="Doble"
+              color="orange"
+            />
+          </div>
+
+          {/* Dynamic Fields */}
+          <div
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '16px',
+              marginBottom: '24px',
+            }}
+          >
+            {type !== 'DOUBLE' && (
+              <div>
+                <label style={labelStyle}>
+                  {type === 'SWAP'
+                    ? 'Quién cede (Origen)'
+                    : 'Quién necesita cobertura'}
+                </label>
+                <select
+                  style={inputStyle}
+                  value={fromId}
+                  onChange={e => setFromId(e.target.value)}
+                >
+                  <option value="">Seleccionar representante...</option>
+                  {representatives.map(r => (
+                    <option key={r.id} value={r.id}>
+                      {r.name}
+                    </option>
+                  ))}
+                </select>
+                {/* Indicador de turno para COVER */}
+                {type === 'COVER' &&
+                  fromId &&
+                  validationContext.daily[fromId] && (
+                    <div
+                      style={{
+                        marginTop: '8px',
+                        fontSize: '12px',
+                        color: '#6b7280',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                      }}
+                    >
+                      {effectiveShift === 'DAY' ? (
+                        <Sun size={14} />
+                      ) : (
+                        <Moon size={14} />
+                      )}
+                      <span>
+                        Turno a cubrir:{' '}
+                        <strong>
+                          {effectiveShift === 'DAY' ? 'Día' : 'Noche'}
+                        </strong>
+                      </span>
+                    </div>
+                  )}
+              </div>
+            )}
+
+            <div>
+              <label style={labelStyle}>
+                {type === 'DOUBLE'
+                  ? 'Quién hará el doble turno'
+                  : type === 'SWAP'
+                  ? 'Con quién intercambia'
+                  : 'Quién va a cubrir'}
+              </label>
+              <select
+                style={inputStyle}
+                value={toId}
+                onChange={e => setToId(e.target.value)}
+              >
+                <option value="">Seleccionar representante...</option>
+                {representatives.map(r => (
+                  <option key={r.id} value={r.id}>
+                    {r.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {/* Preview / Validation Box */}
+          {previewText && !validationError && (
+            <div
+              style={{
+                marginBottom: '24px',
+                padding: '16px',
+                backgroundColor: '#f9fafb',
+                border: '1px solid #e5e7eb',
+                borderRadius: '8px',
+                display: 'flex',
+                gap: '12px',
+                alignItems: 'flex-start',
+              }}
+            >
+              <CheckCircle2
+                color="#16a34a"
+                size={18}
+                style={{ marginTop: '2px', flexShrink: 0 }}
+              />
+              <div
+                style={{
+                  fontSize: '14px',
+                  color: '#374151',
+                  lineHeight: '1.5',
+                }}
+              >
+                {previewText}
+              </div>
+            </div>
+          )}
+
+          {validationError && (
+            <div
+              style={{
+                marginBottom: '24px',
+                padding: '16px',
+                backgroundColor: '#fef2f2',
+                border: '1px solid #fee2e2',
+                borderRadius: '8px',
+                display: 'flex',
+                gap: '12px',
+                alignItems: 'flex-start',
+              }}
+            >
+              <AlertTriangle
+                color="#ef4444"
+                size={18}
+                style={{ marginTop: '2px', flexShrink: 0 }}
+              />
+              <div
+                style={{ fontSize: '14px', color: '#b91c1c', fontWeight: 500 }}
+              >
+                {validationError}
+              </div>
+            </div>
+          )}
+
+          {/* Note */}
+          <div>
+            <label style={labelStyle}>Nota Adicional (Opcional)</label>
+            <input
+              style={inputStyle}
+              placeholder="Ej: Cambio autorizado por jefe de guardia..."
+              value={note}
+              onChange={e => setNote(e.target.value)}
+            />
+          </div>
+
+              {/* Selector de Turno */}
+              <div style={{ display: 'flex', gap: '8px', marginBottom: '24px' }}>
+                <button
+                  onClick={() => setShift('DAY')}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                    padding: '4px 8px',
+                    borderRadius: '4px',
+                    fontSize: '12px',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    border:
+                      shift === 'DAY'
+                        ? '1px solid #fcd34d'
+                        : '1px solid #e5e7eb',
+                    backgroundColor: shift === 'DAY' ? '#fffbeb' : 'white',
+                    color: shift === 'DAY' ? '#b45309' : '#6b7280',
+                  }}
+                >
+                  <Sun size={12} /> Día
+                </button>
+                <button
+                  onClick={() => setShift('NIGHT')}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                    padding: '4px 8px',
+                    borderRadius: '4px',
+                    fontSize: '12px',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    border:
+                      shift === 'NIGHT'
+                        ? '1px solid #c7d2fe'
+                        : '1px solid #e5e7eb',
+                    backgroundColor: shift === 'NIGHT' ? '#eef2ff' : 'white',
+                    color: shift === 'NIGHT' ? '#4338ca' : '#6b7280',
+                  }}
+                >
+                  <Moon size={12} /> Noche
+                </button>
+              </div>
+        <div
+          style={{
+            padding: '16px',
+            borderTop: '1px solid #f3f4f6',
+            backgroundColor: '#f9fafb',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+          }}
+        >
+          {existingSwap ? (
+            // Footer para eliminar swap
+            <>
+              <span style={{ fontSize: '12px', color: '#9ca3af' }}>
+                Esta acción no se puede deshacer.
+              </span>
+              <div style={{ display: 'flex', gap: '12px' }}>
+                <button
+                  onClick={onClose}
+                  style={{
+                    padding: '8px 16px',
+                    fontSize: '14px',
+                    fontWeight: 500,
+                    color: '#4b5563',
+                    backgroundColor: 'transparent',
+                    border: 'none',
+                    cursor: 'pointer',
+                  }}
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={handleDeleteSwap}
+                  style={{
+                    padding: '8px 20px',
+                    fontSize: '14px',
+                    fontWeight: 600,
+                    color: 'white',
+                    backgroundColor: '#dc2626',
+                    border: 'none',
+                    borderRadius: '8px',
+                    cursor: 'pointer',
+                    boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)',
+                    transition: 'all 0.2s',
+                  }}
+                >
+                  Eliminar Cambio
+                </button>
+              </div>
+            </>
+          ) : (
+            // Footer para crear swap
+            <>
+              <span style={{ fontSize: '12px', color: '#9ca3af' }}>
+                Los cambios afectan solo a este día.
+              </span>
+              <div style={{ display: 'flex', gap: '12px' }}>
+                <button
+                  onClick={onClose}
+                  style={{
+                    padding: '8px 16px',
+                    fontSize: '14px',
+                    fontWeight: 500,
+                    color: '#4b5563',
+                    backgroundColor: 'transparent',
+                    border: 'none',
+                    cursor: 'pointer',
+                  }}
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={handleSubmit}
+                  disabled={!canSubmit}
+                  style={{
+                    padding: '8px 20px',
+                    fontSize: '14px',
+                    fontWeight: 500,
+                    color: 'white',
+                    backgroundColor: canSubmit ? '#2563eb' : '#d1d5db',
+                    border: 'none',
+                    borderRadius: '8px',
+                    cursor: canSubmit ? 'pointer' : 'not-allowed',
+                    boxShadow: canSubmit ? '0 1px 2px 0 rgba(0, 0, 0, 0.05)' : 'none',
+                    transition: 'all 0.2s',
+                  }}
+                >
+                  Confirmar
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function TypeCard({ active, onClick, icon: Icon, label, color }: any) {
+  const getColorStyles = (c: string, isActive: boolean) => {
+    if (!isActive)
+      return {
+        backgroundColor: 'white',
+        borderColor: '#e5e7eb',
+        color: '#4b5563',
+      }
+
+    switch (c) {
+      case 'blue':
+        return {
+          backgroundColor: '#eff6ff',
+          borderColor: '#bfdbfe',
+          color: '#1d4ed8',
+        }
+      case 'green':
+        return {
+          backgroundColor: '#f0fdf4',
+          borderColor: '#bbf7d0',
+          color: '#15803d',
+        }
+      case 'orange':
+        return {
+          backgroundColor: '#fff7ed',
+          borderColor: '#fed7aa',
+          color: '#c2410c',
+        }
+      default:
+        return {}
+    }
+  }
+
+  const styles = getColorStyles(color, active)
+
+  return (
+    <button
+      onClick={onClick}
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        gap: '8px',
+        padding: '12px',
+        borderRadius: '12px',
+        border: `1px solid ${styles.borderColor}`,
+        backgroundColor: styles.backgroundColor,
+        color: styles.color,
+        cursor: 'pointer',
+        transition: 'all 0.2s',
+        width: '100%',
+      }}
+    >
+      <Icon size={24} style={{ color: active ? 'inherit' : '#9ca3af' }} strokeWidth={1.5} />
+      <span style={{ fontSize: '12px', fontWeight: 600 }}>{label}</span>
+    </button>
+  )
+}
