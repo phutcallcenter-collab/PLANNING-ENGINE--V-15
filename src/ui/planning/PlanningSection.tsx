@@ -30,7 +30,7 @@ import {
 import { CalendarDayModal } from './CalendarDayModal'
 import { SwapModal } from './SwapModal'
 import { CoverageRulesPanel } from '../coverage/CoverageRulesPanel'
-import { CoverageRuleModal } from '../coverage/CoverageRuleModal'
+// CoverageRuleModal removed
 import { motion, AnimatePresence } from 'framer-motion'
 import { useAppStore } from '@/store/useAppStore'
 import { useWeeklyPlan } from '../../hooks/useWeeklyPlan'
@@ -39,7 +39,7 @@ import { useWeekNavigator } from '@/hooks/useWeekNavigator'
 import { useEditMode } from '@/hooks/useEditMode'
 import { resolveCoverage } from '@/domain/planning/resolveCoverage'
 import { CoverageChart } from '../coverage/CoverageChart'
-import { CoverageEmptyState } from '../coverage/CoverageEmptyState'
+// CoverageEmptyState removed
 import { getEffectiveAssignmentsForPlanner } from '@/application/ui-adapters/getEffectiveAssignmentsForPlanner'
 import {
   getEffectiveDailyCoverage,
@@ -49,6 +49,7 @@ import * as humanize from '@/application/presenters/humanize'
 import { format, parseISO } from 'date-fns'
 import { HelpPanel } from '../components/HelpPanel'
 import { resolveIncidentDates } from '@/domain/incidents/resolveIncidentDates'
+import { Sun, Moon } from 'lucide-react'
 
 // ⚠️ CANONICAL RULE: Identity vs. Operation
 // This function is the single source of truth for deciding if a representative
@@ -77,14 +78,12 @@ function belongsToShiftThisWeek(
   })
 }
 
-export function PlanningSection() {
+export function PlanningSection({ onNavigateToSettings }: { onNavigateToSettings: () => void }) {
   const {
     representatives,
     coverageRules,
     planningAnchorDate,
     isLoading,
-    addOrUpdateCoverageRule,
-    removeCoverageRule,
     addOrUpdateSpecialDay,
     removeSpecialDay,
     setPlanningAnchorDate,
@@ -94,13 +93,12 @@ export function PlanningSection() {
     showMixedShiftConfirmModal,
     allCalendarDaysForRelevantMonths,
     pushUndo,
+    effectivePeriods,
   } = useAppStore(s => ({
     representatives: s.representatives ?? [],
     coverageRules: s.coverageRules,
     planningAnchorDate: s.planningAnchorDate,
     isLoading: s.isLoading,
-    addOrUpdateCoverageRule: s.addOrUpdateCoverageRule,
-    removeCoverageRule: s.removeCoverageRule,
     addOrUpdateSpecialDay: s.addOrUpdateSpecialDay,
     removeSpecialDay: s.removeSpecialDay,
     setPlanningAnchorDate: s.setPlanningAnchorDate,
@@ -110,6 +108,7 @@ export function PlanningSection() {
     swaps: s.swaps,
     allCalendarDaysForRelevantMonths: s.allCalendarDaysForRelevantMonths,
     pushUndo: s.pushUndo,
+    effectivePeriods: s.effectivePeriods ?? [],
   }))
 
   const activeRepresentatives = useMemo(
@@ -134,8 +133,7 @@ export function PlanningSection() {
 
   const [activeShift, setActiveShift] = useState<ShiftType>('DAY')
   const [editingDay, setEditingDay] = useState<DayInfo | null>(null)
-  const [editingRule, setEditingRule] = useState<CoverageRule | null>(null)
-  const [isCreatingRule, setIsCreatingRule] = useState(false)
+  // Coverage rule editing is now handled in Settings > Demand
   const [swapModalState, setSwapModalState] = useState<{
     isOpen: boolean
     repId: string | null
@@ -160,7 +158,7 @@ export function PlanningSection() {
     // Check if there's an active VACACIONES or LICENCIA incident for this representative
     const blockingIncident = incidents.find(i => {
       if (i.representativeId !== representativeId) return false
-      if (!['VACACIONES', 'LICENCIA'].includes(i.type)) return false
+      if (!['VACACIONES', 'LICENCIA', 'AUSENCIA_JUSTIFICADA'].includes(i.type)) return false
 
       const resolved = resolveIncidentDates(i, allCalendarDaysForRelevantMonths, rep)
 
@@ -195,16 +193,6 @@ export function PlanningSection() {
       // The `undo` action will restore it by re-adding the original `existingOverride` object.
       useAppStore.setState(state => {
         state.incidents = state.incidents.filter(i => i.id !== existingOverride.id)
-
-        state.swaps = state.swaps.filter(swap => {
-          if (swap.date !== date) return true;
-          return !(
-            ('representativeId' in swap && swap.representativeId === representativeId) ||
-            ('fromRepresentativeId' in swap && swap.fromRepresentativeId === representativeId) ||
-            ('toRepresentativeId' in swap && swap.toRepresentativeId === representativeId)
-          );
-        });
-
       })
       pushUndo({
         label: `Reaplicar cambio de turno de ${rep.name}`,
@@ -237,6 +225,11 @@ export function PlanningSection() {
         : { type: 'SINGLE', shift: activeShift }
     }
 
+    const note = prompt('Motivo del cambio de turno (opcional):')
+    if (note === null) {
+      return // User cancelled
+    }
+
     const incidentInput: IncidentInput = {
       representativeId,
       startDate: date,
@@ -244,6 +237,7 @@ export function PlanningSection() {
       duration: 1,
       assignment: finalAssignment,
       previousAssignment,
+      note: note || undefined,
     }
 
     // Since we're not confirming, we add the incident directly.
@@ -255,15 +249,6 @@ export function PlanningSection() {
         undo: () => {
           useAppStore.setState(state => {
             state.incidents = state.incidents.filter(i => i.id !== result.newId);
-
-            state.swaps = state.swaps.filter(swap => {
-              if (swap.date !== date) return true;
-              const repInvolved =
-                ('representativeId' in swap && swap.representativeId === representativeId) ||
-                ('fromRepresentativeId' in swap && swap.fromRepresentativeId === representativeId) ||
-                ('toRepresentativeId' in swap && swap.toRepresentativeId === representativeId);
-              return !repInvolved;
-            });
           });
         },
       })
@@ -306,7 +291,8 @@ export function PlanningSection() {
       swaps,
       incidents,
       allCalendarDaysForRelevantMonths,
-      representatives
+      representatives,
+      effectivePeriods
     )
   }, [
     weeklyPlan,
@@ -314,6 +300,7 @@ export function PlanningSection() {
     incidents,
     allCalendarDaysForRelevantMonths,
     representatives,
+    effectivePeriods,
   ])
 
   const agentsToRender = useMemo(() => {
@@ -359,19 +346,25 @@ export function PlanningSection() {
     return Object.values(coverageData).some(d => d.required > 0)
   }, [coverageData])
 
-  const shiftTabStyle = (isActive: boolean) => ({
-    padding: '8px 16px',
-    cursor: 'pointer',
-    border: 'none',
-    borderBottom: isActive
-      ? '2px solid hsl(0, 0%, 13%)'
-      : '2px solid transparent',
-    color: isActive ? '#111827' : '#4b5563',
-    fontWeight: isActive ? 600 : 500,
-    background: 'transparent',
-    fontSize: '16px',
-    marginRight: '10px',
-  })
+  const shiftTabStyle = (isActive: boolean) => {
+    const activeColor = activeShift === 'DAY' ? '#f59e0b' : '#6366f1'
+    return {
+      padding: '8px 16px',
+      cursor: 'pointer',
+      border: 'none',
+      borderBottom: isActive
+        ? `2px solid ${activeColor}`
+        : '2px solid transparent',
+      color: isActive ? activeColor : '#4b5563',
+      fontWeight: isActive ? 600 : 500,
+      background: 'transparent',
+      fontSize: '16px',
+      marginRight: '10px',
+      display: 'flex',
+      alignItems: 'center',
+      gap: '8px',
+    }
+  }
 
   if (isLoading || !weekDays || weekDays.length === 0) {
     return (
@@ -482,12 +475,14 @@ export function PlanningSection() {
               style={shiftTabStyle(activeShift === 'DAY')}
               onClick={() => setActiveShift('DAY')}
             >
+              <Sun size={16} />
               Turno Día
             </button>
             <button
               style={shiftTabStyle(activeShift === 'NIGHT')}
               onClick={() => setActiveShift('NIGHT')}
             >
+              <Moon size={16} />
               Turno Noche
             </button>
           </div>
@@ -578,27 +573,14 @@ export function PlanningSection() {
                   {hasAnyCoverageRule ? (
                     <CoverageChart data={coverageData} />
                   ) : (
-                    <CoverageEmptyState
-                      onCreateRule={() => setIsCreatingRule(true)}
-                    />
+                    /* Empty state handled now by Matrix in Settings */
+                    <div style={{ marginBottom: '16px', padding: '16px', background: '#f9fafb', borderRadius: '8px', border: '1px dashed #d1d5db', textAlign: 'center', color: '#6b7280', fontSize: '13px' }}>
+                      Sin reglas de cobertura activas.
+                    </div>
                   )}
 
                   <CoverageRulesPanel
-                    rules={coverageRules}
-                    onAdd={() => setIsCreatingRule(true)}
-                    onEdit={rule => setEditingRule(rule)}
-                    onDelete={async id => {
-                      const confirmed = await showConfirm({
-                        title: '¿Eliminar Regla?',
-                        description:
-                          'Esta acción eliminará la regla de cobertura permanentemente.',
-                        intent: 'danger',
-                        confirmLabel: 'Sí, eliminar',
-                      })
-                      if (confirmed) {
-                        removeCoverageRule(id)
-                      }
-                    }}
+                    onNavigateToSettings={onNavigateToSettings}
                   />
                 </div>
               </aside>
@@ -623,21 +605,6 @@ export function PlanningSection() {
             if (confirmed) {
               removeSpecialDay(date)
             }
-          }}
-        />
-      )}
-
-      {(editingRule || isCreatingRule) && (
-        <CoverageRuleModal
-          rule={editingRule ?? undefined}
-          onSave={rule => {
-            addOrUpdateCoverageRule(rule)
-            setEditingRule(null)
-            setIsCreatingRule(false)
-          }}
-          onClose={() => {
-            setEditingRule(null)
-            setIsCreatingRule(false)
           }}
         />
       )}

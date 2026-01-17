@@ -20,7 +20,7 @@
  */
 
 import { EffectiveDutyResult } from '@/domain/swaps/resolveEffectiveDuty'
-import { DayInfo } from '@/domain/calendar/types'
+import { DayInfo, DailyPresence } from '@/domain/calendar/types'
 import { Representative } from '@/domain/types'
 import { ResolvedCellState } from './cellState'
 import * as humanize from '@/application/presenters/humanize'
@@ -32,7 +32,9 @@ export function mapEffectiveDutyToCellState(
     duty: EffectiveDutyResult,
     day: DayInfo,
     rep: Representative,
-    allReps: Representative[]
+    allReps: Representative[],
+    source?: DailyPresence['source'],
+    overrideNote?: string
 ): ResolvedCellState {
     // 🔴 AUSENCIA — prioridad absoluta
     if (duty.reason === 'AUSENCIA') {
@@ -41,8 +43,8 @@ export function mapEffectiveDutyToCellState(
             label: 'AUS',
             tooltip: humanize.absentTooltip(rep, day.date),
             ariaLabel: `${rep.name} estuvo ausente el ${day.date}`,
-            canEdit: true,
-            canContextMenu: true,
+            canEdit: false,
+            canContextMenu: false,
         }
     }
 
@@ -59,12 +61,13 @@ export function mapEffectiveDutyToCellState(
     }
 
     // 🟣 LICENCIA
-    if (duty.reason === 'LICENCIA') {
+    if (duty.reason === 'LICENCIA' || duty.reason === 'AUSENCIA_JUSTIFICADA') {
+        const isLicense = duty.reason === 'LICENCIA'
         return {
             variant: 'LICENSE',
-            label: 'LIC',
-            tooltip: `${rep.name} está de licencia.`,
-            ariaLabel: `${rep.name} está de licencia`,
+            label: isLicense ? 'LIC' : 'JUS',
+            tooltip: `${rep.name} está de ${isLicense ? 'licencia' : 'ausencia justificada'}.`,
+            ariaLabel: `${rep.name} está de ${isLicense ? 'licencia' : 'ausencia justificada'}`,
             canEdit: false,
             canContextMenu: false,
         }
@@ -72,10 +75,21 @@ export function mapEffectiveDutyToCellState(
 
     // ⚪ LIBRE
     if (!duty.shouldWork) {
+        let tooltipText = humanize.offBaseTooltip(rep) // Default
+
+        if (source === 'OVERRIDE') {
+            tooltipText = overrideNote
+                ? `Día libre manual: ${overrideNote}`
+                : 'Día libre asignado manualmente.'
+        } else if (source === 'INCIDENT') {
+            // This case might not be hit if duty.reason covers it, but as a fallback.
+            tooltipText = `No trabaja debido a una incidencia.`
+        }
+
         return {
             variant: 'OFF',
             label: 'OFF',
-            tooltip: humanize.offBaseTooltip(rep),
+            tooltip: tooltipText,
             ariaLabel: `${rep.name} no trabaja este día`,
             canEdit: true,
             canContextMenu: true,

@@ -15,13 +15,12 @@ import {
   ShiftAssignment,
   RepresentativeRole,
   SpecialSchedule,
+  EffectiveSchedulePeriod,
+  WeeklyPattern,
+  DailyDuty,
 } from '@/domain/types'
 import { createInitialState, createBaseSchedule } from '@/domain/state'
 import { loadState, saveState } from '@/persistence/storage'
-import {
-    setLastBackupTimestamp,
-    setLastRestoreTimestamp,
-} from '@/persistence/localStorage'
 import {
   getYear,
   getMonth,
@@ -39,6 +38,7 @@ import { AuditEvent } from '@/domain/audit/types'
 import { recordAuditEvent } from '@/domain/audit/auditRecorder'
 import * as humanize from '@/application/presenters/humanize'
 import { BackupPayload } from '@/application/backup/types'
+import { validateNoOverlap } from '@/domain/planning/effectivePeriodHelpers'
 
 // --- UI Slice Types ---
 type ConfirmIntent = 'danger' | 'warning' | 'info'
@@ -152,6 +152,11 @@ export type AppState = PlanningBaseState & {
   addSpecialSchedule: (data: Omit<SpecialSchedule, 'id'>) => void
   removeSpecialSchedule: (id: string) => void
 
+  // Effective Period Actions
+  addEffectivePeriod: (data: Omit<EffectiveSchedulePeriod, 'id' | 'createdAt'>) => { success: boolean; error?: string }
+  updateEffectivePeriod: (id: string, updates: Partial<Omit<EffectiveSchedulePeriod, 'id' | 'representativeId'>>) => { success: boolean; error?: string }
+  deleteEffectivePeriod: (id: string) => void
+
   // History Actions
   addHistoryEvent: (data: Omit<HistoryEvent, 'id' | 'timestamp'>) => void
 
@@ -167,7 +172,7 @@ export type AppState = PlanningBaseState & {
   executeUndo: (id: string) => void
 
   // Backup/Restore
-  exportState: () => BackupPayload
+  exportState: () => PlanningBaseState
   importState: (data: BackupPayload) => { success: boolean; message: string }
 }
 
@@ -321,7 +326,7 @@ export const useAppStore = create<AppState>()(
     },
 
     resetState: async keepFormalIncidents => {
-      const { showConfirm, addAuditEvent } = get()
+      const { showConfirm } = get()
       const confirmed = await showConfirm({
         title: '⚠️ ¿Reiniciar la planificación?',
         description:
@@ -331,12 +336,6 @@ export const useAppStore = create<AppState>()(
       })
 
       if (confirmed) {
-        addAuditEvent({
-          actor: { id: 'admin', name: 'Administrador' },
-          action: 'APP_STATE_RESET',
-          target: { entity: 'SYSTEM' },
-          context: { reason: 'Reinicio de estado desde el panel de ajustes.' },
-        })
         set(state => {
           const freshState = createInitialState()
           let incidentsToKeep: Incident[] = []
@@ -780,6 +779,65 @@ export const useAppStore = create<AppState>()(
         )
       })
     },
+
+    // ===============================================
+    // Effective Period Actions
+    // ===============================================
+    addEffectivePeriod: data => {
+      const { effectivePeriods } = get()
+
+      // Validate no overlap
+      const error = validateNoOverlap(effectivePeriods, data)
+      if (error) {
+        return { success: false, error }
+      }
+
+      set(state => {
+        const newPeriod: EffectiveSchedulePeriod = {
+          id: `ep-${crypto.randomUUID()}`,
+          createdAt: new Date().toISOString().split('T')[0],
+          ...data,
+        }
+        state.effectivePeriods.push(newPeriod)
+      })
+
+      return { success: true }
+    },
+
+    updateEffectivePeriod: (id, updates) => {
+      const { effectivePeriods } = get()
+      const existing = effectivePeriods.find(p => p.id === id)
+
+      if (!existing) {
+        return { success: false, error: 'Período no encontrado' }
+      }
+
+      // Create updated period for validation
+      const updated = { ...existing, ...updates }
+
+      // Validate no overlap (excluding this period)
+      const error = validateNoOverlap(effectivePeriods, updated, id)
+      if (error) {
+        return { success: false, error }
+      }
+
+      set(state => {
+        const period = state.effectivePeriods.find(p => p.id === id)
+        if (period) {
+          Object.assign(period, updates)
+        }
+      })
+
+      return { success: true }
+    },
+
+    deleteEffectivePeriod: id => {
+      set(state => {
+        state.effectivePeriods = state.effectivePeriods.filter(
+          p => p.id !== id
+        )
+      })
+    },
     openDetailModal: (personId, month) => {
       set({ detailModalState: { isOpen: true, personId, month } })
     },
@@ -836,15 +894,6 @@ export const useAppStore = create<AppState>()(
       set({ vacationConfirmationState: null })
     },
     exportState: () => {
-      const now = new Date().toISOString()
-      const { addAuditEvent } = get();
-      addAuditEvent({
-        actor: { id: 'admin', name: 'Administrador' },
-        action: 'DATA_EXPORTED',
-        target: { entity: 'SYSTEM' },
-        context: { reason: `Exportación de estado completo desde el panel de ajustes en ${now}.` },
-      });
-      setLastBackupTimestamp(now)
       const {
         representatives,
         incidents,
@@ -852,30 +901,26 @@ export const useAppStore = create<AppState>()(
         coverageRules,
         swaps,
         specialSchedules,
+        effectivePeriods,
         historyEvents,
         auditLog,
         version,
       } = get()
 
       return {
-        ...{
-          representatives,
-          incidents,
-          calendar,
-          coverageRules,
-          swaps,
-          specialSchedules,
-          historyEvents,
-          auditLog,
-          version,
-        },
-        exportedAt: now,
-        appVersion: version,
+        representatives,
+        incidents,
+        calendar,
+        coverageRules,
+        swaps,
+        specialSchedules,
+        effectivePeriods,
+        historyEvents,
+        auditLog,
+        version,
       }
     },
     importState: (data: BackupPayload) => {
-      const now = new Date().toISOString()
-      const { addAuditEvent } = get();
       const safeState: PlanningBaseState = {
         ...createInitialState(),
         representatives: Array.isArray(data.representatives)
@@ -888,6 +933,7 @@ export const useAppStore = create<AppState>()(
         historyEvents: data.historyEvents ?? [],
         auditLog: data.auditLog ?? [],
         specialSchedules: data.specialSchedules ?? [],
+        effectivePeriods: data.effectivePeriods ?? [],
         version: DOMAIN_VERSION,
       }
 
@@ -901,14 +947,6 @@ export const useAppStore = create<AppState>()(
           undoStack: [],
         })
       })
-
-      addAuditEvent({
-        actor: { id: 'admin', name: 'Administrador' },
-        action: 'DATA_IMPORTED',
-        target: { entity: 'SYSTEM' },
-        context: { reason: `Importación de estado desde archivo de respaldo en ${now}.` },
-      });
-      setLastRestoreTimestamp(now)
 
       get()._generateCalendarDays()
 
@@ -926,6 +964,7 @@ export const stateToPersist = (state: AppState): PlanningBaseState => {
     coverageRules,
     swaps,
     specialSchedules,
+    effectivePeriods,
     historyEvents,
     auditLog,
     version,
@@ -937,6 +976,7 @@ export const stateToPersist = (state: AppState): PlanningBaseState => {
     coverageRules,
     swaps,
     specialSchedules,
+    effectivePeriods,
     historyEvents,
     auditLog,
     version,

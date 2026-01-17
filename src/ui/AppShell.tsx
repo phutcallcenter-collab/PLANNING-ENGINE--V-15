@@ -41,6 +41,20 @@ function AppShellInner() {
     closeVacationConfirmation: s.closeVacationConfirmation,
   }))
 
+  // ✅ AUTO-BACKUP LOGIC
+  useEffect(() => {
+    // Wait for app to be stable
+    if (!isLoading) {
+      import('@/persistence/backup').then(({ shouldRunAutoBackup, saveBackupToLocalStorage }) => {
+        if (shouldRunAutoBackup()) {
+          console.log('Running auto-backup...')
+          const fullState = useAppStore.getState()
+          saveBackupToLocalStorage(fullState, 'auto')
+        }
+      })
+    }
+  }, [isLoading])
+
   const [activeView, setActiveView] = useState<'PLANNING' | 'DAILY_LOG' | 'STATS' | 'SETTINGS'>('DAILY_LOG')
 
   // Pre-fetch the summary for the modal
@@ -134,7 +148,9 @@ function AppShellInner() {
 
       <main style={{ paddingTop: '30px' }}>
         {activeView === 'DAILY_LOG' && <DailyLogView />}
-        {activeView === 'PLANNING' && <PlanningSection />}
+        {activeView === 'PLANNING' && (
+          <PlanningSection onNavigateToSettings={() => setActiveView('SETTINGS')} />
+        )}
         {activeView === 'STATS' && <StatsView />}
         {activeView === 'SETTINGS' && <SettingsView />}
       </main>

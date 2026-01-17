@@ -28,6 +28,7 @@ import {
 import { format, parseISO, addDays, subDays, isToday } from 'date-fns'
 import { es } from 'date-fns/locale'
 import { CalendarGrid } from '../components/CalendarGrid'
+import { isWorking, isExpected } from '@/application/ui-adapters/dailyLogUtils'
 
 const styles = {
   btnPrimary: {
@@ -90,14 +91,14 @@ const ShiftStatusDisplay = ({
   label,
   isActive,
   onClick,
-  coverageCount,
-  totalCount,
+  presentCount,
+  plannedCount,
 }: {
   label: string
   isActive: boolean
   onClick: () => void
-  coverageCount: number
-  totalCount: number
+  presentCount: number
+  plannedCount: number
 }) => {
   const baseStyle: React.CSSProperties = {
     width: '100%',
@@ -148,10 +149,10 @@ const ShiftStatusDisplay = ({
             color: 'var(--text-main)',
           }}
         >
-          {coverageCount}
+          {presentCount}
         </span>
         <span style={{ fontWeight: 500, fontSize: '1rem', color: '#9ca3af' }}>
-          / {totalCount}
+          / {plannedCount}
         </span>
       </div>
     </button>
@@ -166,7 +167,8 @@ export function DailyLogView() {
     planningAnchorDate,
     setPlanningAnchorDate,
     swaps,
-    isLoading
+    isLoading,
+    effectivePeriods
   } = useAppStore(s => ({
     incidents: s.incidents,
     allCalendarDaysForRelevantMonths: s.allCalendarDaysForRelevantMonths,
@@ -175,6 +177,7 @@ export function DailyLogView() {
     setPlanningAnchorDate: s.setPlanningAnchorDate,
     swaps: s.swaps,
     isLoading: s.isLoading,
+    effectivePeriods: s.effectivePeriods ?? [],
   }))
 
   // 🎯 SIEMPRE empezar en el día actual (hoy)
@@ -216,7 +219,8 @@ export function DailyLogView() {
       incidents,
       logDate,
       allCalendarDaysForRelevantMonths,
-      representatives
+      representatives,
+      effectivePeriods
     )
   }, [
     weeklyPlan,
@@ -225,59 +229,54 @@ export function DailyLogView() {
     logDate,
     allCalendarDaysForRelevantMonths,
     representatives,
-    isLoading
+    isLoading,
+    effectivePeriods,
   ])
 
   const {
     representativesInShift,
-    dayShiftCoverage,
-    nightShiftCoverage,
-    dayShiftTotal,
-    nightShiftTotal,
+    dayShiftPresent,
+    nightShiftPresent,
+    dayShiftPlanned,
+    nightShiftPlanned,
   } = useMemo(() => {
     if (!weeklyPlan || isLoading)
       return {
         representativesInShift: [],
-        dayShiftCoverage: 0,
-        nightShiftCoverage: 0,
-        dayShiftTotal: 0,
-        nightShiftTotal: 0,
+        dayShiftPresent: 0,
+        nightShiftPresent: 0,
+        dayShiftPlanned: 0,
+        nightShiftPlanned: 0,
       }
 
     // Coverage Counts
     const dayEntries = dailyLogEntries.filter(e => e.shift === 'DAY')
     const nightEntries = dailyLogEntries.filter(e => e.shift === 'NIGHT')
 
-    // isWorking: personas que efectivamente están trabajando
-    // ABSENT no cuenta porque faltaron (aunque debían trabajar)
-    const isWorking = (e: DailyLogEntry) =>
-      ['WORKING', 'COVERING', 'DOUBLE', 'SWAPPED_IN'].includes(e.logStatus)
+    // 🧠 Metric Logic: present / planned ≠ coverage demand
+    const dayShiftPresent = dayEntries.filter(isWorking).length
+    const nightShiftPresent = nightEntries.filter(isWorking).length
 
-    const dayShiftCoverage = dayEntries.filter(isWorking).length
-    const nightShiftCoverage = nightEntries.filter(isWorking).length
-
-    const dayShiftTotal = dayEntries.filter(
-      e => e.logStatus !== 'OFF' || e.isResponsible
-    ).length
-    const nightShiftTotal = nightEntries.filter(
-      e => e.logStatus !== 'OFF' || e.isResponsible
-    ).length
+    const dayShiftPlanned = dayEntries.filter(isExpected).length
+    const nightShiftPlanned = nightEntries.filter(isExpected).length
 
     // Representatives List (Active Shift)
     const activeEntries = activeShift === 'DAY' ? dayEntries : nightEntries
     const repMap = new Map(representatives.map(r => [r.id, r]))
 
     const representativesInShift = activeEntries
-      .filter(e => e.logStatus !== 'OFF' || e.isResponsible) // Show relevant people
+      .filter(isExpected)
       .map(e => repMap.get(e.representativeId))
       .filter((r): r is Representative => !!r)
+      // Remove duplicates
+      .filter((r, index, self) => self.findIndex(rep => rep.id === r.id) === index)
 
     return {
       representativesInShift,
-      dayShiftCoverage,
-      nightShiftCoverage,
-      dayShiftTotal,
-      nightShiftTotal,
+      dayShiftPresent,
+      nightShiftPresent,
+      dayShiftPlanned,
+      nightShiftPlanned,
     }
   }, [dailyLogEntries, activeShift, weeklyPlan, representatives, isLoading])
 
@@ -459,15 +458,15 @@ export function DailyLogView() {
               label="Día"
               isActive={activeShift === 'DAY'}
               onClick={() => setActiveShift('DAY')}
-              coverageCount={dayShiftCoverage}
-              totalCount={dayShiftTotal}
+              presentCount={dayShiftPresent}
+              plannedCount={dayShiftPlanned}
             />
             <ShiftStatusDisplay
               label="Noche"
               isActive={activeShift === 'NIGHT'}
               onClick={() => setActiveShift('NIGHT')}
-              coverageCount={nightShiftCoverage}
-              totalCount={nightShiftTotal}
+              presentCount={nightShiftPresent}
+              plannedCount={nightShiftPlanned}
             />
           </div>
         </div>
@@ -643,6 +642,7 @@ export function DailyLogView() {
                 >
                   <option value="TARDANZA">Tardanza</option>
                   <option value="AUSENCIA">Ausencia</option>
+                  <option value="AUSENCIA_JUSTIFICADA">Ausencia Justificada</option>
                   <option value="ERROR">Error</option>
                   <option value="OTRO">Otro</option>
                   <option value="LICENCIA">Licencia</option>
@@ -768,7 +768,7 @@ export function DailyLogView() {
             }}
           >
             <DailyEventsList
-              title="Ausencias en Curso (Todos)"
+              title="Eventos en Curso (Todos)"
               incidents={ongoingIncidents}
               emptyMessage="No hay licencias o vacaciones activas."
             />
@@ -778,4 +778,3 @@ export function DailyLogView() {
     </div>
   )
 }
-

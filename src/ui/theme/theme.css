@@ -248,7 +248,7 @@ body,
   overflow-x: hidden;
   /* Contain scrollbar impact */
   gap: 24px;
-  align-items: start;
+  align-items: flex-start;
 }
 
 .planner-grid-container {

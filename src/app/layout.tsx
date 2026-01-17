@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from 'next'
 import ClientLayout from './ClientLayout'
+import '../ui/theme/theme.css'
 
 export const metadata: Metadata = {
   title: 'Control Operativo',

@@ -21,6 +21,7 @@ import { AuditEvent } from './audit/types'
 import { HistoryEvent } from '@/store/useAppStore'
 import { SwapEvent, SwapType } from './planning/swap'
 import { ShiftAssignment } from './planning/shiftAssignment'
+import { EffectiveSchedulePeriod } from './planning/effectiveSchedulePeriod'
 
 // Re-export ISODate to be available from the root domain types
 export type { ISODate, DayInfo, SpecialDay, DayKind } from './calendar/types'
@@ -46,6 +47,7 @@ export type { AvailabilityStatus }
 export type { AuditEvent }
 export type { SwapEvent, SwapType }
 export type { ShiftAssignment }
+export type { EffectiveSchedulePeriod, WeeklyPattern, DailyDuty } from './planning/effectiveSchedulePeriod'
 
 /**
  * Define el alcance de una regla de cobertura.
@@ -57,6 +59,7 @@ export type CoverageRuleScope =
   | { type: 'GLOBAL' }
   | { type: 'SHIFT'; shift: ShiftType }
   | { type: 'DATE'; date: ISODate }
+  | { type: 'WEEKDAY'; day: 0 | 1 | 2 | 3 | 4 | 5 | 6; shift?: ShiftType }
 
 /**
  * Representa una regla que define el número mínimo de personas requeridas.
@@ -92,6 +95,7 @@ export type PlanningBaseState = {
   calendar: CalendarState
   coverageRules: CoverageRule[]
   specialSchedules: SpecialSchedule[]
+  effectivePeriods: EffectiveSchedulePeriod[]
   historyEvents: HistoryEvent[]
   auditLog: AuditEvent[]
   swaps: SwapEvent[]

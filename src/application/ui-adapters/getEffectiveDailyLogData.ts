@@ -1,4 +1,4 @@
-import { WeeklyPlan, SwapEvent, Incident, ISODate, ShiftType, DayInfo, Representative } from '@/domain/types'
+import { WeeklyPlan, SwapEvent, Incident, ISODate, ShiftType, DayInfo, Representative, EffectiveSchedulePeriod } from '@/domain/types'
 import { resolveEffectiveDuty, EffectiveDutyResult } from '@/domain/swaps/resolveEffectiveDuty'
 import { resolvePunitiveResponsibility } from '@/domain/incidents/resolvePunitiveResponsibility'
 
@@ -31,20 +31,21 @@ export function getEffectiveDailyLogData(
     incidents: Incident[],
     date: ISODate,
     allCalendarDays: DayInfo[],
-    representatives: Representative[]
+    representatives: Representative[],
+    effectivePeriods: EffectiveSchedulePeriod[] = []
 ): DailyLogEntry[] {
     const result: DailyLogEntry[] = []
 
     for (const agent of weeklyPlan.agents) {
         for (const shift of ['DAY', 'NIGHT'] as ShiftType[]) {
-            const duty = resolveEffectiveDuty(weeklyPlan, swaps, incidents, date, shift, agent.representativeId, allCalendarDays, representatives)
-            const isResponsible = resolvePunitiveResponsibility(weeklyPlan, swaps, incidents, date, shift, agent.representativeId, allCalendarDays, representatives)
+            const duty = resolveEffectiveDuty(weeklyPlan, swaps, incidents, date, shift, agent.representativeId, allCalendarDays, representatives, effectivePeriods)
+            const isResponsible = resolvePunitiveResponsibility(weeklyPlan, swaps, incidents, date, shift, agent.representativeId, allCalendarDays, representatives, effectivePeriods)
 
             let logStatus: LogStatus = 'OFF'
 
             switch (duty.role) {
                 case 'BASE':
-                    logStatus = duty.shouldWork ? 'WORKING' : 'OFF'
+                    logStatus = duty.shouldWork ? 'WORKING' : 'OFF' // Should be WORKING if base
                     break
                 case 'COVERING':
                     logStatus = 'COVERING'
@@ -53,7 +54,7 @@ export function getEffectiveDailyLogData(
                     logStatus = 'DOUBLE'
                     break
                 case 'SWAPPED_IN':
-                    logStatus = 'SWAPPED_IN'
+                    logStatus = 'SWAPPED_IN' // Specific type of working
                     break
                 case 'COVERED':
                     logStatus = 'COVERED'
@@ -62,11 +63,13 @@ export function getEffectiveDailyLogData(
                     logStatus = 'SWAPPED_OUT'
                     break
                 case 'NONE':
+                    // If base was working but now NONE, check reason
+                    // AUSENCIA means they should have worked but didn't show up
+                    // VACACIONES/LICENCIA are justified absences
                     if (duty.reason === 'AUSENCIA') {
                         logStatus = 'ABSENT'
                     } else if (duty.reason && ['VACACIONES', 'LICENCIA'].includes(duty.reason)) {
-                        // People on formal leave should be OFF, not ABSENT, for this view
-                        logStatus = 'OFF'
+                        logStatus = 'ABSENT'  // Justified absences are still absences
                     } else {
                         logStatus = 'OFF'
                     }

@@ -1,5 +1,5 @@
 import type { VisualVariant } from '@/application/ui-adapters/cellState'
-import { Check, Sun, XCircle, LucideIcon } from 'lucide-react'
+import { Check, Sun, XCircle, LucideIcon, UserCheck } from 'lucide-react'
 
 export interface CellTheme {
     bg: string
@@ -42,6 +42,7 @@ export const CELL_THEME: Record<VisualVariant, CellTheme> = {
     LICENSE: {
         bg: 'hsl(265, 60%, 95%)',
         fg: 'hsl(265, 40%, 35%)',
+        icon: UserCheck
     },
 
     HOLIDAY: {

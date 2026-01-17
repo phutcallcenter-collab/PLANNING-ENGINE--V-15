@@ -18,7 +18,7 @@ function isWeekendDay(date: Date): boolean {
 }
 
 const POINT_RULES: Record<
-  Exclude<IncidentType, 'OTRO' | 'LICENCIA' | 'VACACIONES' | 'OVERRIDE'>,
+  Exclude<IncidentType, 'OTRO' | 'LICENCIA' | 'VACACIONES' | 'OVERRIDE' | 'AUSENCIA_JUSTIFICADA'>,
   { weekday: number; weekend: number }
 > = {
   AUSENCIA: { weekday: 3, weekend: 6 },
@@ -32,7 +32,8 @@ export function calculatePoints(incident: Incident): number {
   if (
     incident.type === 'LICENCIA' ||
     incident.type === 'VACACIONES' ||
-    incident.type === 'OVERRIDE'
+    incident.type === 'OVERRIDE' ||
+    incident.type === 'AUSENCIA_JUSTIFICADA'
   ) {
     return 0
   }

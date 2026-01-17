@@ -27,6 +27,7 @@ export type IncidentType =
   // Planned, multi-day absences
   | 'LICENCIA' // (counts calendar days)
   | 'VACACIONES' // (counts working days)
+  | 'AUSENCIA_JUSTIFICADA' // Justified single-day absence
   // Internal scheduling adjustments
   | 'OVERRIDE' // Not for user logging
 

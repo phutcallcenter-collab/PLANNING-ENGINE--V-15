@@ -15,7 +15,6 @@ import {
 } from 'lucide-react'
 import {
   validateSwapOperation,
-  SwapValidationContext,
 } from '@/domain/swaps/validateSwapOperation'
 import {
   buildDailyEffectiveContext,
@@ -109,7 +108,7 @@ export function SwapModal({
 
   const validationError = useMemo(() => {
     if (!type || !date) return null
-    return validateSwapOperation(type, fromId, toId, effectiveShift, validationContext as unknown as SwapValidationContext)
+    return validateSwapOperation(type, fromId, toId, effectiveShift, validationContext)
   }, [type, fromId, toId, date, effectiveShift, validationContext])
 
   const canSubmit = useMemo(() => {

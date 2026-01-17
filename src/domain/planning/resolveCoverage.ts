@@ -27,8 +27,10 @@ export function resolveCoverage(
   rules: CoverageRule[]
 ): ResolvedCoverage {
   // Orden de precedencia: DATE > SHIFT > GLOBAL
+  // NOTE: .find() assumes at most one active rule per scope/day/shift config.
+  // If UI allows duplicates, this logic will pick the first one found.
 
-  // 1. Regla por fecha
+  // 1. Regla por fecha (DATE)
   const dateMatch = rules.find(
     r => r.scope.type === 'DATE' && r.scope.date === date
   )
@@ -37,11 +39,49 @@ export function resolveCoverage(
       required: dateMatch.required,
       source: 'RULE',
       ruleId: dateMatch.id,
-      reason: `Regla específica para fecha: ${dateMatch.label || dateMatch.id}`,
+      reason: dateMatch.label || 'Excepción por Fecha',
     }
   }
 
-  // 2. Regla por turno
+  // Helper para nombres de días
+  const dayName = new Date(date + 'T12:00:00Z').toLocaleDateString('es-ES', { weekday: 'long' })
+  const dayNameCap = dayName.charAt(0).toUpperCase() + dayName.slice(1)
+  const shiftLabel = shift === 'DAY' ? 'Día' : 'Noche'
+  const dow = new Date(date + 'T12:00:00Z').getDay() as 0 | 1 | 2 | 3 | 4 | 5 | 6
+
+  // 2. Regla por DíaSemana + Turno (WEEKDAY + SHIFT)
+  const weekdayShiftMatch = rules.find(
+    r =>
+      r.scope.type === 'WEEKDAY' &&
+      r.scope.day === dow &&
+      r.scope.shift === shift
+  )
+  if (weekdayShiftMatch) {
+    return {
+      required: weekdayShiftMatch.required,
+      source: 'RULE',
+      ruleId: weekdayShiftMatch.id,
+      reason: weekdayShiftMatch.label || `Demanda: ${dayNameCap} · Turno ${shiftLabel}`,
+    }
+  }
+
+  // 3. Regla por DíaSemana genérico (WEEKDAY - Any Shift)
+  const weekdayMatch = rules.find(
+    r =>
+      r.scope.type === 'WEEKDAY' &&
+      r.scope.day === dow &&
+      !r.scope.shift // Explicitly no shift defined
+  )
+  if (weekdayMatch) {
+    return {
+      required: weekdayMatch.required,
+      source: 'RULE',
+      ruleId: weekdayMatch.id,
+      reason: weekdayMatch.label || `Demanda: ${dayNameCap} (Global)`,
+    }
+  }
+
+  // 4. Regla por Turno genérico (SHIFT)
   const shiftMatch = rules.find(
     r => r.scope.type === 'SHIFT' && r.scope.shift === shift
   )
@@ -50,20 +90,18 @@ export function resolveCoverage(
       required: shiftMatch.required,
       source: 'RULE',
       ruleId: shiftMatch.id,
-      reason: `Regla general de turno ${shift}: ${
-        shiftMatch.label || shiftMatch.id
-      }`,
+      reason: shiftMatch.label || `Criterio: Turno ${shiftLabel} (Estándar)`,
     }
   }
 
-  // 3. Fallback a regla global
+  // 5. Fallback a regla global (GLOBAL)
   const globalMatch = rules.find(r => r.scope.type === 'GLOBAL')
   if (globalMatch) {
     return {
       required: globalMatch.required,
       source: 'RULE',
       ruleId: globalMatch.id,
-      reason: `Regla global: ${globalMatch.label || globalMatch.id}`,
+      reason: globalMatch.label || 'Global (Estándar)',
     }
   }
 

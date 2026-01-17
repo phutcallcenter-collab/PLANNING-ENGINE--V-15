@@ -17,6 +17,7 @@ const stateToPersist = (state: any): PlanningBaseState => {
     coverageRules,
     swaps,
     specialSchedules,
+    effectivePeriods,
     historyEvents,
     auditLog,
     version,
@@ -28,6 +29,7 @@ const stateToPersist = (state: any): PlanningBaseState => {
     coverageRules,
     swaps,
     specialSchedules,
+    effectivePeriods,
     historyEvents,
     auditLog,
     version,
@@ -60,19 +62,19 @@ export default function Page() {
   }, [initialize]);
 
   if (isLoading) {
-      return (
-          <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              height: '100vh',
-              fontFamily: 'sans-serif',
-              fontSize: '1.2rem',
-              color: '#6b7280'
-          }}>
-              Cargando estado de la aplicación...
-          </div>
-      )
+    return (
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        height: '100vh',
+        fontFamily: 'sans-serif',
+        fontSize: '1.2rem',
+        color: '#6b7280'
+      }}>
+        Cargando estado de la aplicación...
+      </div>
+    )
   }
 
   return (

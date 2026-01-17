@@ -4,17 +4,19 @@
  * Este módulo determina el rol efectivo de un representante en un día/turno específico,
  * considerando el plan base, incidencias y eventos de swap.
  *
- * ORDEN DE PRECEDENCIA:
- * 1. Plan base (WeeklyPlan)
- * 2. Incidencias bloqueantes (VACACIONES, LICENCIA)
- * 3. Swaps/Covers/Doubles (eventos operacionales)
+ * ORDEN DE PRECEDENCIA (CRITICAL - DO NOT REORDER):
+ * 1. EffectiveSchedulePeriod (PRIORIDAD ABSOLUTA - reemplaza TODO)
+ * 2. Plan base (WeeklyPlan)
+ * 3. Incidencias bloqueantes (VACACIONES, LICENCIA, AUSENCIA_JUSTIFICADA)
+ * 4. Swaps/Covers/Doubles (eventos operacionales)
  *
  * Ver SWAP_RULES.md para reglas completas.
  */
 
-import { ISODate, ShiftType, WeeklyPlan, SwapEvent, Incident, RepresentativeId, Representative } from '../types'
+import { ISODate, ShiftType, WeeklyPlan, SwapEvent, Incident, RepresentativeId, Representative, EffectiveSchedulePeriod } from '../types'
 import { resolveIncidentDates } from '../incidents/resolveIncidentDates'
 import { DayInfo } from '../calendar/types'
+import { findActiveEffectivePeriod, getDutyFromPeriod } from '../planning/effectivePeriodHelpers'
 
 export type EffectiveDutyRole =
   | 'BASE' // Trabaja según plan base, sin modificaciones
@@ -40,10 +42,50 @@ export function resolveEffectiveDuty(
   shift: ShiftType,
   representativeId: string,
   allCalendarDays: DayInfo[],
-  representatives: Representative[]
+  representatives: Representative[],
+  effectivePeriods: EffectiveSchedulePeriod[] = []
 ): EffectiveDutyResult {
   // ===============================================
-  // 1. PLAN BASE: Determinar asignación original
+  // 1. EFFECTIVE SCHEDULE PERIOD: ABSOLUTE PRIORITY
+  // ===============================================
+  // If an EffectiveSchedulePeriod is active, it REPLACES everything else.
+  // No base plan, no mixProfile, no special schedules - ONLY the period pattern.
+  const activePeriod = findActiveEffectivePeriod(effectivePeriods, representativeId, date)
+
+  if (activePeriod) {
+    const duty = getDutyFromPeriod(activePeriod, date)
+
+    // Map DailyDuty to EffectiveDutyResult
+    if (duty === 'OFF') {
+      return {
+        shouldWork: false,
+        role: 'NONE',
+        reason: activePeriod.reason || 'Período de horario especial',
+      }
+    }
+
+    if (duty === 'BOTH') {
+      // Works both shifts
+      return {
+        shouldWork: true,
+        role: 'BASE',
+        reason: activePeriod.reason,
+      }
+    }
+
+    if (duty === 'DAY' || duty === 'NIGHT') {
+      // Works specific shift
+      const shouldWork = duty === shift
+      return {
+        shouldWork,
+        role: shouldWork ? 'BASE' : 'NONE',
+        reason: activePeriod.reason,
+      }
+    }
+  }
+
+  // ===============================================
+  // 2. PLAN BASE: Determinar asignación original
   // ===============================================
   const agent = weeklyPlan.agents.find(
     a => a.representativeId === representativeId
@@ -55,7 +97,7 @@ export function resolveEffectiveDuty(
     (baseAssignment?.type === 'SINGLE' && baseAssignment.shift === shift)
 
   // ===============================================
-  // 2. INCIDENCIAS BLOQUEANTES: Verificar disponibilidad
+  // 3. INCIDENCIAS BLOQUEANTES: Verificar disponibilidad
   // ===============================================
   const representative = representatives.find(r => r.id === representativeId)
 
@@ -68,7 +110,7 @@ export function resolveEffectiveDuty(
 
   const blockingIncident = incidents.find(i => {
     if (i.representativeId !== representativeId) return false
-    if (!['VACACIONES', 'LICENCIA'].includes(i.type)) return false
+    if (!['VACACIONES', 'LICENCIA', 'AUSENCIA_JUSTIFICADA'].includes(i.type)) return false
 
     const resolved = resolveIncidentDates(
       i,
@@ -129,7 +171,7 @@ export function resolveEffectiveDuty(
   }
 
   // ===============================================
-  // 3. EVENTOS DE SWAP: Aplicar modificaciones
+  // 4. EVENTOS DE SWAP: Aplicar modificaciones
   // ===============================================
   const relevantSwaps = swaps.filter(s => s.date === date)
 
@@ -194,7 +236,7 @@ export function resolveEffectiveDuty(
   }
 
   // ===============================================
-  // 4. FALLBACK: Usar plan base
+  // 5. FALLBACK: Usar plan base
   // ===============================================
   if (baseWorks) {
     return { shouldWork: true, role: 'BASE' }

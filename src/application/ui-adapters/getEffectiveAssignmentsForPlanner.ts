@@ -1,4 +1,4 @@
-import { WeeklyPlan, SwapEvent, Incident, ISODate, ShiftType, Representative } from '@/domain/types'
+import { WeeklyPlan, SwapEvent, Incident, ISODate, ShiftType, Representative, EffectiveSchedulePeriod } from '@/domain/types'
 import { resolveEffectiveDuty, EffectiveDutyResult } from '@/domain/swaps/resolveEffectiveDuty'
 import { DayInfo } from '@/domain/calendar/types'
 
@@ -20,7 +20,8 @@ export function getEffectiveAssignmentsForPlanner(
     swaps: SwapEvent[],
     incidents: Incident[],
     allCalendarDays: DayInfo[],
-    representatives: Representative[]
+    representatives: Representative[],
+    effectivePeriods: EffectiveSchedulePeriod[] = []
 ): PlannerAssignmentsMap {
     const result: PlannerAssignmentsMap = {}
 
@@ -35,24 +36,26 @@ export function getEffectiveAssignmentsForPlanner(
         for (const date of dates) {
             result[agent.representativeId][date] = {
                 DAY: resolveEffectiveDuty(
-                    weeklyPlan, 
-                    swaps, 
-                    incidents, 
-                    date, 
-                    'DAY', 
+                    weeklyPlan,
+                    swaps,
+                    incidents,
+                    date,
+                    'DAY',
                     agent.representativeId,
                     allCalendarDays,
-                    representatives
+                    representatives,
+                    effectivePeriods
                 ),
                 NIGHT: resolveEffectiveDuty(
-                    weeklyPlan, 
-                    swaps, 
-                    incidents, 
-                    date, 
-                    'NIGHT', 
+                    weeklyPlan,
+                    swaps,
+                    incidents,
+                    date,
+                    'NIGHT',
                     agent.representativeId,
                     allCalendarDays,
-                    representatives
+                    representatives,
+                    effectivePeriods
                 )
             }
         }
