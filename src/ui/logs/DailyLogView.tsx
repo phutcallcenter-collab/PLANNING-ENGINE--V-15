@@ -202,7 +202,7 @@ export function DailyLogView() {
   const [confirmConfig, setConfirmConfig] = useState<{
     open: boolean
     title: string
-    description: string
+    description: React.ReactNode
     confirmText: string
     cancelText: string
     resolve: (value: boolean) => void
@@ -210,7 +210,7 @@ export function DailyLogView() {
 
   const showConfirm = (options: {
     title: string
-    description: string
+    description: React.ReactNode
     confirmText: string
     cancelText: string
   }): Promise<boolean> => {
@@ -456,8 +456,16 @@ export function DailyLogView() {
     // 🟢 INTERSTITIAL CONFIRMATION for ABSENCE
     if (incidentType === 'AUSENCIA') {
       const isJustified = await showConfirm({
-        title: 'Ausencia',
-        description: '¿La ausencia es justificada?',
+        title: 'Confirmar Ausencia',
+        description: (
+          <span>
+            ¿Registrar <strong>Ausencia</strong> a <strong>{selectedRep.name}</strong>?
+            <br />
+            <span style={{ fontSize: '0.9em', color: '#6b7280' }}>
+              Seleccione si es justificada o no.
+            </span>
+          </span>
+        ),
         confirmText: 'Sí, justificada',
         cancelText: 'No, injustificada',
       })

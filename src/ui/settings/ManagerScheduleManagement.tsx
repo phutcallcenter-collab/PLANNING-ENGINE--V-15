@@ -56,6 +56,13 @@ export function ManagerScheduleManagement() {
 
     const [newManagerName, setNewManagerName] = useState('')
 
+    // 🛡️ UX RULE: FORCE CURRENT WEEK ON MOUNT
+    // This resets the view to "Today" every time the user enters this screen,
+    // preventing confusion from previous sessions.
+    React.useEffect(() => {
+        setPlanningAnchorDate(format(new Date(), 'yyyy-MM-dd'))
+    }, []) // Empty dependency array = run once on mount
+
     const handleCreateManager = () => {
         if (!newManagerName.trim()) return
         addManager({ name: newManagerName.trim() })
@@ -95,6 +102,9 @@ export function ManagerScheduleManagement() {
         handleNextWeek()
     }
 
+    // Check if we are in the current week to show "Back to Today" button
+    const isCurrentWeek = weekDays.some(d => d.date === format(new Date(), 'yyyy-MM-dd'))
+
     return (
         <div>
             <div style={{ marginBottom: '24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -108,10 +118,32 @@ export function ManagerScheduleManagement() {
                 </div>
 
                 {/* Time Sovereign */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: '#fff', padding: '4px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-subtle)' }}>
-                    <button onClick={handlePrevWeek} style={{ border: 'none', background: 'transparent', cursor: 'pointer', padding: '4px 8px', borderRadius: 'var(--radius-sm)' }}>&lt;</button>
-                    <span style={{ fontSize: '13px', fontWeight: 500, width: '180px', textAlign: 'center' }}>{weekLabel}</span>
-                    <button onClick={handleNextWeek} style={{ border: 'none', background: 'transparent', cursor: 'pointer', padding: '4px 8px', borderRadius: 'var(--radius-sm)' }}>&gt;</button>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+
+                    {!isCurrentWeek && (
+                        <button
+                            onClick={() => setPlanningAnchorDate(format(new Date(), 'yyyy-MM-dd'))}
+                            style={{
+                                padding: '6px 12px',
+                                background: 'white',
+                                border: '1px solid #d1d5db',
+                                borderRadius: 'var(--radius-md)',
+                                fontSize: '13px',
+                                fontWeight: 600,
+                                color: '#374151',
+                                cursor: 'pointer',
+                                boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
+                            }}
+                        >
+                            Hoy
+                        </button>
+                    )}
+
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: '#fff', padding: '6px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-subtle)', boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }}>
+                        <button onClick={handlePrevWeek} style={{ border: 'none', background: 'transparent', cursor: 'pointer', padding: '6px 10px', borderRadius: 'var(--radius-sm)' }}>&lt;</button>
+                        <span style={{ fontSize: '15px', fontWeight: 600, width: '220px', textAlign: 'center', color: '#111827' }}>{weekLabel}</span>
+                        <button onClick={handleNextWeek} style={{ border: 'none', background: 'transparent', cursor: 'pointer', padding: '6px 10px', borderRadius: 'var(--radius-sm)' }}>&gt;</button>
+                    </div>
                 </div>
 
                 <div style={{ marginLeft: '12px' }}>

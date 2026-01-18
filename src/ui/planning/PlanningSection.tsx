@@ -489,9 +489,9 @@ export function PlanningSection({ onNavigateToSettings }: { onNavigateToSettings
             </button>
             <div
               style={{
-                fontSize: '14px',
-                fontWeight: 500,
-                color: '#374151',
+                fontSize: '15px',
+                fontWeight: 600,
+                color: '#111827',
                 width: '280px',
                 textAlign: 'center',
               }}
