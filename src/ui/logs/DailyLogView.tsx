@@ -315,7 +315,7 @@ export function DailyLogView() {
     const representativesInShift = activeEntries
       .filter(e => isExpected(e))
       .map(e => repMap.get(e.representativeId))
-      .filter((r): r is Representative => !!r)
+      .filter((r): r is Representative => !!r && r.isActive)
 
     return {
       representativesInShift,

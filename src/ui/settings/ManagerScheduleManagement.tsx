@@ -149,107 +149,112 @@ export function ManagerScheduleManagement() {
                         </tr>
                     </thead>
                     <tbody>
-                        {managers.map(manager => {
-                            const representative = representatives.find(r => r.id === manager.id)
-                            const weeklyPlan = managementSchedules[manager.id] || null
+                        {managers
+                            .filter(manager => {
+                                const rep = representatives.find(r => r.id === manager.id)
+                                return rep ? rep.isActive !== false : true
+                            })
+                            .map(manager => {
+                                const representative = representatives.find(r => r.id === manager.id)
+                                const weeklyPlan = managementSchedules[manager.id] || null
 
-                            // Calculate Weekly Load
-                            const weeklyLoad = weekDays.reduce((sum, day) => {
-                                const effectiveDay = resolveEffectiveManagerDay(
-                                    weeklyPlan,
-                                    incidents,
-                                    day.date,
-                                    allCalendarDaysForRelevantMonths,
-                                    representative
-                                )
-                                const cellState = mapManagerDayToCell(effectiveDay, manager.name)
-                                // Weights are now centralized in WORKLOAD_WEIGHTS constant
-                                const weight = WORKLOAD_WEIGHTS[cellState.state] ?? 0
-                                return sum + weight
-                            }, 0)
+                                // Calculate Weekly Load
+                                const weeklyLoad = weekDays.reduce((sum, day) => {
+                                    const effectiveDay = resolveEffectiveManagerDay(
+                                        weeklyPlan,
+                                        incidents,
+                                        day.date,
+                                        allCalendarDaysForRelevantMonths,
+                                        representative
+                                    )
+                                    const cellState = mapManagerDayToCell(effectiveDay, manager.name)
+                                    // Weights are now centralized in WORKLOAD_WEIGHTS constant
+                                    const weight = WORKLOAD_WEIGHTS[cellState.state] ?? 0
+                                    return sum + weight
+                                }, 0)
 
-                            // Load Color Logic
-                            let loadColor = '#22c55e' // Green (< 12)
-                            if (weeklyLoad >= 12 && weeklyLoad < 15) loadColor = '#eab308' // Yellow
-                            if (weeklyLoad >= 15 && weeklyLoad < 18) loadColor = '#f97316' // Orange
-                            if (weeklyLoad >= 18) loadColor = '#ef4444' // Red
+                                // Load Color Logic
+                                let loadColor = '#22c55e' // Green (< 12)
+                                if (weeklyLoad >= 12 && weeklyLoad < 15) loadColor = '#eab308' // Yellow
+                                if (weeklyLoad >= 15 && weeklyLoad < 18) loadColor = '#f97316' // Orange
+                                if (weeklyLoad >= 18) loadColor = '#ef4444' // Red
 
-                            // Progress (capped at 100% for ~20 points visual max)
-                            const progress = Math.min((weeklyLoad / 20) * 100, 100)
+                                // Progress (capped at 100% for ~20 points visual max)
+                                const progress = Math.min((weeklyLoad / 20) * 100, 100)
 
-                            return (
-                                <tr key={manager.id} style={{ borderBottom: '1px solid #f3f4f6' }}>
-                                    <td style={{ padding: '8px 16px', color: '#111827', fontWeight: 500 }}>
-                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                                <div style={{ width: '24px', height: '24px', background: '#eff6ff', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#3b82f6' }}>
-                                                    <User size={14} />
+                                return (
+                                    <tr key={manager.id} style={{ borderBottom: '1px solid #f3f4f6' }}>
+                                        <td style={{ padding: '8px 16px', color: '#111827', fontWeight: 500 }}>
+                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                    <div style={{ width: '24px', height: '24px', background: '#eff6ff', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#3b82f6' }}>
+                                                        <User size={14} />
+                                                    </div>
+                                                    {manager.name}
                                                 </div>
-                                                {manager.name}
-                                            </div>
 
-                                            {/* Workload Meter */}
-                                            <div
-                                                title={`Carga Operativa Semanal: ${Number(weeklyLoad.toFixed(1))} pts\n\nSuma del tipo de turnos asignados esta semana.\n(Noche = más carga, Día = media, Monitoreo = baja)\n\nLo normal está entre 12 y 15 pts.\nEste valor es solo informativo.\nNo mide desempeño ni productividad.`}
-                                                style={{
-                                                    display: 'flex',
-                                                    alignItems: 'center',
-                                                    gap: '6px',
-                                                    fontSize: '11px',
-                                                    color: '#6b7280',
-                                                    paddingLeft: '32px'
-                                                }}
+                                                {/* Workload Meter */}
+                                                <div
+                                                    title={`Carga Operativa Semanal: ${Number(weeklyLoad.toFixed(1))} pts\n\nSuma del tipo de turnos asignados esta semana.\n(Noche = más carga, Día = media, Monitoreo = baja)\n\nLo normal está entre 12 y 15 pts.\nEste valor es solo informativo.\nNo mide desempeño ni productividad.`}
+                                                    style={{
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        gap: '6px',
+                                                        fontSize: '11px',
+                                                        color: '#6b7280',
+                                                        paddingLeft: '32px'
+                                                    }}
+                                                >
+                                                    <div style={{ width: '60px', height: '4px', background: '#e5e7eb', borderRadius: '2px', overflow: 'hidden' }}>
+                                                        <div style={{ width: `${progress}%`, height: '100%', background: loadColor, transition: 'width 0.3s' }} />
+                                                    </div>
+                                                    <span style={{ fontWeight: 500 }}>{Number(weeklyLoad.toFixed(1))}</span>
+                                                </div>
+                                            </div>
+                                        </td>
+                                        {weekDays.map(day => {
+                                            const effectiveDay = resolveEffectiveManagerDay(
+                                                weeklyPlan,
+                                                incidents,
+                                                day.date,
+                                                allCalendarDaysForRelevantMonths,
+                                                representative
+                                            )
+
+                                            const cellState = mapManagerDayToCell(effectiveDay, manager.name)
+
+                                            // Determine current value for selector
+                                            let currentValue = 'EMPTY'
+                                            if (effectiveDay.kind === 'DUTY') currentValue = effectiveDay.duty
+                                            else if (effectiveDay.kind === 'OFF') currentValue = 'OFF'
+                                            else if (effectiveDay.kind === 'EMPTY') currentValue = 'EMPTY'
+
+                                            const isEditable = cellState.isEditable && effectiveDay.kind !== 'VACATION' && effectiveDay.kind !== 'LICENSE'
+
+                                            return (
+                                                <td key={day.date} style={{ padding: '6px' }}>
+                                                    <ManagerPlannerCell
+                                                        state={cellState.state}
+                                                        label={cellState.label}
+                                                        tooltip={cellState.tooltip}
+                                                        currentValue={currentValue}
+                                                        onChange={isEditable ? (val) => handleDutyChange(manager.id, day.date, val) : undefined}
+                                                    />
+                                                </td>
+                                            )
+                                        })}
+                                        <td style={{ padding: '0 8px', textAlign: 'center' }}>
+                                            <button
+                                                onClick={() => removeManager(manager.id)}
+                                                style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: '#fee2e2' }}
+                                                title="Eliminar"
                                             >
-                                                <div style={{ width: '60px', height: '4px', background: '#e5e7eb', borderRadius: '2px', overflow: 'hidden' }}>
-                                                    <div style={{ width: `${progress}%`, height: '100%', background: loadColor, transition: 'width 0.3s' }} />
-                                                </div>
-                                                <span style={{ fontWeight: 500 }}>{Number(weeklyLoad.toFixed(1))}</span>
-                                            </div>
-                                        </div>
-                                    </td>
-                                    {weekDays.map(day => {
-                                        const effectiveDay = resolveEffectiveManagerDay(
-                                            weeklyPlan,
-                                            incidents,
-                                            day.date,
-                                            allCalendarDaysForRelevantMonths,
-                                            representative
-                                        )
-
-                                        const cellState = mapManagerDayToCell(effectiveDay, manager.name)
-
-                                        // Determine current value for selector
-                                        let currentValue = 'EMPTY'
-                                        if (effectiveDay.kind === 'DUTY') currentValue = effectiveDay.duty
-                                        else if (effectiveDay.kind === 'OFF') currentValue = 'OFF'
-                                        else if (effectiveDay.kind === 'EMPTY') currentValue = 'EMPTY'
-
-                                        const isEditable = cellState.isEditable && effectiveDay.kind !== 'VACATION' && effectiveDay.kind !== 'LICENSE'
-
-                                        return (
-                                            <td key={day.date} style={{ padding: '6px' }}>
-                                                <ManagerPlannerCell
-                                                    state={cellState.state}
-                                                    label={cellState.label}
-                                                    tooltip={cellState.tooltip}
-                                                    currentValue={currentValue}
-                                                    onChange={isEditable ? (val) => handleDutyChange(manager.id, day.date, val) : undefined}
-                                                />
-                                            </td>
-                                        )
-                                    })}
-                                    <td style={{ padding: '0 8px', textAlign: 'center' }}>
-                                        <button
-                                            onClick={() => removeManager(manager.id)}
-                                            style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: '#fee2e2' }}
-                                            title="Eliminar"
-                                        >
-                                            <Trash2 size={16} color="#ef4444" />
-                                        </button>
-                                    </td>
-                                </tr>
-                            )
-                        })}
+                                                <Trash2 size={16} color="#ef4444" />
+                                            </button>
+                                        </td>
+                                    </tr>
+                                )
+                            })}
                         {managers.length === 0 && (
                             <tr>
                                 <td colSpan={9} style={{ padding: '32px', textAlign: 'center', color: '#9ca3af' }}>
