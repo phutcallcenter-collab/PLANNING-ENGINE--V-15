@@ -424,7 +424,7 @@ export function DailyLogView() {
   }, [])
 
   const { submit } = useIncidentFlow({
-    onSuccess: (incidentId: string) => {
+    onSuccess: (incidentId?: string) => {
       // ✅ SUCCESS: Trigger Undo UI here
       // This is the clean separation the user requested. UI controls the experience.
       if (incidentId) {
