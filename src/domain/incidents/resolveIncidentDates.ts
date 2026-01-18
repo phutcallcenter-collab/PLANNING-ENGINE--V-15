@@ -62,7 +62,8 @@ function resolveLicenseDates(incident: Incident, allCalendarDays: DayInfo[], rep
   }
 
   const endDate = result[result.length - 1]
-  const returnDate = findNextWorkingDay(endDate, allCalendarDays, representative)
+  // 🟢 FIX: Licenses return checking should IGNORE holidays (treat them as working days if rep works that day)
+  const returnDate = findNextWorkingDay(endDate, allCalendarDays, representative, true)
 
   return {
     incident,
@@ -162,7 +163,8 @@ function resolveSingleDayIncident(incident: Incident, allCalendarDays: DayInfo[]
 function findNextWorkingDay(
   fromIndexDate: ISODate,
   allCalendarDays: DayInfo[],
-  representative?: Representative
+  representative?: Representative,
+  ignoreHolidays: boolean = false
 ): ISODate {
   const calendarMap = new Map(allCalendarDays.map(d => [d.date, d]))
   let cursor = addDays(parseISO(fromIndexDate), 1)
@@ -174,7 +176,11 @@ function findNextWorkingDay(
     const dateStr = formatISO(cursor, { representation: 'date' })
     const dayInfo = calendarMap.get(dateStr)
 
-    if (dayInfo && dayInfo.kind !== 'HOLIDAY') {
+    // Modification: If ignoreHolidays is true, we count HOLIDAY as a potential working day 
+    // (provided representative base schedule allows it).
+    // If ignoreHolidays is false (default), we skip HOLIDAY.
+
+    if (dayInfo && (dayInfo.kind !== 'HOLIDAY' || ignoreHolidays)) {
       if (representative) {
         const dayOfWeek = cursor.getUTCDay()
         if (representative.baseSchedule[dayOfWeek] !== 'OFF') {
