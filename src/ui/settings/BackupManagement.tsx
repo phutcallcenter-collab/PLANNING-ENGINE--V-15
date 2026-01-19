@@ -8,13 +8,15 @@ import {
     getBackupHistory,
     saveBackupToLocalStorage,
     loadBackupFromLocalStorage,
-    deleteBackupFromLocalStorage
+    deleteBackupFromLocalStorage,
+    getAutoBackupMetadata
 } from '@/persistence/backup'
 import { Download, Upload, Trash2, Save, AlertCircle } from 'lucide-react'
 
 export function BackupManagement() {
-    const { representatives, incidents, calendar, coverageRules, swaps, specialSchedules, effectivePeriods, historyEvents, auditLog, version, importState } = useAppStore()
+    const { representatives, incidents, calendar, coverageRules, swaps, specialSchedules, effectivePeriods, historyEvents, auditLog, managers, managementSchedules, version, importState } = useAppStore()
     const [backups, setBackups] = useState<Array<{ key: string; timestamp: string; size: number }>>([])
+    const [autoBackup, setAutoBackup] = useState<{ timestamp: string; size: number } | null>(null)
     const [error, setError] = useState<string | null>(null)
     const [success, setSuccess] = useState<string | null>(null)
 
@@ -24,6 +26,10 @@ export function BackupManagement() {
 
     const refreshBackupList = () => {
         setBackups(getBackupHistory())
+        const auto = getAutoBackupMetadata()
+        if (auto) {
+            setAutoBackup(auto)
+        }
     }
 
     const handleExport = () => {
@@ -38,6 +44,8 @@ export function BackupManagement() {
                 effectivePeriods,
                 historyEvents,
                 auditLog,
+                managers,
+                managementSchedules,
                 version,
             }
             exportBackup(state)
@@ -59,6 +67,8 @@ export function BackupManagement() {
                 // Restore state - add required metadata
                 const payload = {
                     ...state,
+                    managers: state.managers || [],
+                    managementSchedules: state.managementSchedules || {},
                     exportedAt: new Date().toISOString(),
                     appVersion: 1,
                 }
@@ -86,6 +96,8 @@ export function BackupManagement() {
                 effectivePeriods,
                 historyEvents,
                 auditLog,
+                managers,
+                managementSchedules,
                 version,
             }
             saveBackupToLocalStorage(state)
@@ -110,6 +122,8 @@ export function BackupManagement() {
             // Add required metadata
             const payload = {
                 ...state,
+                managers: state.managers || [],
+                managementSchedules: state.managementSchedules || {},
                 exportedAt: new Date().toISOString(),
                 appVersion: 1,
             }
@@ -158,10 +172,28 @@ export function BackupManagement() {
         <div style={{ padding: '20px', fontFamily: 'sans-serif' }}>
             <h2 style={{ marginTop: 0, marginBottom: '24px', color: 'var(--text-main)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 Gestión de Backups
-                {backups.length > 0 && (
-                    <span style={{ fontSize: '14px', fontWeight: 500, color: 'var(--text-muted)' }}>
-                        Último respaldo: {formatDate(backups[0].timestamp)}
-                    </span>
+                {autoBackup && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                        <span style={{ fontSize: '13px', color: '#059669', background: '#ecfdf5', padding: '4px 10px', borderRadius: '20px', border: '1px solid #a7f3d0', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <div style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#059669' }}></div>
+                            Auto-Backup: {formatDate(autoBackup.timestamp)}
+                        </span>
+                        <button
+                            onClick={() => handleRestoreBackup('planning-backup-auto-latest')}
+                            style={{
+                                fontSize: '12px',
+                                background: 'transparent',
+                                border: '1px solid var(--border-subtle)',
+                                borderRadius: '6px',
+                                padding: '4px 8px',
+                                cursor: 'pointer',
+                                color: 'var(--text-muted)'
+                            }}
+                            title="Restaurar copia de seguridad automática"
+                        >
+                            Restaurar
+                        </button>
+                    </div>
                 )}
             </h2>
 

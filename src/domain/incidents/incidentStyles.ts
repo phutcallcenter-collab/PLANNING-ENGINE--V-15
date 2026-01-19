@@ -13,10 +13,6 @@ export const INCIDENT_STYLES: Record<
     label: 'Ausencia',
     variant: 'danger',
   },
-  AUSENCIA_JUSTIFICADA: {
-    label: 'Ausencia Justificada',
-    variant: 'info',
-  },
   ERROR: {
     label: 'Error',
     variant: 'danger',

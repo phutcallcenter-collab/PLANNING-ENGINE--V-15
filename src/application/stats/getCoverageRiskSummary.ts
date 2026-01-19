@@ -99,11 +99,9 @@ export function getCoverageRiskSummary(
     const plan = findPlanForDate(day.date)
     if (!plan) continue // not an operational day
 
-    // Dual-mode: explicit days vs aggregate plans
-    const hasExplicitDays = plan.agents.some(agent => Object.keys(agent.days).length > 0)
-    const isOperationalDay = hasExplicitDays
-      ? plan.agents.some(agent => agent.days[day.date])
-      : true
+    // We evaluate the day if a plan exists for this week.
+    // Even if no specific agent has an assignment for this day, it is an operational day (with 0 coverage).
+    const isOperationalDay = true
     if (!isOperationalDay) continue
 
     const coverage = getEffectiveDailyCoverage(

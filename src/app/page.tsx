@@ -20,6 +20,8 @@ const stateToPersist = (state: any): PlanningBaseState => {
     effectivePeriods,
     historyEvents,
     auditLog,
+    managers,
+    managementSchedules,
     version,
   } = state
   return {
@@ -32,6 +34,8 @@ const stateToPersist = (state: any): PlanningBaseState => {
     effectivePeriods,
     historyEvents,
     auditLog,
+    managers,
+    managementSchedules,
     version,
   }
 }

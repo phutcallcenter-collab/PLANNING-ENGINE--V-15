@@ -81,7 +81,8 @@ export function getEffectiveDailyLogData(
                 shift,
                 logStatus,
                 isResponsible,
-                details: duty.reason
+                // Prioritize explicit details (e.g. JUSTIFICADA) over the generic reason
+                details: duty.details || duty.reason
             })
         }
     }

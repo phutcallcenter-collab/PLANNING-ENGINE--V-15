@@ -26,7 +26,7 @@ export function AuditDetail({ event }: { event: AuditEvent }) {
     // Stringify objects for better display
     const fromStr = typeof change.from === 'object' && change.from !== null ? JSON.stringify(change.from) : String(change.from);
     const toStr = typeof change.to === 'object' && change.to !== null ? JSON.stringify(change.to) : String(change.to);
-    
+
     return (
       <div style={itemStyle}>
         <span style={{ color: '#6b7280' }}>{change.field}:</span>
@@ -43,12 +43,12 @@ export function AuditDetail({ event }: { event: AuditEvent }) {
 
   if (context?.reason) {
     return (
-      <span style={{ fontStyle: 'italic', color: '#4b5563' }}>
-        "{context.reason}"
+      <span style={{ fontStyle: 'normal', color: '#374151', fontSize: '14px' }}>
+        {context.reason}
       </span>
     )
   }
-  
+
   if (context?.date) {
     return `Fecha afectada: ${context.date}`
   }

@@ -2,7 +2,7 @@ import { getEffectiveDailyCoverage } from '../getEffectiveDailyCoverage'
 import { WeeklyPlan, CoverageRule, SwapEvent } from '@/domain/types'
 
 const mockPlan: WeeklyPlan = {
-    id: 'w1', weekStart: '2026-01-05',
+    weekStart: '2026-01-05',
     agents: [
         {
             representativeId: 'A',
@@ -29,8 +29,8 @@ describe('getEffectiveDailyCoverage', () => {
     it('calculates base coverage correctly (OK status)', () => {
         // 2 agents working DAY. Rule requires 2.
         const res = getEffectiveDailyCoverage(mockPlan, [], mockRules, date, [], [], [])
-        expect(res.DAY).toEqual({ actual: 2, required: 2, status: 'OK', reason: 'Regla global: r1' })
-        expect(res.NIGHT).toEqual({ actual: 0, required: 2, status: 'DEFICIT', reason: 'Regla global: r1' })
+        expect(res.DAY).toEqual({ actual: 2, required: 2, status: 'OK', reason: 'Global (Estándar)' })
+        expect(res.NIGHT).toEqual({ actual: 0, required: 2, status: 'DEFICIT', reason: 'Global (Estándar)' })
     })
 
     it('reflects DOUBLE swap increment (SURPLUS)', () => {
@@ -40,7 +40,7 @@ describe('getEffectiveDailyCoverage', () => {
             createdAt: ''
         }
         const res = getEffectiveDailyCoverage(mockPlan, [swap], mockRules, date, [], [], [])
-        expect(res.DAY).toEqual({ actual: 3, required: 2, status: 'SURPLUS', reason: 'Regla global: r1' })
+        expect(res.DAY).toEqual({ actual: 3, required: 2, status: 'SURPLUS', reason: 'Global (Estándar)' })
     })
 
     it('reflects COVER as net zero', () => {

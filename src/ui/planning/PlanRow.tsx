@@ -29,7 +29,6 @@ interface PlanRowProps {
 
 export const PlanRow = React.memo(function PlanRow({
   agent,
-  weeklyPlan,
   weekDays,
   activeShift,
   assignmentsMap,
@@ -37,9 +36,8 @@ export const PlanRow = React.memo(function PlanRow({
   onCellClick,
   onCellContextMenu,
 }: PlanRowProps) {
-  const { representatives, incidents } = useAppStore(s => ({
+  const { representatives } = useAppStore(s => ({
     representatives: s.representatives,
-    incidents: s.incidents,
   }))
 
   return (
@@ -69,29 +67,12 @@ export const PlanRow = React.memo(function PlanRow({
           // Lookup effective duty from adapter map
           const effectiveDuty = assignmentsMap[agent.id]?.[day.date]?.[activeShift]
 
-          const agentPlan = weeklyPlan.agents.find(a => a.representativeId === agent.id);
-          const dayPresence = agentPlan?.days[day.date];
-          const source = dayPresence?.source;
-
-          let overrideNote: string | undefined;
-          if (source === 'OVERRIDE') {
-              const overrideIncident = incidents.find(
-                  i =>
-                      i.representativeId === agent.id &&
-                      i.startDate === day.date &&
-                      i.type === 'OVERRIDE'
-              );
-              overrideNote = overrideIncident?.note;
-          }
-
           // 🧠 MAPPER: Convert domain state to UI-ready state
           const resolvedCell = mapEffectiveDutyToCellState(
             effectiveDuty,
             day,
             agent,
-            representatives,
-            source,
-            overrideNote
+            representatives
           )
 
           return (

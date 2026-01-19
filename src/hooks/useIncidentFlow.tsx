@@ -7,7 +7,7 @@ import { useAppStore } from '@/store/useAppStore'
 import { canRegisterOnDate } from '@/domain/incidents/canRegisterOnDate'
 import { format } from 'date-fns'
 
-export function useIncidentFlow({ onSuccess }: { onSuccess: () => void }) {
+export function useIncidentFlow({ onSuccess }: { onSuccess: (incidentId?: string) => void }) {
   const addIncident = useAppStore(s => s.addIncident)
   const { showToast } = useToast()
 
@@ -42,9 +42,9 @@ export function useIncidentFlow({ onSuccess }: { onSuccess: () => void }) {
     const result = await addIncident(incidentInput)
 
     if (result.ok) {
-      onSuccess()
+      onSuccess(result.newId)
     } else {
-       if (result.reason !== 'Acción cancelada por el usuario.') {
+      if (result.reason !== 'Acción cancelada por el usuario.') {
         showToast({
           title: 'Error de validación',
           message: result.reason || 'Ocurrió un error desconocido.',

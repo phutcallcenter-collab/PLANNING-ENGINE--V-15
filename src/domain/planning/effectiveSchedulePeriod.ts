@@ -60,6 +60,9 @@ export interface EffectiveSchedulePeriod {
     /** Optional reason for this schedule change */
     reason?: string
 
+    /** Optional note/comment for specific details */
+    note?: string
+
     /** Timestamp when this period was created */
     createdAt: ISODate
 }

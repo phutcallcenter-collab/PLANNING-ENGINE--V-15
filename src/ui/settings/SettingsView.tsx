@@ -3,6 +3,7 @@
 import React, { useState } from 'react'
 import { useAppStore, HistoryEvent } from '@/store/useAppStore'
 import { useEditMode } from '@/hooks/useEditMode'
+import { QuickGuide } from './QuickGuide'
 import { HolidayManagement } from './HolidayManagement'
 import { RepresentativeManagement } from './RepresentativeManagement'
 import {
@@ -22,7 +23,10 @@ import { AuditEvent } from '@/domain/audit/types'
 import { format, parseISO } from 'date-fns'
 import { es } from 'date-fns/locale'
 
-type SettingsTab = 'equipo' | 'calendario' | 'sistema'
+import { Briefcase } from 'lucide-react'
+import { ManagerScheduleManagement } from './ManagerScheduleManagement'
+
+type SettingsTab = 'equipo' | 'calendario' | 'sistema' | 'gerencia'
 type EquipoSection = 'representatives' | 'demand'
 
 export function SettingsView() {
@@ -243,6 +247,13 @@ export function SettingsView() {
           Equipo y Reglas
         </button>
         <button
+          style={tabStyle(activeTab === 'gerencia')}
+          onClick={() => setActiveTab('gerencia')}
+        >
+          <Briefcase size={16} />
+          Gerencia
+        </button>
+        <button
           style={tabStyle(activeTab === 'calendario')}
           onClick={() => setActiveTab('calendario')}
         >
@@ -306,13 +317,31 @@ export function SettingsView() {
           </div>
         )}
 
+        {activeTab === 'gerencia' && (
+          <ManagerScheduleManagement />
+        )}
+
         {activeTab === 'calendario' && (
           <HolidayManagement />
         )}
 
+
+
+
+
+
         {activeTab === 'sistema' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
 
+            {/* 1. Backups */}
+            <div style={{ ...settingItemStyle, padding: 0, overflow: 'hidden' }}>
+              <BackupManagement />
+            </div>
+
+            {/* 2. Guía Rápida */}
+            <QuickGuide />
+
+            {/* 3. Modo Edición Avanzada */}
             <div style={settingItemStyle}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div>
@@ -342,12 +371,7 @@ export function SettingsView() {
               </div>
             </div>
 
-            {/* Backups Integration */}
-            <div style={{ ...settingItemStyle, padding: 0, overflow: 'hidden' }}>
-              <BackupManagement />
-            </div>
-
-            {/* Auditoría */}
+            {/* 4. Auditoría */}
             <div style={settingItemStyle}>
               <h3 style={{ margin: '0 0 4px 0', fontSize: '16px', color: 'var(--text-main)' }}>
                 Auditoría del Sistema
@@ -381,7 +405,7 @@ export function SettingsView() {
               </div>
             </div>
 
-            {/* Zona de Peligro */}
+            {/* 5. Zona de Peligro */}
             <div style={{ ...settingItemStyle, borderColor: '#fecaca', background: '#fff5f5' }}>
               <h3 style={{ margin: '0 0 4px 0', fontSize: '16px', color: '#991b1b', display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <Shield size={18} />

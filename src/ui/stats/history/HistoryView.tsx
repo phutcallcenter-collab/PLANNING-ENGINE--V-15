@@ -63,8 +63,8 @@ const HistoryEventCard = ({ event }: { event: HistoryEvent }) => {
         <div
           style={{
             fontSize: '14px',
-            color: 'var(--text-muted)',
-            fontStyle: 'italic',
+            color: '#374151',
+            fontStyle: 'normal',
             paddingTop: '4px',
           }}
         >

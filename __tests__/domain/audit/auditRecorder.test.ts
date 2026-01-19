@@ -1,8 +1,8 @@
 import { recordAuditEvent } from '../../../src/domain/audit/auditRecorder'
 import type { AuditEvent } from '../../../src/domain/audit/types'
 import { produce } from 'immer'
-import type { PlanningBaseState } from '@/src/domain/types'
-import { createInitialState } from '@/src/domain/state'
+import type { PlanningBaseState } from '@/domain/types'
+import { createInitialState } from '@/domain/state'
 
 describe('Domain Rules: Audit Recorder', () => {
   let baseState: PlanningBaseState

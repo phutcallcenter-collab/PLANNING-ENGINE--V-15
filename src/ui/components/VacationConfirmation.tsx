@@ -87,6 +87,7 @@ export function VacationConfirmation({
               </div>
               <button
                 onClick={onClose}
+                aria-label="Cerrar confirmación"
                 style={{
                   background: 'transparent',
                   border: 'none',

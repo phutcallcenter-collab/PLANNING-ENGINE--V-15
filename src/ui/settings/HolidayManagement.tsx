@@ -106,6 +106,7 @@ export function HolidayManagement() {
               type="date"
               value={newDate}
               onChange={e => setNewDate(e.target.value)}
+              aria-label="Fecha del feriado"
               style={{
                 width: '100%',
                 padding: '8px 10px',
@@ -228,6 +229,8 @@ export function HolidayManagement() {
                 {mode === 'ADMIN_OVERRIDE' && (
                   <button
                     onClick={() => handleDelete(holiday.date)}
+                    aria-label={`Eliminar feriado ${holiday.label}`}
+                    title="Eliminar feriado"
                     style={{
                       padding: '8px',
                       background: 'transparent',
@@ -238,7 +241,6 @@ export function HolidayManagement() {
                       alignItems: 'center',
                       borderRadius: '4px',
                     }}
-                    title="Eliminar feriado"
                   >
                     <Trash2 size={18} />
                   </button>

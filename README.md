@@ -1,32 +1,81 @@
-# Planning Engine — v2.0 (Operational Core)
+# Planning Engine — v1.0 (OPERATIVO ESTABLE)
 
-**Estado**: Producción Ready | **Versión de Dominio**: 7 | **Stack**: Next.js 14 + TypeScript + Zustand + IndexedDB
-
----
-
-## 📖 Descripción
-
-**Planning Engine v2.0** es un sistema de gestión operativa determinista para equipos de representantes, diseñado para planificar turnos de trabajo (DAY/NIGHT) y registrar incidencias del mundo real.
-
-El sistema NO es un optimizador automático mágico. Es un **motor de decisiones trazable** que prioriza:
-
-- **Corrección** antes que optimización
-- **Transparencia** antes que heurísticas opacas  
-- **Separación de responsabilidades** entre planificación y registro
-- **Determinismo**: mismo input → mismo output, siempre
+**Estado**: 🟢 OPERATIVO ESTABLE | **Stack**: Next.js 14 + TypeScript + Zustand + IndexedDB  
+**Última actualización**: 2026-01-18 | **Fase**: 7 (CONTRATO VISUAL CERRADO)
 
 ---
 
-## 🎯 Responsabilidades del Sistema
+## 📖 Qué hace este sistema
 
-El sistema tiene **dos módulos primarios completamente separados**:
+**Planning Engine** es un sistema de gestión operativa para equipos de trabajo con dos módulos independientes:
 
-### 1. 📅 **Módulo de Planificación**
-Define el **"deber ser"**: ¿Quién **debería** trabajar y cuándo?
+1. **Planner Operativo**: Planificación de turnos de representantes (DAY/NIGHT), registro de incidencias, cobertura, swaps
+2. **Planner Gerencial**: Asignación de turnos gerenciales (Día/Noche/Inter/Monitoreo)
 
-- Construcción de plan semanal basado en horarios base
-- Sistema de **overrides** (modificaciones manuales al plan)
-- **Sistema de Swaps** (COVER, DOUBLE, SWAP) con validación de conflictos
+**No es:**
+- ❌ Un optimizador automático
+- ❌ Un sistema de IA que "aprende"
+- ❌ Una herramienta de auditoría laboral
+- ❌ Un reemplazo de decisiones humanas
+
+**Es:**
+- ✅ Un registro determinista de planificación e incidencias
+- ✅ Un reflejo de la realidad operativa sin juicios
+- ✅ Una herramienta que muestra verdad sin corregirla
+- ✅ Un sistema que tolera ambigüedad humana
+
+**Principio fundamental:**
+> El sistema nunca completa lo que el humano no decidió.
+
+**Para quién:**
+- Organizaciones con operación 24/7
+- Equipos que necesitan registrar turnos y eventos reales
+- Gerencias que necesitan visibilidad sin burocracia
+- Humanos que aceptan que la realidad es caótica
+
+---
+
+## 🎯 Qué problemas resuelve
+
+1. **Registro de turnos sin ambigüedad** - DAY/NIGHT para operativos, Día/Noche/Inter/Monitoreo para gerencia
+2. **Incidencias del mundo real** - Ausencias, tardanzas, vacaciones, licencias sin interpretación
+3. **Cobertura en tiempo real** - Déficit/superávit sin heurísticas opacas
+4. **Swaps validados** - COVER, DOUBLE, SWAP con reglas explícitas
+5. **Auditoría completa** - Todo cambio deja rastro
+
+**Qué NO resuelve (deliberadamente):**
+- ❌ Optimización automática de horarios
+- ❌ Detección de patrones "sospechosos"
+- ❌ Métricas de cumplimiento gerencial
+- ❌ Inferencia de datos faltantes
+- ❌ Corrección de inconsistencias humanas
+
+Ver: [LIMITACIONES_SISTEMA.md](./LIMI (Incidencias)**
+Registra el **"ser"**: ¿Qué **ocurrió** realmente?
+
+- Registro de **incidencias** del mundo real:
+  - `AUSENCIA`: Falta no justificada (bloquea el día)
+  - `TARDANZA`: Llegada tarde
+  - `LICENCIA`: Ausencia justificada médica/administrativa (14 días)
+  - `VACACIONES`: Periodo de descanso (cuenta solo días laborales, excluye feriados)
+  - `ERROR`: Errores operativos
+  - `OTRO`: Eventos misceláneos
+- Sistema de **puntos punitivos** por tipo de incidencia
+- **Jerarquía de prioridad**: `AUSENCIA` > `LICENCIA`/`VACACIONES` > otros eventos
+- Validación de incidencias duplicadas
+- Vista de incidencias activas del día
+
+### 3. 👔 **Módulo de Planificación Gerencial**
+Asignación de turnos para supervisores/gerentes:
+
+- **Turnos gerenciales**: DAY (Día), NIGHT (Noche), INTER (Intermedio), MONITORING (Monitoreo)
+- **Notas libres** por asignación (máx 300 caracteres)
+- **Validación suave**: Advertencias visuales, no bloqueos
+- **Bloqueo por vacaciones/licencias**: No se puede editar si hay incidencia bloqueante
+- **Separación total**: No afecta cobertura del planner operativo
+- **Principio clave**: `null` ≠ `OFF` → null = "no planificado" (dato válido)
+
+Ver: [MANAGER_SCHEDULE_RULES.md](./MANAGER_SCHEDULE_RULES.md) SWAP) con validación de conflictos
 - Gestión de **reglas de cobertura** por turno/fecha con jerarquía
 - Soporte para **horarios especiales** temporales
 - Cálculo de déficit de cobertura en tiempo real
@@ -115,6 +164,28 @@ src/
 │
 └── persistence/         # 💿 Capa de persistencia (IndexedDB)
 ```
+
+---
+
+## 🚨 Áreas de Alto Riesgo (NO TOCAR)
+
+Si tocas esto sin entender el "por qué", el sistema dejará de ser determinista y pasará a ser "una opinión".
+
+1. **Tokens Visuales (`tokens.css`)**:
+   - Fuente única de verdad. No usar HEX ni estilos inline.
+   - Romper esto elimina la consistencia visual y el soporte futuro de temas (Dark Mode).
+
+2. **Lógica de Swaps (`validateSwapOperation.ts`)**:
+   - Contiene 29 invariantes de seguridad.
+   - Modificar una condición aquí puede permitir estados imposibles (doble turno, cobertura fantasma).
+
+3. **Resolución de Fechas (`resolveIncidentDates.ts`)**:
+   - Diferencia crítica entre días naturales (Licencias) y días hábiles (Vacaciones).
+   - Tocar esto rompe el cálculo de nómina y días libres.
+
+4. **Identidad de Turno (`belongsToShiftThisWeek`)**:
+   - Determina quién aparece en qué turno.
+   - Alterar esto causa "agentes fantasma" o desapariciones en la grilla.
 
 ---
 
@@ -232,18 +303,7 @@ El sistema tiene **cobertura exhaustiva** en tres niveles:
 - **29 tests de "pruebas hostiles"** para swaps
 - Validación de flujos críticos
 
-### 📊 Estado Actual de Tests
-
-- ✅ **Todas las suites de pruebas pasando**
-- 🧪 **29 tests de swaps hostiles: PASADOS**
-- 🎯 **Cobertura de lógica crítica: 100%**
-
-**Ejecutar tests**: 
-```bash
-npm test
-```
-
-**Ver última ejecución**: Los resultados se guardan en `test_summary.txt`
+**Comando**: `npm test`
 
 ---
 
@@ -263,6 +323,9 @@ npm test
 - Primera carga < 2s
 - Navegación instantánea entre vistas
 - Persistencia automática en IndexedDB (300ms debounce)
+
+- **Persistencia automática en IndexedDB (300ms debounce)**
+- **Design System Tokenizado**: Contrato visual estricto (Zero hardcoded values)
 
 ---
 
@@ -315,59 +378,6 @@ npm run lint
 
 - **Desarrollo**: http://localhost:3000
 - **Producción**: Compilar y deployar en Vercel/Netlify
-
----
-
-## 🔧 Troubleshooting
-
-### Errores comunes de build
-
-**Problema**: Errores de tipos en build
-```bash
-# Solución: Build sin lint estricto
-npm run build -- --no-lint
-```
-
-**Problema**: Errores de PWA o Service Worker
-```bash
-# Solución: Limpiar cache
-# 1. Abrir DevTools (F12)
-# 2. Application → Service Workers → Unregister
-# 3. Application → Cache Storage → Delete all
-```
-
-### Problemas de persistencia
-
-**Problema**: Datos corruptos en IndexedDB
-```bash
-# Solución: Resetear base de datos
-# 1. Abrir DevTools (F12)
-# 2. Application → IndexedDB → planning-engine-db
-# 3. Click derecho → Delete database
-# 4. Recargar aplicación
-```
-
-**Problema**: Estado inconsistente
-```bash
-# Solución: Limpiar localStorage
-localStorage.clear()
-# Luego recargar la aplicación
-```
-
-### Problemas de tests
-
-**Problema**: Tests fallan por timeout
-```bash
-# Solución: Ejecutar en modo single-thread
-npm test -- --runInBand
-```
-
-**Problema**: Errores de fake-indexeddb
-```bash
-# Solución: Limpiar y reinstalar
-rm -rf node_modules package-lock.json
-npm install
-```
 
 ---
 
@@ -473,4 +483,4 @@ Este es un proyecto privado. Para consultas, contactar al propietario del reposi
 
 ---
 
-**Última actualización**: 2026-01-14
+**Última actualización**: 2026-01-13

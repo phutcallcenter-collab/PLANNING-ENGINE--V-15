@@ -48,6 +48,8 @@ export type { AuditEvent }
 export type { SwapEvent, SwapType }
 export type { ShiftAssignment }
 export type { EffectiveSchedulePeriod, WeeklyPattern, DailyDuty } from './planning/effectiveSchedulePeriod'
+import { Manager, ManagerSchedule, ManagerDuty, ManagerAssignment } from './management/types'
+export type { Manager, ManagerSchedule, ManagerDuty, ManagerAssignment }
 
 /**
  * Define el alcance de una regla de cobertura.
@@ -99,6 +101,8 @@ export type PlanningBaseState = {
   historyEvents: HistoryEvent[]
   auditLog: AuditEvent[]
   swaps: SwapEvent[]
+  managers: Manager[]
+  managementSchedules: Record<string, ManagerSchedule>
   version: number
 }
 

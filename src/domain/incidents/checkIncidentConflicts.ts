@@ -21,6 +21,12 @@ export function checkIncidentConflicts(
   allCalendarDays: DayInfo[],
   representative?: Representative
 ): ConflictCheck {
+  // 🛡️ BLINDAJE FIX 6:
+  // Licencias y Vacaciones son eventos administrativos/calendario.
+  // Pueden iniciar en días OFF, Feriados o Overrides.
+  // No bloqueamos por "No trabaja hoy".
+  // La validación de solapamiento (Overlap) se mantiene abajo.
+
   // Filtrar incidencias del mismo representante
   const repIncidents = existingIncidents.filter(
     i => i.representativeId === representativeId
@@ -30,11 +36,16 @@ export function checkIncidentConflicts(
   const activeVacations = repIncidents.filter(i => i.type === 'VACACIONES')
   for (const vacation of activeVacations) {
     const resolved = resolveIncidentDates(vacation, allCalendarDays, representative)
-    
+
     if (resolved.dates.includes(startDate)) {
+      const from = resolved.start
+      const to = resolved.returnDate
+        ? resolved.returnDate
+        : resolved.dates.at(-1)
+
       return {
         hasConflict: true,
-        message: `Ya tiene vacaciones activas desde ${resolved.start} hasta ${resolved.end}`,
+        message: `Ya tiene vacaciones activas desde ${from} hasta ${to}`,
         conflictType: 'VACATION',
       }
     }
@@ -45,9 +56,14 @@ export function checkIncidentConflicts(
   for (const license of activeLicenses) {
     const resolved = resolveIncidentDates(license, allCalendarDays, representative)
     if (resolved.dates.includes(startDate)) {
+      const from = resolved.start
+      const to = resolved.returnDate
+        ? resolved.returnDate
+        : resolved.dates.at(-1)
+
       return {
         hasConflict: true,
-        message: `Ya tiene licencia activa desde ${resolved.start} hasta ${resolved.end}`,
+        message: `Ya tiene licencia activa desde ${from} hasta ${to}`,
         conflictType: 'LICENSE',
       }
     }
@@ -64,20 +80,25 @@ export function checkIncidentConflicts(
       duration,
       createdAt: new Date().toISOString(),
     }
-    
+
     const newResolved = resolveIncidentDates(newIncidentDummy, allCalendarDays, representative)
-    
+
     // Solo verificar solapamiento con incidentes del mismo tipo o compatibles
     for (const existing of repIncidents) {
       if (existing.type === 'VACACIONES' || existing.type === 'LICENCIA') {
         const existingResolved = resolveIncidentDates(existing, allCalendarDays, representative)
-        
+
         // Verificar si hay fechas en común (pero excluir el caso ya detectado arriba)
         const overlap = newResolved.dates.some(date => existingResolved.dates.includes(date))
         if (overlap) {
+          const from = existingResolved.start
+          const to = existingResolved.returnDate
+            ? existingResolved.returnDate
+            : existingResolved.dates.at(-1)
+
           return {
             hasConflict: true,
-            message: `Se solapa con ${existing.type === 'VACACIONES' ? 'vacaciones' : 'licencia'} del ${existingResolved.start} al ${existingResolved.end}`,
+            message: `Se solapa con ${existing.type === 'VACACIONES' ? 'vacaciones' : 'licencia'} del ${from} al ${to}`,
             conflictType: 'OVERLAP',
           }
         }

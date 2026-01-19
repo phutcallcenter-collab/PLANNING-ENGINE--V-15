@@ -13,6 +13,7 @@ describe('Domain Logic: applySwapsToCoverage', () => {
     const swaps: SwapEvent[] = [
       {
         id: 'swap1',
+        type: 'COVER',
         date: date,
         shift: 'DAY',
         fromRepresentativeId: 'rep-A',
@@ -36,6 +37,7 @@ describe('Domain Logic: applySwapsToCoverage', () => {
     const swaps: SwapEvent[] = [
       {
         id: 'swap1',
+        type: 'COVER',
         date: date,
         shift: 'DAY',
         fromRepresentativeId: 'rep-A',
@@ -44,6 +46,7 @@ describe('Domain Logic: applySwapsToCoverage', () => {
       },
       {
         id: 'swap2',
+        type: 'COVER',
         date: date,
         shift: 'DAY',
         fromRepresentativeId: 'rep-C',
@@ -65,6 +68,7 @@ describe('Domain Logic: applySwapsToCoverage', () => {
     const swaps: SwapEvent[] = [
       {
         id: 'swap-day',
+        type: 'COVER',
         date: date,
         shift: 'DAY',
         fromRepresentativeId: 'rep-A',
@@ -73,6 +77,7 @@ describe('Domain Logic: applySwapsToCoverage', () => {
       },
       {
         id: 'swap-night',
+        type: 'COVER',
         date: date,
         shift: 'NIGHT',
         fromRepresentativeId: 'rep-X',
@@ -95,6 +100,7 @@ describe('Domain Logic: applySwapsToCoverage', () => {
     const swaps: SwapEvent[] = [
       {
         id: 'swap1',
+        type: 'COVER',
         date: date,
         shift: 'DAY',
         fromRepresentativeId: 'rep-A',

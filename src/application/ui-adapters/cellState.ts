@@ -7,6 +7,7 @@ export type VisualVariant =
     | 'LICENSE'
     | 'HOLIDAY'
     | 'ABSENT'
+    | 'ABSENT_JUSTIFIED'
 
 /**
  * UI CONTRACT — DO NOT BREAK

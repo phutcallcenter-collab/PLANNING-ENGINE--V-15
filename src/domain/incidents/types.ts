@@ -27,7 +27,6 @@ export type IncidentType =
   // Planned, multi-day absences
   | 'LICENCIA' // (counts calendar days)
   | 'VACACIONES' // (counts working days)
-  | 'AUSENCIA_JUSTIFICADA' // Justified single-day absence
   // Internal scheduling adjustments
   | 'OVERRIDE' // Not for user logging
 
@@ -48,7 +47,10 @@ export interface Incident {
   // For 'OVERRIDE', a specific assignment can be forced
   assignment?: ShiftAssignment
   // For 'OVERRIDE', this captures the state before the change for a perfect undo
+  // For 'OVERRIDE', this captures the state before the change for a perfect undo
   previousAssignment?: ShiftAssignment
+  // Additional details (e.g., 'JUSTIFICADA' for absences)
+  details?: string
 }
 
 /**
@@ -64,4 +66,5 @@ export interface IncidentInput {
   note?: string
   assignment?: ShiftAssignment
   previousAssignment?: ShiftAssignment
+  details?: string
 }

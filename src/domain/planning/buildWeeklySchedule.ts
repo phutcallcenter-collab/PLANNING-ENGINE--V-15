@@ -130,7 +130,7 @@ export function buildWeeklySchedule(
   const agentMap = new Map(agents.map(a => [a.id, a]))
 
   const resolvedFormalIncidents = incidents
-    .filter(i => i.type === 'VACACIONES' || i.type === 'LICENCIA' || i.type === 'AUSENCIA_JUSTIFICADA')
+    .filter(i => i.type === 'VACACIONES' || i.type === 'LICENCIA')
     .map(i => {
       const representative = agentMap.get(i.representativeId)
       return resolveIncidentDates(i, allCalendarDays, representative)

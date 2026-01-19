@@ -61,17 +61,19 @@ function AppShellInner() {
   const monthlySummary = useMonthlySummary(detailModalState.month)
 
   const viewTabStyle = (isActive: boolean): React.CSSProperties => ({
-    padding: '12px 24px',
+    padding: '0 var(--space-md)',
     cursor: 'pointer',
     border: 'none',
     borderBottom: isActive
-      ? '3px solid hsl(0, 0%, 13%)'
+      ? '3px solid var(--accent)'
       : '3px solid transparent',
-    color: isActive ? 'hsl(0, 0%, 10%)' : '#374151',
+    color: isActive ? 'var(--text-main)' : 'var(--text-muted)',
     fontWeight: isActive ? 600 : 500,
-    background: isActive ? 'hsl(0, 0%, 97%)' : 'transparent',
-    fontSize: '16px',
-    marginRight: '8px',
+    background: 'transparent',
+    fontSize: 'var(--font-size-base)',
+    height: '100%',
+    display: 'flex',
+    alignItems: 'center',
     transition: 'all 0.2s ease-in-out',
   })
 
@@ -86,67 +88,74 @@ function AppShellInner() {
   return (
     <div
       style={{
-        padding: '0 40px',
         fontFamily: 'sans-serif',
-        background: '#F8F9FA',
+        background: 'var(--bg-app)',
         minHeight: '100vh',
       }}
     >
       <header
         style={{
           display: 'flex',
-          justifyContent: 'space-between',
           alignItems: 'center',
-          paddingTop: '20px',
-          paddingBottom: '16px',
-          marginBottom: '24px',
-          borderBottom: '1px solid #e5e7eb',
+          justifyContent: 'space-between',
+          height: '64px',
+          padding: '0 var(--space-xl)',
+          background: 'var(--bg-surface)',
+          borderBottom: '1px solid var(--border-subtle)',
+          boxShadow: 'var(--shadow-sm)',
+          position: 'sticky',
+          top: 0,
+          zIndex: 100,
         }}
       >
-        <div>
-          <h1 style={{ color: '#1F2937', margin: 0, fontSize: '18px', fontWeight: 700, lineHeight: 1.2 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-sm)' }}>
+          <svg
+            width="24"
+            height="24"
+            viewBox="0 0 24 24"
+            fill="currentColor"
+            style={{ color: 'var(--text-main)' }}
+          >
+            <path fillRule="evenodd" clipRule="evenodd" d="M9 2C9 1.44772 9.44772 1 10 1H14C14.5523 1 15 1.44772 15 2V3H17C18.6569 3 20 4.34315 20 6V20C20 21.6569 18.6569 23 17 23H7C5.34315 23 4 21.6569 4 20V6C4 4.34315 5.34315 3 7 3H9V2ZM15 3V4C15 4.55228 14.5523 5 14 5H10C9.44772 5 9 4.55228 9 4V3H15ZM10.2929 13.2929C9.90237 13.6834 9.2692 13.6834 8.87868 13.2929L6.70711 11.1213C6.31658 10.7308 6.31658 10.0976 6.70711 9.70711C7.09763 9.31658 7.7308 9.31658 8.12132 9.70711L9.58579 11.1716L15.8787 4.87868C16.2692 4.48816 16.9024 4.48816 17.2929 4.87868C17.6834 5.2692 17.6834 5.90237 17.2929 6.29289L10.2929 13.2929Z" />
+          </svg>
+          <span style={{
+            fontSize: 'var(--font-size-lg)',
+            fontWeight: 'var(--font-weight-semibold)',
+            color: 'var(--text-main)'
+          }}>
             Control Operativo
-          </h1>
-          <p style={{ color: '#6b7280', margin: '4px 0 0', fontSize: '13px', fontWeight: 400, opacity: 0.7 }}>
-            Incidencias y Horarios
-          </p>
+          </span>
         </div>
+
+        <nav style={{ display: 'flex', height: '100%', gap: 'var(--space-sm)' }}>
+          <button
+            style={viewTabStyle(activeView === 'DAILY_LOG')}
+            onClick={() => setActiveView('DAILY_LOG')}
+          >
+            Registro Diario
+          </button>
+          <button
+            style={viewTabStyle(activeView === 'PLANNING')}
+            onClick={() => setActiveView('PLANNING')}
+          >
+            Planificación
+          </button>
+          <button
+            style={viewTabStyle(activeView === 'STATS')}
+            onClick={() => setActiveView('STATS')}
+          >
+            Reportes
+          </button>
+          <button
+            style={viewTabStyle(activeView === 'SETTINGS')}
+            onClick={() => setActiveView('SETTINGS')}
+          >
+            Configuración
+          </button>
+        </nav>
       </header>
 
-      <nav
-        style={{
-          borderBottom: '1px solid #e5e7eb',
-          marginTop: '12px',
-          background: '#FFFFFF',
-        }}
-      >
-        <button
-          style={viewTabStyle(activeView === 'DAILY_LOG')}
-          onClick={() => setActiveView('DAILY_LOG')}
-        >
-          Registro Diario
-        </button>
-        <button
-          style={viewTabStyle(activeView === 'PLANNING')}
-          onClick={() => setActiveView('PLANNING')}
-        >
-          Planificación Semanal
-        </button>
-        <button
-          style={viewTabStyle(activeView === 'STATS')}
-          onClick={() => setActiveView('STATS')}
-        >
-          Estadísticas y Reportes
-        </button>
-        <button
-          style={viewTabStyle(activeView === 'SETTINGS')}
-          onClick={() => setActiveView('SETTINGS')}
-        >
-          Configuración
-        </button>
-      </nav>
-
-      <main style={{ paddingTop: '30px' }}>
+      <main style={{ padding: 'var(--space-lg) var(--space-xl)' }}>
         {activeView === 'DAILY_LOG' && <DailyLogView />}
         {activeView === 'PLANNING' && (
           <PlanningSection onNavigateToSettings={() => setActiveView('SETTINGS')} />
@@ -157,12 +166,12 @@ function AppShellInner() {
 
       <footer
         style={{
-          marginTop: '40px',
-          padding: '20px 0',
-          borderTop: '1px solid #e5e7eb',
-          color: '#9ca3af',
-          fontSize: '12px',
+          padding: 'var(--space-lg) 0',
+          borderTop: '1px solid var(--border-subtle)',
+          color: 'var(--text-faint)',
+          fontSize: 'var(--font-size-xs)',
           textAlign: 'center',
+          marginTop: 'auto'
         }}
       >
       </footer>

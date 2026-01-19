@@ -58,12 +58,15 @@ export function getBackupHistory(): Array<{ key: string; timestamp: string; size
 
     for (let i = 0; i < localStorage.length; i++) {
         const key = localStorage.key(i)
-        if (key?.startsWith('planning-backup-')) {
+        // STRICT separation: Manual backups only in this list
+        // We explicitly exclude the fixed auto-backup key
+        if (key?.startsWith('planning-backup-') && key !== 'planning-backup-auto-latest') {
             const value = localStorage.getItem(key)
             if (value) {
+                const timestamp = key.replace('planning-backup-manual-', '').replace('planning-backup-', '')
                 backups.push({
                     key,
-                    timestamp: key.replace('planning-backup-manual-', '').replace('planning-backup-auto-', '').replace('planning-backup-', ''),
+                    timestamp,
                     size: new Blob([value]).size,
                 })
             }
@@ -74,24 +77,38 @@ export function getBackupHistory(): Array<{ key: string; timestamp: string; size
 }
 
 /**
+ * Gets the auto-backup metadata if it exists
+ */
+export function getAutoBackupMetadata(): { timestamp: string, size: number } | null {
+    const key = 'planning-backup-auto-latest'
+    const value = localStorage.getItem(key)
+    if (!value) return null
+
+    // Check separate flag for timestamp, or fallback to now if not found (less reliable but safe)
+    // Actually, saveBackupToLocalStorage sets 'planning-auto-backup-last-run'
+    const lastRun = localStorage.getItem('planning-auto-backup-last-run')
+    return {
+        timestamp: lastRun || new Date().toISOString(),
+        size: new Blob([value]).size
+    }
+}
+
+/**
  * Saves a backup to localStorage
  */
 export function saveBackupToLocalStorage(state: PlanningBaseState, type: 'manual' | 'auto' = 'manual'): void {
     const timestamp = new Date().toISOString()
-    const key = `planning-backup-${type}-${timestamp}`
+
+    // Fix: Auto-backups use a fixed key to overwrite (Single Snapshot)
+    const key = type === 'auto'
+        ? 'planning-backup-auto-latest'
+        : `planning-backup-${type}-${timestamp}`
+
     const value = JSON.stringify(state)
 
     try {
-        // For auto backups, limit to 5 most recent
-        if (type === 'auto') {
-            const backups = getBackupHistory().filter(b => b.key.includes('-auto-'))
-            if (backups.length >= 5) {
-                // Remove oldest auto backups until we have space for one more
-                const sorted = backups.sort((a, b) => a.timestamp.localeCompare(b.timestamp)) // Oldest first
-                const toRemove = sorted.slice(0, backups.length - 4) // Keep 4, so +1 = 5
-                toRemove.forEach(b => localStorage.removeItem(b.key))
-            }
-        }
+        // Manual backups: check quota if needed, but auto overwrites so no quota check for auto needed
+        // (localStorage has global limit, but we are not adding unlimited files)
 
         localStorage.setItem(key, value)
         if (type === 'auto') {

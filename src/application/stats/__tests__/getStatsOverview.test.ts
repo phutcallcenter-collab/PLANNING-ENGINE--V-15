@@ -10,8 +10,8 @@ import {
 
 // Mock Data
 const mockReps: Representative[] = [
-  { id: 'r1', name: 'Ana', baseShift: 'DAY', baseSchedule: { 1: 'WORKING' } },
-  { id: 'r2', name: 'Bob', baseShift: 'NIGHT', baseSchedule: { 1: 'WORKING' } },
+  { id: 'r1', name: 'Ana', baseShift: 'DAY', role: 'SALES', isActive: true, orderIndex: 0, baseSchedule: { 1: 'WORKING' } },
+  { id: 'r2', name: 'Bob', baseShift: 'NIGHT', role: 'SALES', isActive: true, orderIndex: 1, baseSchedule: { 1: 'WORKING' } },
 ]
 
 const mockMonthDays: DayInfo[] = Array.from({ length: 30 }, (_, i) => ({
@@ -26,19 +26,19 @@ const mockWeeklyPlan: WeeklyPlan = {
   agents: [
     {
       representativeId: 'r1',
-      days: { '2025-01-01': { assignment: { type: 'SINGLE', shift: 'DAY' } } },
+      days: { '2025-01-01': { status: 'WORKING', source: 'BASE', assignment: { type: 'SINGLE', shift: 'DAY' } } },
     },
     {
       representativeId: 'r2',
-      days: { '2025-01-01': { assignment: { type: 'SINGLE', shift: 'NIGHT' } } },
+      days: { '2025-01-01': { status: 'WORKING', source: 'BASE', assignment: { type: 'SINGLE', shift: 'NIGHT' } } },
     },
     {
       representativeId: 'r1',
-      days: { '2025-01-02': { assignment: { type: 'SINGLE', shift: 'DAY' } } },
+      days: { '2025-01-02': { status: 'WORKING', source: 'BASE', assignment: { type: 'SINGLE', shift: 'DAY' } } },
     },
     {
       representativeId: 'r2',
-      days: { '2025-01-02': { assignment: { type: 'SINGLE', shift: 'NIGHT' } } },
+      days: { '2025-01-02': { status: 'WORKING', source: 'BASE', assignment: { type: 'SINGLE', shift: 'NIGHT' } } },
     },
   ],
 }
@@ -106,26 +106,31 @@ describe('getStatsOverview', () => {
       { id: 'r-day', scope: { type: 'SHIFT', shift: 'DAY' }, required: 2 },
       { id: 'r-night', scope: { type: 'SHIFT', shift: 'NIGHT' }, required: 2 },
     ]
-    
+
     // On 2025-01-01, DAY has 1 rep (needs 2, DEFICIT), NIGHT has 1 (needs 2, DEFICIT)
     // On 2025-01-02, DAY has 1 rep (needs 2, DEFICIT), NIGHT has 1 (needs 2, DEFICIT)
     const weeklyPlanWithAssignments: WeeklyPlan = {
       weekStart: '2025-01-01',
       agents: [
-        { representativeId: 'r1', days: { 
-            '2025-01-01': { assignment: { type: 'SINGLE', shift: 'DAY' } }, 
-            '2025-01-02': { assignment: { type: 'SINGLE', shift: 'DAY' } }
-        }},
-        { representativeId: 'r2', days: { 
-            '2025-01-01': { assignment: { type: 'SINGLE', shift: 'NIGHT' } }, 
-            '2025-01-02': { assignment: { type: 'SINGLE', shift: 'NIGHT' } }
-        }}
+        {
+          representativeId: 'r1', days: {
+            '2025-01-01': { status: 'WORKING', source: 'BASE', assignment: { type: 'SINGLE', shift: 'DAY' } },
+            '2025-01-02': { status: 'WORKING', source: 'BASE', assignment: { type: 'SINGLE', shift: 'DAY' } }
+          }
+        },
+        {
+          representativeId: 'r2', days: {
+            '2025-01-01': { status: 'WORKING', source: 'BASE', assignment: { type: 'SINGLE', shift: 'NIGHT' } },
+            '2025-01-02': { status: 'WORKING', source: 'BASE', assignment: { type: 'SINGLE', shift: 'NIGHT' } }
+          }
+        }
       ]
     }
 
     const result = getStatsOverview({ ...baseInput, coverageRules: rules, weeklyPlans: [weeklyPlanWithAssignments] });
-    
-    // Expect 2 deficit days, even though there are 4 shift deficits in total.
-    expect(result.deficitDays).toBe(2);
+
+    // Expect 7 deficit days (01-01 to 01-07) because the plan covers the week 
+    // and empty days count as 0 coverage vs required 2.
+    expect(result.deficitDays).toBe(7);
   })
 })

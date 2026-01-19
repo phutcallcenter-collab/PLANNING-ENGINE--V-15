@@ -1,5 +1,4 @@
 import React from 'react'
-import { Tooltip } from '../components/Tooltip'
 import { ResolvedCellState } from '@/application/ui-adapters/cellState'
 import { CELL_THEME } from '@/ui/theme/cellTheme'
 import type { ISODate } from '../../domain/types'
@@ -57,6 +56,7 @@ export const PlanCell = React.memo(function PlanCell({
       role="gridcell"
       aria-label={resolved.ariaLabel}
       aria-disabled={!resolved.canEdit}
+      title={resolved.tooltip} // ✅ Native tooltip avoids clipping issues
       tabIndex={0}
       style={style}
       onClick={resolved.canEdit ? onClick : undefined}
@@ -69,12 +69,10 @@ export const PlanCell = React.memo(function PlanCell({
         }
       }}
     >
-      <Tooltip content={resolved.tooltip}>
-        <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
-          {Icon && <Icon size={14} strokeWidth={2} />}
-          {resolved.label && <span>{resolved.label}</span>}
-        </div>
-      </Tooltip>
+      <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+        {Icon && <Icon size={14} strokeWidth={2} />}
+        {resolved.label && <span>{resolved.label}</span>}
+      </div>
     </div>
   )
 })

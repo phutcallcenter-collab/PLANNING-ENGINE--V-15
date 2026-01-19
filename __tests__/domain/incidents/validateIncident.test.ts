@@ -17,6 +17,9 @@ describe('Domain Rules: Incident Validation', () => {
     name: 'Test Rep',
     baseShift: 'DAY',
     baseSchedule: {},
+    role: 'SALES',
+    isActive: true,
+    orderIndex: 0,
   }
   const mockAllReps = [mockRep]
   const mockCalendar: DayInfo[] = [
@@ -110,7 +113,9 @@ describe('Domain Rules: Incident Validation', () => {
 
       expect(canRegisterOnDate).toHaveBeenCalledWith('AUSENCIA', futureDate, expect.any(String))
       expect(result.ok).toBe(false)
-      expect(result.code).toBe('TEST_FAIL')
+      if (!result.ok) {
+        expect(result.code).toBe('TEST_FAIL')
+      }
     });
 
     it('should fail if trying to add an incident on a day with an existing AUSENCIA', () => {
@@ -134,7 +139,9 @@ describe('Domain Rules: Incident Validation', () => {
 
       const result = validateIncident(newIncident, existing, mockCalendar, mockRep, mockAllReps);
       expect(result.ok).toBe(false);
-      expect(result.code).toBe('BLOCKED_BY_ABSENCE');
+      if (!result.ok) {
+        expect(result.code).toBe('BLOCKED_BY_ABSENCE');
+      }
     });
 
     it('should fail if there is an overlap with existing VACACIONES', () => {
@@ -157,16 +164,19 @@ describe('Domain Rules: Incident Validation', () => {
       }
 
       // We need a larger calendar for date resolution
+      // We need a larger calendar for date resolution, centered around today/pastDate
       const biggerCalendar = Array.from({ length: 30 }, (_, i) => ({
-        date: `2024-05-${(i + 1).toString().padStart(2, '0')}`,
-        dayOfWeek: (i + 2) % 7,
+        date: format(addDays(new Date(pastDate), i), 'yyyy-MM-dd'),
+        dayOfWeek: (i + 1) % 7,
         kind: 'WORKING' as 'WORKING',
         isSpecial: false,
       }));
 
       const result = validateIncident(newIncident, existing, biggerCalendar, mockRep, mockAllReps);
       expect(result.ok).toBe(false);
-      expect(result.code).toBe('OVERLAP_WITH_FORMAL_INCIDENT');
+      if (!result.ok) {
+        expect(result.code).toBe('OVERLAP_WITH_FORMAL_INCIDENT');
+      }
     });
   })
 })

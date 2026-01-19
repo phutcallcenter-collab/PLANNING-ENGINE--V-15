@@ -21,7 +21,7 @@ export type MixProfile =
 /**
  * Defines the operational role of a representative.
  */
-export type RepresentativeRole = 'SALES' | 'CUSTOMER_SERVICE'
+export type RepresentativeRole = 'SALES' | 'CUSTOMER_SERVICE' | 'SUPERVISOR' | 'MANAGER'
 
 export interface Representative {
   id: RepresentativeId

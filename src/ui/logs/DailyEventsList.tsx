@@ -126,9 +126,15 @@ const OtherIncidentRow = memo(function OtherIncidentRow({
         <p
           style={{
             margin: 0,
-            fontSize: '12px',
-            fontStyle: 'italic',
-            color: 'var(--text-muted)',
+            fontStyle: 'normal',
+            fontSize: '14px',
+            lineHeight: 1.5,
+            color: '#374151',
+            marginTop: '4px',
+            wordBreak: 'break-word',
+            // Optional "Note" styling
+            borderLeft: '3px solid var(--border-subtle)',
+            paddingLeft: '8px',
           }}
         >
           {incident.note}

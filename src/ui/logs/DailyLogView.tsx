@@ -14,6 +14,7 @@ import {
   ShiftAssignment,
 } from '../../domain/types'
 import { useIncidentFlow } from '../../hooks/useIncidentFlow'
+import * as humanize from '@/application/presenters/humanize'
 import { resolveIncidentDates } from '../../domain/incidents/resolveIncidentDates'
 import { checkIncidentConflicts } from '../../domain/incidents/checkIncidentConflicts'
 import { Sun, Moon, Users, ChevronLeft, ChevronRight, Calendar as CalendarIcon } from 'lucide-react'
@@ -21,6 +22,7 @@ import { useAppStore } from '@/store/useAppStore'
 import { useWeeklyPlan } from '@/hooks/useWeeklyPlan'
 import { useWeekNavigator } from '@/hooks/useWeekNavigator'
 import { InlineAlert } from '../components/InlineAlert'
+import { ConfirmDialog } from '../components/ConfirmDialog'
 import {
   getEffectiveDailyLogData,
   DailyLogEntry,
@@ -35,8 +37,8 @@ const styles = {
     backgroundColor: 'var(--accent)',
     color: 'white',
     padding: '10px',
-    borderRadius: '6px',
-    fontWeight: 600,
+    borderRadius: 'var(--radius-md)',
+    fontWeight: 'var(--font-weight-semibold)',
     transition: 'all 0.2s ease',
     border: 'none',
     cursor: 'pointer',
@@ -50,32 +52,34 @@ const styles = {
   input: {
     width: '100%',
     border: '1px solid var(--border-strong)',
-    borderRadius: '6px',
+    borderRadius: 'var(--radius-md)',
     padding: '10px 12px',
-    fontSize: '14px',
+    fontSize: 'var(--font-size-base)',
     boxSizing: 'border-box' as React.CSSProperties['boxSizing'],
+    background: 'var(--bg-surface)',
+    color: 'var(--text-main)',
   },
   label: {
     display: 'block',
-    fontSize: '14px',
-    fontWeight: 500,
+    fontSize: 'var(--font-size-base)',
+    fontWeight: 'var(--font-weight-medium)',
     marginBottom: '6px',
     color: 'var(--text-main)',
   },
   listItem: {
     width: '100%',
     textAlign: 'left' as 'left',
-    padding: '8px 12px',
-    borderRadius: '6px',
+    padding: 'var(--space-sm) var(--space-md)',
+    borderRadius: 'var(--radius-md)',
     cursor: 'pointer',
     border: 'none',
     background: 'transparent',
-    fontSize: '14px',
+    fontSize: 'var(--font-size-base)',
     color: 'var(--text-main)',
   },
   activeListItem: {
-    background: '#f3f4f6',
-    fontWeight: 600,
+    background: 'var(--bg-subtle)',
+    fontWeight: 'var(--font-weight-semibold)',
   },
 }
 
@@ -168,7 +172,9 @@ export function DailyLogView() {
     setPlanningAnchorDate,
     swaps,
     isLoading,
-    effectivePeriods
+    effectivePeriods,
+    pushUndo,
+    removeIncident,
   } = useAppStore(s => ({
     incidents: s.incidents,
     allCalendarDaysForRelevantMonths: s.allCalendarDaysForRelevantMonths,
@@ -178,6 +184,8 @@ export function DailyLogView() {
     swaps: s.swaps,
     isLoading: s.isLoading,
     effectivePeriods: s.effectivePeriods ?? [],
+    pushUndo: s.pushUndo,
+    removeIncident: s.removeIncident,
   }))
 
   // 🎯 SIEMPRE empezar en el día actual (hoy)
@@ -196,6 +204,37 @@ export function DailyLogView() {
   const [note, setNote] = useState('')
   const [duration, setDuration] = useState(1)
   const [customPoints, setCustomPoints] = useState(0)
+
+  // 🛡️ CONFIRM DIALOG STATE
+  const [confirmConfig, setConfirmConfig] = useState<{
+    open: boolean
+    title: string
+    description: React.ReactNode
+    confirmText: string
+    cancelText: string
+    resolve: (value: boolean) => void
+  } | null>(null)
+
+  const showConfirm = (options: {
+    title: string
+    description: React.ReactNode
+    confirmText: string
+    cancelText: string
+  }): Promise<boolean> => {
+    return new Promise((resolve) => {
+      setConfirmConfig({
+        open: true,
+        title: options.title,
+        description: options.description,
+        confirmText: options.confirmText,
+        cancelText: options.cancelText,
+        resolve: (val) => {
+          setConfirmConfig(null)
+          resolve(val)
+        },
+      })
+    })
+  }
 
   // --- Close calendar on outside click ---
   useEffect(() => {
@@ -264,12 +303,31 @@ export function DailyLogView() {
     const activeEntries = activeShift === 'DAY' ? dayEntries : nightEntries
     const repMap = new Map(representatives.map(r => [r.id, r]))
 
+    // 🔴 UX REFINEMENT: Administrative incidents ignore operational shift
+    if (incidentType === 'VACACIONES' || incidentType === 'LICENCIA') {
+      const representativesInShift = representatives
+        .filter(r => r.isActive !== false)
+        // Sort alphabetically to be nice
+        .sort((a, b) => a.name.localeCompare(b.name))
+
+      return {
+        representativesInShift,
+        dayShiftPresent,
+        nightShiftPresent,
+        dayShiftPlanned,
+        nightShiftPlanned,
+      }
+    }
+
     const representativesInShift = activeEntries
-      .filter(isExpected)
+      .filter(e => {
+        // B2/B3 Separation of Concerns:
+        // 1. isExpected(e) -> TRUE (Keeps them in the math: 13/14)
+        // 2. We explicitly HIDE them from the list if they are ABSENT
+        return isExpected(e) && e.logStatus !== 'ABSENT'
+      })
       .map(e => repMap.get(e.representativeId))
-      .filter((r): r is Representative => !!r)
-      // Remove duplicates
-      .filter((r, index, self) => self.findIndex(rep => rep.id === r.id) === index)
+      .filter((r): r is Representative => !!r && r.isActive)
 
     return {
       representativesInShift,
@@ -278,7 +336,7 @@ export function DailyLogView() {
       dayShiftPlanned,
       nightShiftPlanned,
     }
-  }, [dailyLogEntries, activeShift, weeklyPlan, representatives, isLoading])
+  }, [dailyLogEntries, activeShift, weeklyPlan, representatives, isLoading, incidentType])
 
   const filteredRepresentatives = useMemo(() => {
     if (!searchTerm) return representativesInShift
@@ -371,7 +429,17 @@ export function DailyLogView() {
   }, [])
 
   const { submit } = useIncidentFlow({
-    onSuccess: () => resetForm(true),
+    onSuccess: (incidentId?: string) => {
+      // ✅ SUCCESS: Trigger Undo UI here
+      // Fix M2: Ensure this always fires and gives feedback
+      if (incidentId) {
+        pushUndo({
+          label: 'Evento registrado', // Generic label for consistency
+          undo: () => removeIncident(incidentId, true), // Silent remove
+        }, 5000) // 5 seconds per user request (5-7s)
+      }
+      resetForm(true)
+    },
   })
 
   // ✅ STEP 3: Preventive validation (non-blocking)
@@ -389,29 +457,57 @@ export function DailyLogView() {
     )
   }, [selectedRep, logDate, incidentType, duration, incidents, allCalendarDaysForRelevantMonths, isLoading])
 
+  // 🛡️ UX PROTECTION: Avoid zombie states
+  // If the user changes incident type and the selected rep is no longer in the list, clear selection.
   useEffect(() => {
-    if (
-      selectedRep &&
-      !filteredRepresentatives.some(r => r.id === selectedRep.id)
-    ) {
-      resetForm(false)
+    if (!selectedRep) return
+    const stillVisible = representativesInShift.some(r => r.id === selectedRep.id)
+    if (!stillVisible) {
+      setSelectedRep(null)
+      setSearchTerm('')
     }
-  }, [activeShift, selectedRep, filteredRepresentatives, resetForm])
+  }, [incidentType, representativesInShift, selectedRep])
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!selectedRep) return
 
+    let finalIncidentType = incidentType
+    let details: string | undefined
+
+    // 🟢 INTERSTITIAL CONFIRMATION for ABSENCE
+    if (incidentType === 'AUSENCIA') {
+      const isJustified = await showConfirm({
+        title: 'Confirmar Ausencia',
+        description: (
+          <span>
+            ¿Registrar <strong>Ausencia</strong> a <strong>{selectedRep.name}</strong>?
+            <br />
+            <span style={{ fontSize: '0.9em', color: '#6b7280' }}>
+              Seleccione si es justificada o no.
+            </span>
+          </span>
+        ),
+        confirmText: 'Sí, justificada',
+        cancelText: 'No, injustificada',
+      })
+
+      if (isJustified) {
+        details = 'JUSTIFICADA'
+      }
+    }
+
     const isMultiDay =
-      incidentType === 'LICENCIA' || incidentType === 'VACACIONES'
+      finalIncidentType === 'LICENCIA' || finalIncidentType === 'VACACIONES'
 
     const incidentInput: IncidentInput = {
       representativeId: selectedRep.id,
-      type: incidentType,
+      type: finalIncidentType,
       startDate: logDate,
       duration: isMultiDay ? duration : 1,
-      customPoints: incidentType === 'OTRO' ? customPoints : undefined,
+      customPoints: finalIncidentType === 'OTRO' ? customPoints : undefined,
       note: note.trim() || undefined,
+      details,
     }
     submit(incidentInput, selectedRep)
   }
@@ -428,31 +524,34 @@ export function DailyLogView() {
         display: 'grid',
         gridTemplateColumns: '300px 1fr',
         height: 'calc(100vh - 200px)',
-        gap: '16px',
+        gap: 'var(--space-md)',
         fontFamily: 'sans-serif',
+        background: 'var(--bg-app)',
+        padding: 'var(--space-lg)',
       }}
     >
       <aside
         style={{
           flexShrink: 0,
-          backgroundColor: 'white',
-          borderRadius: '12px',
-          padding: '20px',
+          backgroundColor: 'var(--bg-surface)',
+          borderRadius: 'var(--radius-card)',
+          padding: 'var(--space-lg)',
           border: '1px solid var(--border-subtle)',
           display: 'flex',
           flexDirection: 'column',
-          gap: '16px',
-          marginBottom: '16px',
+          gap: 'var(--space-md)',
+          marginBottom: 'var(--space-md)',
+          boxShadow: 'var(--shadow-sm)',
         }}
       >
         <div>
           <h3
-            style={{ fontWeight: 500, margin: '0 0 12px 0', color: 'var(--text-main)', fontSize: '13px' }}
+            style={{ fontWeight: 'var(--font-weight-medium)', margin: '0 0 var(--space-md) 0', color: 'var(--text-muted)', fontSize: 'var(--font-size-sm)' }}
           >
             Estado de Turnos
           </h3>
           <div
-            style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}
+            style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-sm)' }}
           >
             <ShiftStatusDisplay
               label="Día"
@@ -472,13 +571,18 @@ export function DailyLogView() {
         </div>
 
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-          <label style={{ ...styles.label, marginBottom: '8px' }}>
+          <label style={{ ...styles.label, marginBottom: 'var(--space-sm)' }}>
             Representantes del Turno
           </label>
+          {(incidentType === 'VACACIONES' || incidentType === 'LICENCIA') && (
+            <div style={{ marginBottom: 'var(--space-sm)', fontSize: 'var(--font-size-xs)', color: '#059669', background: '#ecfdf5', padding: '6px 10px', borderRadius: 'var(--radius-sm)', border: '1px solid #a7f3d0' }}>
+              Mostrando <strong>todos</strong> para registro administrativo.
+            </div>
+          )}
           <input
             type="text"
             placeholder="Buscar representante..."
-            style={{ ...styles.input, marginBottom: '12px' }}
+            style={{ ...styles.input, marginBottom: 'var(--space-md)' }}
             value={searchTerm}
             onChange={e => setSearchTerm(e.target.value)}
           />
@@ -517,18 +621,19 @@ export function DailyLogView() {
       >
         <div
           style={{
-            backgroundColor: 'white',
+            backgroundColor: 'var(--bg-surface)',
             border: '1px solid var(--border-subtle)',
-            borderRadius: '12px',
-            padding: '16px 20px',
+            borderRadius: 'var(--radius-card)',
+            padding: 'var(--space-md) var(--space-lg)',
             display: 'flex',
             justifyContent: 'space-between',
             alignItems: 'center',
             height: '74px',
             boxSizing: 'border-box',
+            boxShadow: 'var(--shadow-sm)',
           }}
         >
-          <h2 style={{ margin: '0 0 32px 0', fontWeight: 700, fontSize: '16px' }}>
+          <h2 style={{ margin: '0 0 var(--space-xl) 0', fontWeight: 'var(--font-weight-bold)', fontSize: 'var(--font-size-md)', color: 'var(--text-main)' }}>
             Registro de Eventos
           </h2>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', position: 'relative' }} ref={calendarRef}>
@@ -601,17 +706,18 @@ export function DailyLogView() {
         <form onSubmit={handleSubmit}>
           <div
             style={{
-              backgroundColor: 'white',
+              backgroundColor: 'var(--bg-surface)',
               border: '1px solid var(--border-subtle)',
-              borderRadius: '12px',
-              padding: '20px',
+              borderRadius: 'var(--radius-card)',
+              padding: 'var(--space-lg)',
               display: 'flex',
               flexDirection: 'column',
-              gap: '16px',
+              gap: 'var(--space-md)',
+              boxShadow: 'var(--shadow-sm)',
             }}
           >
             <header>
-              <h3 style={{ margin: 0, fontWeight: 600, fontSize: '16px' }}>
+              <h3 style={{ margin: 0, fontWeight: 'var(--font-weight-semibold)', fontSize: 'var(--font-size-md)', color: 'var(--text-main)' }}>
                 {selectedRep ? (
                   <>
                     Registrar para:{' '}
@@ -638,11 +744,10 @@ export function DailyLogView() {
                   onChange={e =>
                     setIncidentType(e.target.value as IncidentType)
                   }
-                  disabled={!selectedRep}
+                // disabled={!selectedRep} <-- REMOVED THIS LINE
                 >
                   <option value="TARDANZA">Tardanza</option>
                   <option value="AUSENCIA">Ausencia</option>
-                  <option value="AUSENCIA_JUSTIFICADA">Ausencia Justificada</option>
                   <option value="ERROR">Error</option>
                   <option value="OTRO">Otro</option>
                   <option value="LICENCIA">Licencia</option>
@@ -715,12 +820,12 @@ export function DailyLogView() {
                 disabled={!selectedRep}
                 style={{
                   padding: '10px 16px',
-                  fontSize: '14px',
-                  fontWeight: 600,
-                  backgroundColor: !selectedRep ? '#e5e7eb' : '#2563eb',
-                  color: !selectedRep ? '#9ca3af' : '#ffffff',
+                  fontSize: 'var(--font-size-base)',
+                  fontWeight: 'var(--font-weight-semibold)',
+                  backgroundColor: !selectedRep ? 'var(--bg-subtle)' : 'var(--accent)',
+                  color: !selectedRep ? 'var(--text-muted)' : '#ffffff',
                   border: 'none',
-                  borderRadius: '6px',
+                  borderRadius: 'var(--radius-md)',
                   cursor: !selectedRep ? 'not-allowed' : 'pointer',
                   width: '100%',
                   transition: 'background-color 0.2s',
@@ -737,18 +842,19 @@ export function DailyLogView() {
             flex: 1,
             display: 'grid',
             gridTemplateColumns: '1fr 1fr',
-            gap: '16px',
+            gap: 'var(--space-md)',
             overflowY: 'hidden',
           }}
         >
           <div
             style={{
-              backgroundColor: 'white',
+              backgroundColor: 'var(--bg-surface)',
               border: '1px solid var(--border-subtle)',
-              borderRadius: '12px',
-              padding: '20px',
+              borderRadius: 'var(--radius-card)',
+              padding: 'var(--space-lg)',
               overflowY: 'auto',
-              marginBottom: '24px',
+              marginBottom: 'var(--space-lg)',
+              boxShadow: 'var(--shadow-sm)',
             }}
           >
             <DailyEventsList
@@ -759,12 +865,13 @@ export function DailyLogView() {
           </div>
           <div
             style={{
-              backgroundColor: 'white',
+              backgroundColor: 'var(--bg-surface)',
               border: '1px solid var(--border-subtle)',
-              borderRadius: '12px',
-              padding: '20px',
+              borderRadius: 'var(--radius-card)',
+              padding: 'var(--space-lg)',
               overflowY: 'auto',
-              marginBottom: '16px',
+              marginBottom: 'var(--space-md)',
+              boxShadow: 'var(--shadow-sm)',
             }}
           >
             <DailyEventsList
@@ -775,6 +882,23 @@ export function DailyLogView() {
           </div>
         </div>
       </section>
-    </div>
+
+      {/* GLOBAL CONFIRM DIALOG */}
+      {
+        confirmConfig && (
+          <ConfirmDialog
+            open={confirmConfig.open}
+            title={confirmConfig.title}
+            description={confirmConfig.description}
+            intent="warning"
+            confirmLabel={confirmConfig.confirmText}
+            cancelLabel={confirmConfig.cancelText}
+            onConfirm={() => confirmConfig.resolve(true)}
+            onCancel={() => confirmConfig.resolve(false)}
+          />
+        )
+      }
+    </div >
   )
 }
+

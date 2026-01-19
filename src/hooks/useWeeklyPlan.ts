@@ -26,14 +26,9 @@ export function useWeeklyPlan(weekDays: DayInfo[]) {
       return null
     }
 
-    // 🔥 FIX: Only build plan for active representatives
-    const activeRepresentatives = representatives.filter(
-      rep => rep.isActive !== false
-    )
-
     // Calcular el plan semanal usando los días ya derivados.
     const derivedWeeklyPlan = buildWeeklySchedule(
-      activeRepresentatives,
+      representatives,
       incidents,
       specialSchedules,
       weekDays,

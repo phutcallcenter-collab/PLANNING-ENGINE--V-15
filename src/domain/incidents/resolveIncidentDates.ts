@@ -14,13 +14,8 @@ export interface ResolvedIncident {
 /**
  * Calculates the actual calendar dates affected by an incident based on its type.
  * - 'LICENCIA': Counts all consecutive calendar days.
- * - 'VACACIONES': Counts a fixed number of 'WORKING' days (14), skipping holidays and base schedule OFF days.
+ * - 'VACACIONES': Counts a fixed number of 'WORKING' days, skipping holidays and base schedule OFF days.
  * - Other incidents: Have a duration of 1 day.
- *
- * @param incident The incident to resolve.
- * @param allCalendarDays A (potentially large) array of DayInfo objects, must contain all days needed.
- * @param representative The specific representative, needed to check their base schedule for vacations.
- * @returns An object with the original incident, an array of affected ISO dates, and start/end dates.
  */
 export function resolveIncidentDates(
   incident: Incident,
@@ -38,121 +33,169 @@ export function resolveIncidentDates(
     return { incident, dates: [], start: null, end: null }
   }
 
-  const result: ISODate[] = []
-
-  // For VACACIONES, duration defaults to 14 working days but can be overridden. For others, use provided duration or default to 1.
-  const duration = incident.type === 'VACACIONES'
-    ? (incident.duration ?? 14)
-    : (incident.duration ?? 1)
-
-  if (duration <= 0) {
-    return {
-      incident,
-      dates: [],
-      start: incident.startDate,
-      end: incident.startDate,
-    }
+  // --- SPLIT LOGIC BY TYPE ---
+  if (incident.type === 'LICENCIA') {
+    return resolveLicenseDates(incident, allCalendarDays, representative)
   }
 
+  if (incident.type === 'VACACIONES') {
+    return resolveVacationDates(incident, allCalendarDays, representative)
+  }
+
+  // Default: Single day incidents (Tardanza, Error, etc)
+  return resolveSingleDayIncident(incident, allCalendarDays)
+}
+
+// ----------------------------------------------------------------------
+// HELPER: LICENCIA (Continuous Calendar Days)
+// ----------------------------------------------------------------------
+function resolveLicenseDates(incident: Incident, allCalendarDays: DayInfo[], representative?: Representative): ResolvedIncident {
+  const duration = incident.duration ?? 1
+  const result: ISODate[] = []
+
+  // Simple continuous expansion
+  let cursor = parseISO(incident.startDate)
+  for (let i = 0; i < duration; i++) {
+    const currentDate = formatISO(cursor, { representation: 'date' })
+    result.push(currentDate)
+    cursor = addDays(cursor, 1)
+  }
+
+  const endDate = result[result.length - 1]
+  // 🟢 FIX: Licenses return checking should IGNORE holidays (treat them as working days if rep works that day)
+  const returnDate = findNextWorkingDay(endDate, allCalendarDays, representative, true)
+
+  return {
+    incident,
+    dates: result,
+    start: result[0],
+    end: endDate,
+    returnDate
+  }
+}
+
+// ----------------------------------------------------------------------
+// HELPER: VACACIONES (Working Days Only)
+// ----------------------------------------------------------------------
+function resolveVacationDates(
+  incident: Incident,
+  allCalendarDays: DayInfo[],
+  representative?: Representative
+): ResolvedIncident {
+  const duration = incident.duration ?? 14
+  const result: ISODate[] = []
   const calendarMap = new Map(allCalendarDays.map(d => [d.date, d]))
+
   let cursor = parseISO(incident.startDate)
   let consumedDays = 0
-  // Heuristic to prevent infinite loops in case of misconfiguration (e.g., rep with no working days)
-  const maxDaysToScan = duration * 3 + 30
   let daysScanned = 0
+  const maxDaysToScan = duration * 3 + 30 // Safety break
 
   while (consumedDays < duration && daysScanned < maxDaysToScan) {
     const currentDate = formatISO(cursor, { representation: 'date' })
-    const dayInfo = calendarMap.get(currentDate)
     daysScanned++
 
-    let isCountableDay = false
+    // Check eligibility
+    let isCountable = false
+    const dayInfo = calendarMap.get(currentDate)
 
-    switch (incident.type) {
-      case 'LICENCIA':
-        // Licenses count every single calendar day, no exceptions.
-        isCountableDay = true
-        break
-
-      case 'VACACIONES':
-        // Vacations only count 'WORKING' days and skip HOLIDAYS and base schedule OFF days.
-        if (dayInfo) {
-          let isWorkingDay = dayInfo.kind !== 'HOLIDAY'
-
-          if (representative) {
-            const dayOfWeek = cursor.getUTCDay()
-            const isBaseOffDay = representative.baseSchedule[dayOfWeek] === 'OFF'
-            isWorkingDay = isWorkingDay && !isBaseOffDay
-          }
-          isCountableDay = isWorkingDay
+    if (dayInfo && dayInfo.kind !== 'HOLIDAY') {
+      // Not a general holiday, check rep specific schedule
+      if (representative) {
+        const dayOfWeek = cursor.getUTCDay()
+        const isBaseOffDay = representative.baseSchedule[dayOfWeek] === 'OFF'
+        if (!isBaseOffDay) {
+          isCountable = true
         }
-        break
-
-      default:
-        // All other incidents are single-day events.
-        if (result.length === 0) {
-          isCountableDay = true
-        }
-        break
+      } else {
+        // No rep context? Assume working if not holiday
+        isCountable = true
+      }
     }
 
-    if (isCountableDay) {
+    if (isCountable) {
       result.push(currentDate)
       consumedDays++
-    }
-
-    // For single-day incidents, we stop after finding the first countable day.
-    if (incident.type !== 'LICENCIA' && incident.type !== 'VACACIONES' && consumedDays === 1) {
-      break
     }
 
     cursor = addDays(cursor, 1)
   }
 
   const endDate = result[result.length - 1]
-  let returnDate: ISODate | undefined = undefined
-
-  if (endDate && (incident.type === 'VACACIONES' || incident.type === 'LICENCIA')) {
-    // La fecha de retorno debe ser el PRIMER día WORKING después de las vacaciones/licencias
-    let returnCursor = addDays(parseISO(endDate), 1)
-    const maxReturnScan = 14 // Máximo 2 semanas para encontrar día de retorno
-
-    for (let i = 0; i < maxReturnScan; i++) {
-      const candidateDate = formatISO(returnCursor, { representation: 'date' })
-      const dayInfo = calendarMap.get(candidateDate)
-
-      // Verificar si es un día trabajable
-      let isWorkingDay = false
-
-      if (dayInfo?.kind !== 'HOLIDAY') {
-        if (representative) {
-          const dayOfWeek = returnCursor.getUTCDay()
-          const isBaseOffDay = representative.baseSchedule[dayOfWeek] === 'OFF'
-          isWorkingDay = !isBaseOffDay
-        } else {
-          isWorkingDay = true;
-        }
-      }
-
-      if (isWorkingDay) {
-        returnDate = candidateDate
-        break
-      }
-
-      returnCursor = addDays(returnCursor, 1)
-    }
-  } else if (endDate) {
-    // Para otros tipos de incidencias, simplemente el día siguiente
-    returnDate = formatISO(addDays(parseISO(endDate), 1), {
-      representation: 'date',
-    })
-  }
+  // For vacation, logic implies return date is the next working day after the last vacation day
+  const returnDate = endDate ? findNextWorkingDay(endDate, allCalendarDays, representative) : undefined
 
   return {
     incident,
     dates: result,
     start: result[0] ?? incident.startDate,
     end: endDate ?? incident.startDate,
-    returnDate,
+    returnDate
   }
+}
+
+// ----------------------------------------------------------------------
+// HELPER: Single Day Incident
+// ----------------------------------------------------------------------
+function resolveSingleDayIncident(incident: Incident, allCalendarDays: DayInfo[]): ResolvedIncident {
+  // Usually just the start date
+  // Note: Some might argue TARDANZA creates a date. 
+  // Current logic: Just returns the date itself.
+  const date = incident.startDate
+
+  // For single day incidents, returnDate is typically just the next day, 
+  // OR we could say "next working day". Usually incidental events don't have a "return".
+  // But let's keep consistency with previous logic: simple addDays(1)
+  const returnDate = formatISO(addDays(parseISO(date), 1), { representation: 'date' })
+
+  return {
+    incident,
+    dates: [date],
+    start: date,
+    end: date,
+    returnDate
+  }
+}
+
+// ----------------------------------------------------------------------
+// SHARED UTILITY: Find Next Working Day
+// ----------------------------------------------------------------------
+function findNextWorkingDay(
+  fromIndexDate: ISODate,
+  allCalendarDays: DayInfo[],
+  representative?: Representative,
+  ignoreHolidays: boolean = false
+): ISODate {
+  const calendarMap = new Map(allCalendarDays.map(d => [d.date, d]))
+  let cursor = addDays(parseISO(fromIndexDate), 1)
+  let found = false
+  const maxSearch = 20
+  let i = 0
+
+  while (!found && i < maxSearch) {
+    const dateStr = formatISO(cursor, { representation: 'date' })
+    const dayInfo = calendarMap.get(dateStr)
+
+    // Modification: If ignoreHolidays is true, we count HOLIDAY as a potential working day 
+    // (provided representative base schedule allows it).
+    // If ignoreHolidays is false (default), we skip HOLIDAY.
+
+    if (dayInfo && (dayInfo.kind !== 'HOLIDAY' || ignoreHolidays)) {
+      if (representative) {
+        const dayOfWeek = cursor.getUTCDay()
+        if (representative.baseSchedule[dayOfWeek] !== 'OFF') {
+          return dateStr
+        }
+      } else {
+        // Without rep, assume non-holiday is working
+        return dateStr
+      }
+    }
+
+    cursor = addDays(cursor, 1)
+    i++
+  }
+
+  // Fallback if not found (unexpected)
+  return formatISO(addDays(parseISO(fromIndexDate), 1), { representation: 'date' })
 }

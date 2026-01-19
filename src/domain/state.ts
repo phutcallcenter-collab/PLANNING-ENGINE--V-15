@@ -88,6 +88,8 @@ export function createInitialState(): PlanningBaseState {
     historyEvents: initialHistory,
     auditLog: initialAuditLog,
     swaps: initialSwaps,
+    managers: [],
+    managementSchedules: {},
   }
 }
 

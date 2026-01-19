@@ -18,7 +18,7 @@ function isWeekendDay(date: Date): boolean {
 }
 
 const POINT_RULES: Record<
-  Exclude<IncidentType, 'OTRO' | 'LICENCIA' | 'VACACIONES' | 'OVERRIDE' | 'AUSENCIA_JUSTIFICADA'>,
+  Exclude<IncidentType, 'OTRO' | 'LICENCIA' | 'VACACIONES' | 'OVERRIDE'>,
   { weekday: number; weekend: number }
 > = {
   AUSENCIA: { weekday: 3, weekend: 6 },
@@ -33,7 +33,7 @@ export function calculatePoints(incident: Incident): number {
     incident.type === 'LICENCIA' ||
     incident.type === 'VACACIONES' ||
     incident.type === 'OVERRIDE' ||
-    incident.type === 'AUSENCIA_JUSTIFICADA'
+    (incident.type === 'AUSENCIA' && incident.details === 'JUSTIFICADA')
   ) {
     return 0
   }
@@ -88,7 +88,10 @@ export function computeMonthlySummary(
 
     switch (inc.type) {
       case 'AUSENCIA':
-        personSummary.totals.ausencias++
+        // Only count unjustified absences for risk metrics
+        if (inc.details !== 'JUSTIFICADA') {
+          personSummary.totals.ausencias++
+        }
         break
       case 'TARDANZA':
         personSummary.totals.tardanzas++

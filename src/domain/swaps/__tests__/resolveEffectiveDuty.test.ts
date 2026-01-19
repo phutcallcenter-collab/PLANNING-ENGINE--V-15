@@ -2,38 +2,46 @@ import { resolveEffectiveDuty } from '../resolveEffectiveDuty'
 import { WeeklyPlan, SwapEvent, Incident, DayInfo, Representative } from '@/domain/types'
 
 const mockPlan: WeeklyPlan = {
-    id: 'w1',
     weekStart: '2026-01-05',
     agents: [
         {
             representativeId: 'A',
             days: {
-                '2026-01-08': { assignment: { type: 'SINGLE', shift: 'DAY' } }, // A works DAY
+                '2026-01-08': { status: 'WORKING', source: 'BASE', assignment: { type: 'SINGLE', shift: 'DAY' } }, // A works DAY
             },
         },
         {
             representativeId: 'B',
             days: {
-                '2026-01-08': { assignment: { type: 'SINGLE', shift: 'NIGHT' } }, // B works NIGHT
+                '2026-01-08': { status: 'WORKING', source: 'BASE', assignment: { type: 'SINGLE', shift: 'NIGHT' } }, // B works NIGHT
             },
         },
         {
             representativeId: 'C',
             days: {
-                '2026-01-08': { assignment: { type: 'NONE' } }, // C is OFF
+                '2026-01-08': { status: 'OFF', source: 'BASE', assignment: { type: 'NONE' } }, // C is OFF
             }
         }
     ],
 }
 
 const mockCalendarDays: DayInfo[] = [
-    { date: '2026-01-08', isWorkingDay: true, isWeekend: false, label: 'Thu 8', kind: 'WORKING' }
+    { date: '2026-01-08', dayOfWeek: 4, kind: 'WORKING', isSpecial: false }
 ]
 
 const mockRepresentatives: Representative[] = [
-    { id: 'A', name: 'Agent A', baseShift: 'DAY', baseSchedule: ['DAY', 'DAY', 'DAY', 'DAY', 'DAY', 'OFF', 'OFF'] },
-    { id: 'B', name: 'Agent B', baseShift: 'NIGHT', baseSchedule: ['NIGHT', 'NIGHT', 'NIGHT', 'NIGHT', 'NIGHT', 'OFF', 'OFF'] },
-    { id: 'C', name: 'Agent C', baseShift: 'DAY', baseSchedule: ['DAY', 'DAY', 'DAY', 'DAY', 'DAY', 'OFF', 'OFF'] }
+    {
+        id: 'A', name: 'Agent A', baseShift: 'DAY', role: 'SALES', isActive: true, orderIndex: 0,
+        baseSchedule: { 1: 'WORKING', 2: 'WORKING', 3: 'WORKING', 4: 'WORKING', 5: 'WORKING', 6: 'OFF', 0: 'OFF' }
+    },
+    {
+        id: 'B', name: 'Agent B', baseShift: 'NIGHT', role: 'SALES', isActive: true, orderIndex: 1,
+        baseSchedule: { 1: 'WORKING', 2: 'WORKING', 3: 'WORKING', 4: 'WORKING', 5: 'WORKING', 6: 'OFF', 0: 'OFF' }
+    },
+    {
+        id: 'C', name: 'Agent C', baseShift: 'DAY', role: 'SALES', isActive: true, orderIndex: 2,
+        baseSchedule: { 1: 'WORKING', 2: 'WORKING', 3: 'WORKING', 4: 'WORKING', 5: 'WORKING', 6: 'OFF', 0: 'OFF' }
+    }
 ]
 
 describe('resolveEffectiveDuty', () => {
@@ -41,7 +49,7 @@ describe('resolveEffectiveDuty', () => {
 
     it('BASE: returns true if base assignment exists and no changes', () => {
         const res = resolveEffectiveDuty(mockPlan, [], [], date, 'DAY', 'A', mockCalendarDays, mockRepresentatives)
-        expect(res).toEqual({ shouldWork: true, role: 'BASE' })
+        expect(res).toEqual({ shouldWork: true, role: 'BASE', source: 'BASE' })
     })
 
     it('BASE: returns false if no assignment', () => {
@@ -56,7 +64,7 @@ describe('resolveEffectiveDuty', () => {
             duration: 1
         }
         const res = resolveEffectiveDuty(mockPlan, [], [incident], date, 'DAY', 'A', mockCalendarDays, mockRepresentatives)
-        expect(res).toEqual({ shouldWork: false, role: 'NONE', reason: 'VACACIONES' })
+        expect(res).toEqual({ shouldWork: false, role: 'NONE', reason: 'VACACIONES', source: 'INCIDENT' })
     })
 
     describe('COVER', () => {
@@ -67,7 +75,7 @@ describe('resolveEffectiveDuty', () => {
                 createdAt: ''
             }
             const res = resolveEffectiveDuty(mockPlan, [swap], [], date, 'DAY', 'A', mockCalendarDays, mockRepresentatives)
-            expect(res).toEqual({ shouldWork: false, role: 'COVERED', reason: 'Cubierto por C' })
+            expect(res).toEqual({ shouldWork: false, role: 'COVERED', reason: 'Cubierto por C', source: 'SWAP' })
         })
 
         it('COVERING: person covering should WORK', () => {
@@ -77,7 +85,7 @@ describe('resolveEffectiveDuty', () => {
                 createdAt: ''
             }
             const res = resolveEffectiveDuty(mockPlan, [swap], [], date, 'DAY', 'C', mockCalendarDays, mockRepresentatives)
-            expect(res).toEqual({ shouldWork: true, role: 'COVERING', reason: 'Cubriendo a A' })
+            expect(res).toEqual({ shouldWork: true, role: 'COVERING', reason: 'Cubriendo a A', source: 'SWAP' })
         })
     })
 
@@ -90,7 +98,7 @@ describe('resolveEffectiveDuty', () => {
             }
             // A normally works DAY. Checks NIGHT.
             const res = resolveEffectiveDuty(mockPlan, [swap], [], date, 'NIGHT', 'A', mockCalendarDays, mockRepresentatives)
-            expect(res).toEqual({ shouldWork: true, role: 'DOUBLE', reason: 'Turno adicional' })
+            expect(res).toEqual({ shouldWork: true, role: 'DOUBLE', reason: 'Turno adicional', source: 'SWAP' })
         })
     })
 
@@ -104,22 +112,22 @@ describe('resolveEffectiveDuty', () => {
 
         it('A (from) works NIGHT (toShift)', () => {
             const res = resolveEffectiveDuty(mockPlan, [swap], [], date, 'NIGHT', 'A', mockCalendarDays, mockRepresentatives)
-            expect(res).toEqual({ shouldWork: true, role: 'SWAPPED_IN', reason: 'Intercambio con B' })
+            expect(res).toEqual({ shouldWork: true, role: 'SWAPPED_IN', reason: 'Intercambio con B', source: 'SWAP' })
         })
 
         it('A (from) does NOT work DAY (fromShift)', () => {
             const res = resolveEffectiveDuty(mockPlan, [swap], [], date, 'DAY', 'A', mockCalendarDays, mockRepresentatives)
-            expect(res).toEqual({ shouldWork: false, role: 'SWAPPED_OUT', reason: 'Intercambio con B' })
+            expect(res).toEqual({ shouldWork: false, role: 'SWAPPED_OUT', reason: 'Intercambio con B', source: 'SWAP' })
         })
 
         it('B (to) works DAY (fromShift)', () => {
             const res = resolveEffectiveDuty(mockPlan, [swap], [], date, 'DAY', 'B', mockCalendarDays, mockRepresentatives)
-            expect(res).toEqual({ shouldWork: true, role: 'SWAPPED_IN', reason: 'Intercambio con A' })
+            expect(res).toEqual({ shouldWork: true, role: 'SWAPPED_IN', reason: 'Intercambio con A', source: 'SWAP' })
         })
 
         it('B (to) does NOT work NIGHT (toShift)', () => {
             const res = resolveEffectiveDuty(mockPlan, [swap], [], date, 'NIGHT', 'B', mockCalendarDays, mockRepresentatives)
-            expect(res).toEqual({ shouldWork: false, role: 'SWAPPED_OUT', reason: 'Intercambio con A' })
+            expect(res).toEqual({ shouldWork: false, role: 'SWAPPED_OUT', reason: 'Intercambio con A', source: 'SWAP' })
         })
     })
 })

@@ -30,7 +30,6 @@ import {
 import { CalendarDayModal } from './CalendarDayModal'
 import { SwapModal } from './SwapModal'
 import { CoverageRulesPanel } from '../coverage/CoverageRulesPanel'
-// CoverageRuleModal removed
 import { motion, AnimatePresence } from 'framer-motion'
 import { useAppStore } from '@/store/useAppStore'
 import { useWeeklyPlan } from '../../hooks/useWeeklyPlan'
@@ -39,7 +38,6 @@ import { useWeekNavigator } from '@/hooks/useWeekNavigator'
 import { useEditMode } from '@/hooks/useEditMode'
 import { resolveCoverage } from '@/domain/planning/resolveCoverage'
 import { CoverageChart } from '../coverage/CoverageChart'
-// CoverageEmptyState removed
 import { getEffectiveAssignmentsForPlanner } from '@/application/ui-adapters/getEffectiveAssignmentsForPlanner'
 import {
   getEffectiveDailyCoverage,
@@ -49,7 +47,7 @@ import * as humanize from '@/application/presenters/humanize'
 import { format, parseISO } from 'date-fns'
 import { HelpPanel } from '../components/HelpPanel'
 import { resolveIncidentDates } from '@/domain/incidents/resolveIncidentDates'
-import { Sun, Moon } from 'lucide-react'
+import { PromptDialog } from '../components/PromptDialog'
 
 // ⚠️ CANONICAL RULE: Identity vs. Operation
 // This function is the single source of truth for deciding if a representative
@@ -146,6 +144,34 @@ export function PlanningSection({ onNavigateToSettings }: { onNavigateToSettings
     showConfirm: s.showConfirm,
   }))
 
+  // 📝 PROMPT DIALOG STATE
+  const [promptConfig, setPromptConfig] = useState<{
+    open: boolean
+    title: string
+    description: string
+    placeholder?: string
+    optional?: boolean
+    resolve: (value: string | undefined) => void
+  } | null>(null)
+
+  const showConfirmWithInput = (options: {
+    title: string
+    description: string
+    placeholder?: string
+    optional?: boolean
+  }): Promise<string | undefined> => {
+    return new Promise((resolve) => {
+      setPromptConfig({
+        open: true,
+        ...options,
+        resolve: (val) => {
+          setPromptConfig(null)
+          resolve(val)
+        },
+      })
+    })
+  }
+
   const togglePlanOverride = async (
     representativeId: string,
     date: ISODate
@@ -158,7 +184,7 @@ export function PlanningSection({ onNavigateToSettings }: { onNavigateToSettings
     // Check if there's an active VACACIONES or LICENCIA incident for this representative
     const blockingIncident = incidents.find(i => {
       if (i.representativeId !== representativeId) return false
-      if (!['VACACIONES', 'LICENCIA', 'AUSENCIA_JUSTIFICADA'].includes(i.type)) return false
+      if (!['VACACIONES', 'LICENCIA'].includes(i.type)) return false
 
       const resolved = resolveIncidentDates(i, allCalendarDaysForRelevantMonths, rep)
 
@@ -193,6 +219,16 @@ export function PlanningSection({ onNavigateToSettings }: { onNavigateToSettings
       // The `undo` action will restore it by re-adding the original `existingOverride` object.
       useAppStore.setState(state => {
         state.incidents = state.incidents.filter(i => i.id !== existingOverride.id)
+
+        state.swaps = state.swaps.filter(swap => {
+          if (swap.date !== date) return true;
+          return !(
+            ('representativeId' in swap && swap.representativeId === representativeId) ||
+            ('fromRepresentativeId' in swap && swap.fromRepresentativeId === representativeId) ||
+            ('toRepresentativeId' in swap && swap.toRepresentativeId === representativeId)
+          );
+        });
+
       })
       pushUndo({
         label: `Reaplicar cambio de turno de ${rep.name}`,
@@ -225,9 +261,25 @@ export function PlanningSection({ onNavigateToSettings }: { onNavigateToSettings
         : { type: 'SINGLE', shift: activeShift }
     }
 
-    const note = prompt('Motivo del cambio de turno (opcional):')
-    if (note === null) {
-      return // User cancelled
+    // 📝 CONTEXT: Ask for explanation logic
+    const requiresExplanation =
+      previousAssignment?.type !== finalAssignment?.type ||
+      (previousAssignment?.type === 'SINGLE' &&
+        finalAssignment?.type === 'SINGLE' &&
+        previousAssignment.shift !== finalAssignment.shift)
+
+    let note: string | undefined
+
+    if (requiresExplanation) {
+      const result = await showConfirmWithInput({
+        title: 'Cambio de día libre',
+        description: '¿Por qué se realiza este cambio?',
+        placeholder: 'Ej: Permiso especial, cita médica, etc.',
+        optional: true,
+      })
+      if (result === undefined) return // User cancelled
+      // Sanitization: Empty strings become undefined
+      note = result.trim() || undefined
     }
 
     const incidentInput: IncidentInput = {
@@ -237,7 +289,7 @@ export function PlanningSection({ onNavigateToSettings }: { onNavigateToSettings
       duration: 1,
       assignment: finalAssignment,
       previousAssignment,
-      note: note || undefined,
+      note,
     }
 
     // Since we're not confirming, we add the incident directly.
@@ -249,6 +301,15 @@ export function PlanningSection({ onNavigateToSettings }: { onNavigateToSettings
         undo: () => {
           useAppStore.setState(state => {
             state.incidents = state.incidents.filter(i => i.id !== result.newId);
+
+            state.swaps = state.swaps.filter(swap => {
+              if (swap.date !== date) return true;
+              const repInvolved =
+                ('representativeId' in swap && swap.representativeId === representativeId) ||
+                ('fromRepresentativeId' in swap && swap.fromRepresentativeId === representativeId) ||
+                ('toRepresentativeId' in swap && swap.toRepresentativeId === representativeId);
+              return !repInvolved;
+            });
           });
         },
       })
@@ -346,56 +407,62 @@ export function PlanningSection({ onNavigateToSettings }: { onNavigateToSettings
     return Object.values(coverageData).some(d => d.required > 0)
   }, [coverageData])
 
-  const shiftTabStyle = (isActive: boolean) => {
-    const activeColor = activeShift === 'DAY' ? '#f59e0b' : '#6366f1'
-    return {
-      padding: '8px 16px',
-      cursor: 'pointer',
-      border: 'none',
-      borderBottom: isActive
-        ? `2px solid ${activeColor}`
-        : '2px solid transparent',
-      color: isActive ? activeColor : '#4b5563',
-      fontWeight: isActive ? 600 : 500,
-      background: 'transparent',
-      fontSize: '16px',
-      marginRight: '10px',
-      display: 'flex',
-      alignItems: 'center',
-      gap: '8px',
-    }
-  }
+  const shiftTabStyle = (isActive: boolean) => ({
+    padding: 'var(--space-sm) var(--space-md)',
+    cursor: 'pointer',
+    border: 'none',
+    borderBottom: isActive
+      ? '2px solid var(--text-main)'
+      : '2px solid transparent',
+    color: isActive ? 'var(--text-main)' : 'var(--text-muted)',
+    fontWeight: isActive ? 'var(--font-weight-semibold)' : 'var(--font-weight-medium)',
+    background: 'transparent',
+    fontSize: 'var(--font-size-md)',
+    marginRight: '10px',
+  })
 
   if (isLoading || !weekDays || weekDays.length === 0) {
     return (
-      <div style={{ padding: '40px', fontFamily: 'sans-serif', color: '#555' }}>
+      <div style={{ padding: 'var(--space-xl)', fontFamily: 'sans-serif', color: 'var(--text-muted)' }}>
         Cargando planificación...
       </div>
     )
   }
 
   return (
-    <div>
+    <div style={{ background: 'var(--bg-app)', minHeight: '100vh', padding: 'var(--space-lg)' }}>
       <div
         style={{
-          marginBottom: '25px',
-          padding: '16px 20px',
-          background: '#FFFFFF',
-          borderRadius: '12px',
+          marginBottom: 'var(--space-lg)',
+          padding: 'var(--space-md) var(--space-lg)',
+          background: 'var(--bg-surface)',
+          borderRadius: 'var(--radius-card)',
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
-          border: `1px solid ${mode === 'ADMIN_OVERRIDE' ? '#f59e0b' : '#e5e7eb'
+          border: `1px solid ${mode === 'ADMIN_OVERRIDE' ? '#f59e0b' : 'var(--border-subtle)'
             }`,
           height: '74px',
           boxSizing: 'border-box',
           transition: 'border-color 0.3s ease',
+          boxShadow: 'var(--shadow-sm)',
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <h2 style={{ margin: 0, fontWeight: 600, fontSize: '18px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-md)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-md)' }}>
+            <h2 style={{ margin: 0, fontWeight: 'var(--font-weight-semibold)', fontSize: 'var(--font-size-lg)', display: 'flex', alignItems: 'center', gap: 'var(--space-sm)', color: 'var(--text-main)' }}>
               Planificación
+              <span style={{
+                fontSize: 'var(--font-size-sm)',
+                fontWeight: 'var(--font-weight-medium)',
+                padding: '2px 8px',
+                borderRadius: '99px',
+                background: 'var(--accent-soft)',
+                color: 'var(--accent)',
+                border: '1px solid var(--accent)'
+              }}>
+                {activeShift === 'DAY' ? '🌞 Turno Día' : '🌙 Turno Noche'}
+              </span>
             </h2>
             <HelpPanel
               title="¿Cómo usar el planner?"
@@ -406,65 +473,72 @@ export function PlanningSection({ onNavigateToSettings }: { onNavigateToSettings
               ]}
             />
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <button
-              onClick={handlePrevWeek}
-              style={{
-                padding: '8px',
-                border: '1px solid #d1d5db',
-                borderRadius: '6px',
-                background: 'white',
-                lineHeight: 1,
-              }}
-            >
-              &lt;
-            </button>
-            <div
-              style={{
-                fontSize: '14px',
-                fontWeight: 500,
-                color: '#374151',
-                width: '280px',
-                textAlign: 'center',
-              }}
-            >
-              {weekLabel}
-            </div>
-            <button
-              onClick={handleNextWeek}
-              style={{
-                padding: '8px',
-                border: '1px solid #d1d5db',
-                borderRadius: '6px',
-                background: 'white',
-                lineHeight: 1,
-              }}
-            >
-              &gt;
-            </button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-sm)' }}>
+
             {!isCurrentWeek && (
               <button
                 onClick={handleGoToday}
                 style={{
-                  padding: '8px 12px',
-                  border: '1px solid #d1d5db',
-                  borderRadius: '6px',
-                  background: 'white',
-                  fontSize: '12px',
-                  fontWeight: 600,
+                  padding: '6px 12px',
+                  background: 'var(--bg-surface)',
+                  border: '1px solid var(--border-subtle)',
+                  borderRadius: 'var(--radius-md)',
+                  fontSize: 'var(--font-size-sm)',
+                  fontWeight: 'var(--font-weight-semibold)',
+                  color: 'var(--text-main)',
+                  cursor: 'pointer',
+                  boxShadow: 'var(--shadow-sm)'
                 }}
               >
-                Semana Actual
+                Hoy
               </button>
             )}
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-sm)', background: 'var(--bg-surface)', padding: '6px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-subtle)', boxShadow: 'var(--shadow-sm)' }}>
+              <button
+                onClick={handlePrevWeek}
+                style={{
+                  border: 'none',
+                  background: 'transparent',
+                  cursor: 'pointer',
+                  padding: '6px 10px',
+                  borderRadius: 'var(--radius-sm)'
+                }}
+              >
+                &lt;
+              </button>
+              <div
+                style={{
+                  fontSize: 'var(--font-size-lg)',
+                  fontWeight: 'var(--font-weight-semibold)',
+                  color: 'var(--text-main)',
+                  width: '220px',
+                  textAlign: 'center',
+                }}
+              >
+                {weekLabel}
+              </div>
+              <button
+                onClick={handleNextWeek}
+                style={{
+                  border: 'none',
+                  background: 'transparent',
+                  cursor: 'pointer',
+                  padding: '6px 10px',
+                  borderRadius: 'var(--radius-sm)'
+                }}
+              >
+                &gt;
+              </button>
+            </div>
           </div>
         </div>
       </div>
 
-      <div style={{ marginBottom: '20px' }}>
+      <div style={{ marginBottom: 'var(--space-lg)' }}>
         <div
           style={{
-            borderBottom: '1px solid #e5e7eb',
+            borderBottom: '1px solid var(--border-subtle)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
@@ -475,14 +549,12 @@ export function PlanningSection({ onNavigateToSettings }: { onNavigateToSettings
               style={shiftTabStyle(activeShift === 'DAY')}
               onClick={() => setActiveShift('DAY')}
             >
-              <Sun size={16} />
               Turno Día
             </button>
             <button
               style={shiftTabStyle(activeShift === 'NIGHT')}
               onClick={() => setActiveShift('NIGHT')}
             >
-              <Moon size={16} />
               Turno Noche
             </button>
           </div>
@@ -497,17 +569,17 @@ export function PlanningSection({ onNavigateToSettings }: { onNavigateToSettings
               })
             }
             style={{
-              padding: '8px 16px',
-              backgroundColor: '#2563eb',
+              padding: 'var(--space-sm) var(--space-md)',
+              backgroundColor: 'var(--accent)',
               color: 'white',
               border: 'none',
-              borderRadius: '6px',
-              fontWeight: 600,
-              fontSize: '14px',
+              borderRadius: 'var(--radius-md)',
+              fontWeight: 'var(--font-weight-semibold)',
+              fontSize: 'var(--font-size-base)',
               cursor: 'pointer',
               display: 'flex',
               alignItems: 'center',
-              gap: '8px',
+              gap: 'var(--space-sm)',
             }}
           >
             <svg
@@ -545,7 +617,7 @@ export function PlanningSection({ onNavigateToSettings }: { onNavigateToSettings
               style={{
                 display: 'flex',
                 overflowX: 'hidden', // Containment
-                gap: '40px',
+                gap: 'var(--space-xl)',
                 alignItems: 'start',
               }}
             >
@@ -567,14 +639,14 @@ export function PlanningSection({ onNavigateToSettings }: { onNavigateToSettings
                   style={{
                     display: 'flex',
                     flexDirection: 'column',
-                    gap: '24px',
+                    gap: 'var(--space-lg)',
                   }}
                 >
                   {hasAnyCoverageRule ? (
                     <CoverageChart data={coverageData} />
                   ) : (
                     /* Empty state handled now by Matrix in Settings */
-                    <div style={{ marginBottom: '16px', padding: '16px', background: '#f9fafb', borderRadius: '8px', border: '1px dashed #d1d5db', textAlign: 'center', color: '#6b7280', fontSize: '13px' }}>
+                    <div style={{ marginBottom: 'var(--space-md)', padding: 'var(--space-md)', background: 'var(--bg-subtle)', borderRadius: 'var(--radius-md)', border: '1px dashed var(--border-strong)', textAlign: 'center', color: 'var(--text-muted)', fontSize: 'var(--font-size-sm)' }}>
                       Sin reglas de cobertura activas.
                     </div>
                   )}
@@ -625,6 +697,19 @@ export function PlanningSection({ onNavigateToSettings }: { onNavigateToSettings
               existingSwap: null,
             })
           }
+        />
+      )}
+
+      {/* GLOBAL PROMPT DIALOG */}
+      {promptConfig && (
+        <PromptDialog
+          open={promptConfig.open}
+          title={promptConfig.title}
+          description={promptConfig.description}
+          placeholder={promptConfig.placeholder}
+          optional={promptConfig.optional}
+          onConfirm={(val) => promptConfig.resolve(val)}
+          onCancel={() => promptConfig.resolve(undefined)}
         />
       )}
     </div>

@@ -562,12 +562,12 @@ export function PersonDetailModal({
                               {i.note && (
                                 <p
                                   style={{
-                                    fontSize: '12px',
-                                    color: '#4b5563',
-                                    fontStyle: 'italic',
-                                    margin: '0',
+                                    fontSize: '14px',
+                                    color: '#374151',
+                                    fontStyle: 'normal',
+                                    marginTop: '4px',
                                     paddingLeft: '8px',
-                                    borderLeft: '2px solid #e5e7eb',
+                                    borderLeft: '3px solid var(--border-subtle)',
                                   }}
                                 >
                                   {i.note}

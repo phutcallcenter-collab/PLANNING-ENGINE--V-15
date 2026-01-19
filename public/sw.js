@@ -15,7 +15,6 @@ const DATA_CACHE = `${CACHE_PREFIX}-data-${SW_VERSION}`;
 */
 const SHELL_ASSETS = [
     '/',
-    '/index.html',
     '/manifest.json',
     '/favicon.ico',
 ];
