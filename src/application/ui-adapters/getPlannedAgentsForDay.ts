@@ -5,10 +5,10 @@ import {
     ShiftType,
     DayInfo,
     Representative,
-    EffectiveSchedulePeriod,
+    SpecialSchedule,
 } from '@/domain/types'
 import { resolveIncidentDates } from '@/domain/incidents/resolveIncidentDates'
-import { findActiveEffectivePeriod, getDutyFromPeriod } from '@/domain/planning/effectivePeriodHelpers'
+import { getEffectiveSchedule } from '@/application/scheduling/specialScheduleAdapter'
 
 export interface PlannedAgent {
     representativeId: string
@@ -38,7 +38,7 @@ export function getPlannedAgentsForDay(
     shift: ShiftType,
     allCalendarDays: DayInfo[],
     representatives: Representative[],
-    effectivePeriods: EffectiveSchedulePeriod[] = []
+    specialSchedules: SpecialSchedule[] = []
 ): PlannedAgent[] {
     const planned: PlannedAgent[] = []
 
@@ -68,43 +68,31 @@ export function getPlannedAgentsForDay(
         if (blockingIncident) continue // ⛔ NO está planificado
 
         // ─────────────────────────────
-        // 2. EFFECTIVE SCHEDULE PERIOD
+        // 2 & 3. CANONICAL SCHEDULE RESOLUTION
         // ─────────────────────────────
-        // If an effective period is active, it overrides the base schedule.
-        const activePeriod = findActiveEffectivePeriod(effectivePeriods, repId, date)
-        if (activePeriod) {
-            const duty = getDutyFromPeriod(activePeriod, date)
+        // Use the unified adapter to determine if they work and on what shift.
+        const effective = getEffectiveSchedule({
+            representative,
+            dateStr: date,
+            baseSchedule: representative.baseSchedule,
+            specialSchedules
+        })
 
-            if (
-                duty === 'BOTH' ||
-                (duty === 'DAY' && shift === 'DAY') ||
-                (duty === 'NIGHT' && shift === 'NIGHT')
-            ) {
-                planned.push({
-                    representativeId: repId,
-                    shift,
-                    source: 'EFFECTIVE_PERIOD',
-                })
-            }
-
-            continue // ⛔ El período reemplaza TODO
+        if (effective.type === 'OFF') {
+            continue // ⛔ Explicitly OFF
         }
 
-        // ─────────────────────────────
-        // 3. PLAN BASE
-        // ─────────────────────────────
-        const baseAssignment = agent.days[date]?.assignment
+        // If WORKING (BASE, OVERRIDE, MIXTO)
+        // Check if the resulting shift matches the requested shift context
+        const worksRequestedShift =
+            effective.type === 'MIXTO' || // SAFE: MIXTO implies Base is WORKING (handled by adapter)
+            (effective.shift === shift) // Specific shift matches
 
-        const baseWorks =
-            baseAssignment?.type === 'BOTH' ||
-            (baseAssignment?.type === 'SINGLE' &&
-                baseAssignment.shift === shift)
-
-        if (baseWorks) {
+        if (worksRequestedShift) {
             planned.push({
                 representativeId: repId,
                 shift,
-                source: 'BASE',
+                source: effective.type === 'BASE' ? 'BASE' : 'EFFECTIVE_PERIOD' // Keeping simplified source for now, or could map 'OVERRIDE'
             })
         }
     }

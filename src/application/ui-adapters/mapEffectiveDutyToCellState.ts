@@ -22,17 +22,25 @@
 import { EffectiveDutyResult } from '@/domain/swaps/resolveEffectiveDuty'
 import { DayInfo } from '@/domain/calendar/types'
 import { Representative } from '@/domain/types'
-import { ResolvedCellState } from './cellState'
+import { ResolvedCellState, CellBadge } from './cellState'
 import * as humanize from '@/application/presenters/humanize'
 
 /**
  * Maps an EffectiveDutyResult to a fully resolved cell state.
+ * 
+ * @param badge - Optional badge from DayResolution.computed.display.badge
+ * @param coverageInfo - Optional coverage context for tooltip generation
  */
 export function mapEffectiveDutyToCellState(
     duty: EffectiveDutyResult,
     day: DayInfo,
     rep: Representative,
-    allReps: Representative[]
+    allReps: Representative[],
+    badge?: CellBadge, // 🔄 Badge from domain
+    coverageInfo?: { // 🔄 NEW: Coverage context for tooltips
+        coveredByName?: string
+        coveringName?: string
+    }
 ): ResolvedCellState {
     // 🔴 AUSENCIA — prioridad absoluta
     if (duty.reason === 'AUSENCIA') {
@@ -51,6 +59,7 @@ export function mapEffectiveDutyToCellState(
             ariaLabel: `${rep.name} estuvo ausente el ${day.date}`,
             canEdit: false,
             canContextMenu: false,
+            badge: badge || 'AUSENCIA', // Badge has priority
         }
     }
 
@@ -66,6 +75,7 @@ export function mapEffectiveDutyToCellState(
             ariaLabel: `${rep.name} está de vacaciones`,
             canEdit: false,
             canContextMenu: false,
+            badge: badge || 'VACACIONES',
         }
     }
 
@@ -85,6 +95,7 @@ export function mapEffectiveDutyToCellState(
             ariaLabel: `${rep.name} está de licencia`,
             canEdit: false,
             canContextMenu: false,
+            badge: badge || 'LICENCIA',
         }
     }
 
@@ -111,6 +122,7 @@ export function mapEffectiveDutyToCellState(
             ariaLabel: `${rep.name} no trabaja este día`,
             canEdit: true,
             canContextMenu: true,
+            badge, // 🔄 Pass through badge (CUBIERTO/CUBRIENDO)
         }
     }
 
@@ -123,6 +135,7 @@ export function mapEffectiveDutyToCellState(
             ariaLabel: `${rep.name} trabaja en feriado: ${day.label || 'feriado'}`,
             canEdit: true,
             canContextMenu: true,
+            badge, // 🔄 Pass through badge
         }
     }
 
@@ -137,12 +150,22 @@ export function mapEffectiveDutyToCellState(
         // INTER se maneja con effective periods o overrides
     }
 
+    // 🔄 NEW: Build tooltip with coverage context
+    let tooltip = humanize.workingBaseTooltip(rep, day.date)
+
+    if (badge === 'CUBIERTO' && coverageInfo?.coveredByName) {
+        tooltip = `${rep.name} está siendo cubierto por ${coverageInfo.coveredByName}`
+    } else if (badge === 'CUBRIENDO' && coverageInfo?.coveringName) {
+        tooltip = `${rep.name} está cubriendo a ${coverageInfo.coveringName}`
+    }
+
     return {
         variant: 'WORKING',
         label,
-        tooltip: humanize.workingBaseTooltip(rep, day.date),
+        tooltip,
         ariaLabel: `${rep.name} trabaja normalmente`,
         canEdit: true,
         canContextMenu: true,
+        badge, // 🔄 Pass through badge (CUBIERTO/CUBRIENDO)
     }
 }

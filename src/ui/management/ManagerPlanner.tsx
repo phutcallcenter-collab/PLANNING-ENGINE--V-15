@@ -35,7 +35,7 @@ export function ManagerPlanner() {
     incidents,
     swaps,
     allCalendarDaysForRelevantMonths,
-    effectivePeriods,
+    specialSchedules,
   } = useAppStore(s => ({
     representatives: s.representatives,
     planningAnchorDate: s.planningAnchorDate,
@@ -43,7 +43,7 @@ export function ManagerPlanner() {
     incidents: s.incidents,
     swaps: s.swaps,
     allCalendarDaysForRelevantMonths: s.allCalendarDaysForRelevantMonths,
-    effectivePeriods: s.effectivePeriods ?? [],
+    specialSchedules: s.specialSchedules,
   }))
 
   const { weekDays, label } = useWeekNavigator(
@@ -67,7 +67,7 @@ export function ManagerPlanner() {
       incidents,
       allCalendarDaysForRelevantMonths,
       representatives,
-      effectivePeriods
+      specialSchedules
     )
   }, [
     weeklyPlan,
@@ -75,7 +75,7 @@ export function ManagerPlanner() {
     swaps,
     incidents,
     allCalendarDaysForRelevantMonths,
-    effectivePeriods,
+    specialSchedules,
   ])
 
   if (!weeklyPlan) return null

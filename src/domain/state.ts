@@ -81,7 +81,6 @@ export function createInitialState(): PlanningBaseState {
     representatives: initialRepresentatives,
     incidents: initialIncidents,
     specialSchedules: initialSpecialSchedules,
-    effectivePeriods: [],
     calendar: initialCalendarState,
     coverageRules: initialCoverageRules,
     version: CURRENT_VERSION,

@@ -14,7 +14,7 @@ import {
   Incident,
   ShiftType,
   ISODate,
-  EffectiveSchedulePeriod,
+  SpecialSchedule,
 } from '@/domain/types'
 import { getEffectiveDailyCoverage } from '@/application/ui-adapters/getEffectiveDailyCoverage'
 
@@ -45,7 +45,7 @@ export interface CoverageRiskInput {
   coverageRules: CoverageRule[]
   incidents: Incident[]
   representatives: any[]
-  effectivePeriods?: EffectiveSchedulePeriod[]
+  specialSchedules?: SpecialSchedule[]
 }
 
 export function getCoverageRiskSummary(
@@ -114,7 +114,7 @@ export function getCoverageRiskSummary(
       incidents,
       monthDays,
       representatives || [],
-      input.effectivePeriods
+      input.specialSchedules
     )
 
     // ⚠️ CONTRACT AMBIGUITY WARNING (Operational vs Statistical Semantics)

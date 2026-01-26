@@ -13,10 +13,10 @@
  * Ver SWAP_RULES.md para reglas completas.
  */
 
-import { ISODate, ShiftType, WeeklyPlan, SwapEvent, Incident, RepresentativeId, Representative, EffectiveSchedulePeriod } from '../types'
+import { ISODate, ShiftType, WeeklyPlan, SwapEvent, Incident, RepresentativeId, Representative, SpecialSchedule } from '../types'
 import { resolveIncidentDates } from '../incidents/resolveIncidentDates'
 import { DayInfo } from '../calendar/types'
-import { findActiveEffectivePeriod, getDutyFromPeriod } from '../planning/effectivePeriodHelpers'
+import { getEffectiveSchedule } from '@/application/scheduling/specialScheduleAdapter'
 
 export type EffectiveDutyRole =
   | 'BASE' // Trabaja según plan base, sin modificaciones
@@ -48,7 +48,7 @@ export function resolveEffectiveDuty(
   representativeId: string,
   allCalendarDays: DayInfo[],
   representatives: Representative[],
-  effectivePeriods: EffectiveSchedulePeriod[] = []
+  specialSchedules: SpecialSchedule[] = []
 ): EffectiveDutyResult {
   // ===============================================
   // 0. OVERRIDE INCIDENTS: Manual changes to assignments
@@ -90,65 +90,65 @@ export function resolveEffectiveDuty(
   }
 
   // ===============================================
-  // 1. EFFECTIVE SCHEDULE PERIOD: SECOND PRIORITY
+  // 1. CANONICAL SCHEDULING ADAPTER (Base + Special Schedules)
   // ===============================================
-  const activePeriod = findActiveEffectivePeriod(effectivePeriods, representativeId, date)
+  // Replaces both Priority 1 (EffectivePeriod) and Priority 2 (Base Plan) old logic.
+  // The adapter respects Precedence: Individual Special > Global Special > Base.
+  const representative = representatives.find(r => r.id === representativeId)
+  if (!representative) {
+    // Fallback / Error handling
+    return { shouldWork: false, role: 'NONE', reason: 'Representative not found' }
+  }
 
-  if (activePeriod) {
-    const duty = getDutyFromPeriod(activePeriod, date)
-    const isOverride = activePeriod.startDate === activePeriod.endDate
-    const source = isOverride ? 'OVERRIDE' : 'EFFECTIVE_PERIOD'
-    const note = activePeriod.note
+  const effective = getEffectiveSchedule({
+    representative,
+    dateStr: date,
+    baseSchedule: representative.baseSchedule,
+    specialSchedules
+  })
 
-    // Map DailyDuty to EffectiveDutyResult
-    if (duty === 'OFF') {
-      return {
-        shouldWork: false,
-        role: 'NONE',
-        reason: activePeriod.reason || (isOverride ? 'Día libre asignado manualmente' : 'Período de horario especial'),
-        source,
-        note,
-      }
-    }
+  // We need to determine "Planned Duty" before checking incidents.
+  let plannedRole: EffectiveDutyRole = 'NONE'
+  let plannedShouldWork = false
+  let adapterSource: EffectiveDutyResult['source'] = 'BASE'
+  let adapterReason: string | undefined = undefined
 
-    if (duty === 'BOTH') {
-      return {
-        shouldWork: true,
-        role: 'BASE',
-        reason: activePeriod.reason,
-        source,
-        note,
-      }
-    }
+  if (effective.type === 'OFF') {
+    plannedShouldWork = false
+    plannedRole = 'NONE'
+    adapterSource = effective.source ? 'EFFECTIVE_PERIOD' : 'BASE'
+    adapterReason = effective.source?.note || 'Día libre'
+  } else if (effective.type === 'MIXTO' || effective.type === 'BASE' || effective.type === 'OVERRIDE') {
+    // If working, does it match the requested shift?
+    adapterSource = effective.source ? 'EFFECTIVE_PERIOD' : 'BASE'
+    adapterReason = effective.source?.note
 
-    if (duty === 'DAY' || duty === 'NIGHT') {
-      const shouldWork = duty === shift
-      return {
-        shouldWork,
-        role: shouldWork ? 'BASE' : 'NONE',
-        reason: activePeriod.reason,
-        source,
-        note,
-      }
+    if (effective.type === 'MIXTO') {
+      plannedShouldWork = true
+      plannedRole = 'BASE'
+      // ⚠️ SEMANTIC NOTE: 'BASE' role here is correct because MIXTO isn't a separate job.
+      // It just means they are working their base day, but are eligible for swaps/covers in other shifts.
+    } else {
+      // Specific shift
+      const matchesRequest = effective.shift === shift
+      plannedShouldWork = matchesRequest
+      plannedRole = matchesRequest ? 'BASE' : 'NONE'
     }
   }
 
-  // ===============================================
-  // 2. PLAN BASE: Determinar asignación original
-  // ===============================================
-  const agent = weeklyPlan.agents.find(
-    a => a.representativeId === representativeId
-  )
-  const baseAssignment = agent?.days[date]?.assignment
+  // Precedence Note:
+  // We calculate the "Planned State" first via the Adapter (Base + Special).
+  // Then we verify availability via Incident blocks (Priority 3).
+  // This ensures VACATIONS always override any schedule (even Special),
+  // aligning with the "OFF mata todo" rule for formal incidents.
 
-  const baseWorks =
-    baseAssignment?.type === 'BOTH' ||
-    (baseAssignment?.type === 'SINGLE' && baseAssignment.shift === shift)
+  // Continue to check Incidents...
 
   // ===============================================
   // 3. INCIDENCIAS BLOQUEANTES: Verificar disponibilidad
   // ===============================================
-  const representative = representatives.find(r => r.id === representativeId)
+  // representative already found in step 1
+  // const representative = representatives.find(r => r.id === representativeId)
 
   // 🔒 DEFENSIVE: Si no encontramos el representante, algo está mal
   if (!representative) {
@@ -203,16 +203,14 @@ export function resolveEffectiveDuty(
     return resolved.dates.includes(date)
   })
 
-  // 🛡️ GUARD: Absence vs Base Schedule
-  // AUSENCIA applies only if the day was planned as work.
-  // This protects against future logic where absences might be logged on OFF days (e.g. administrative).
-  if (absenceIncident && baseWorks) {
+  // 🛡️ GUARD: Absence vs Planned Schedule (Adapter)
+  if (absenceIncident && plannedShouldWork) {
     return {
       shouldWork: false, // Although planned, didn't work
       role: 'NONE',
       reason: 'AUSENCIA',
       source: 'INCIDENT',
-      details: absenceIncident.details, // Propagate details (e.g., 'JUSTIFICADA')
+      details: absenceIncident.details,
       note: absenceIncident.note,
     }
   }
@@ -289,11 +287,13 @@ export function resolveEffectiveDuty(
   }
 
   // ===============================================
-  // 5. FALLBACK: Usar plan base
+  // 5. FALLBACK: Usar resultado del Adapter
   // ===============================================
-  if (baseWorks) {
-    return { shouldWork: true, role: 'BASE', source: 'BASE' }
+  // If no other event intervened, return the calculated scheduled state.
+  return {
+    shouldWork: plannedShouldWork,
+    role: plannedRole,
+    source: adapterSource,
+    reason: adapterReason
   }
-
-  return { shouldWork: false, role: 'NONE', source: 'BASE' }
 }

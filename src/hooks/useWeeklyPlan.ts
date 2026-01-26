@@ -2,6 +2,7 @@
 
 import { useMemo } from 'react'
 import { useAppStore } from '@/store/useAppStore'
+import { useCoverageStore } from '@/store/useCoverageStore'
 import { buildWeeklySchedule } from '../domain/planning/buildWeeklySchedule'
 import { DayInfo } from '../domain/types'
 
@@ -20,6 +21,10 @@ export function useWeeklyPlan(weekDays: DayInfo[]) {
       allCalendarDaysForRelevantMonths: s.allCalendarDaysForRelevantMonths,
     }))
 
+  // 🔄 NEW: Get active coverages from store
+  const { getActiveCoverages } = useCoverageStore()
+  const coverages = getActiveCoverages()
+
   const weeklyPlan = useMemo(() => {
     // Si no hay días de la semana o representantes, el plan está vacío.
     if (!representatives.length || !weekDays || weekDays.length !== 7) {
@@ -32,7 +37,8 @@ export function useWeeklyPlan(weekDays: DayInfo[]) {
       incidents,
       specialSchedules,
       weekDays,
-      allCalendarDaysForRelevantMonths
+      allCalendarDaysForRelevantMonths,
+      coverages // 👈 Pass coverages to domain
     )
 
     return derivedWeeklyPlan
@@ -42,6 +48,7 @@ export function useWeeklyPlan(weekDays: DayInfo[]) {
     incidents,
     specialSchedules,
     allCalendarDaysForRelevantMonths,
+    coverages, // 👈 Add coverages as dependency
   ])
 
   return { weeklyPlan }

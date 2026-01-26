@@ -6,7 +6,6 @@ import { useAppStore } from '@/store/useAppStore'
 import { useEditMode } from '@/hooks/useEditMode'
 import { SpecialScheduleWizard } from './SpecialScheduleWizard'
 import { SpecialScheduleList } from './SpecialScheduleList'
-import { MixedShiftManager } from './MixedShiftManager'
 import { Tooltip } from '@/ui/components/Tooltip'
 import { Calendar } from 'lucide-react'
 import { useState } from 'react'
@@ -112,15 +111,6 @@ export function SortableRepCard({ rep, onEdit, onAddSchedule, addingScheduleFor,
 
             <SpecialScheduleList repId={rep.id} onEdit={setEditingSchedule} />
 
-            {/* Mixed Shift Manager (for mixed shift reps) */}
-            {managingMixedFor === rep.id && (
-                <MixedShiftManager
-                    repId={rep.id}
-                    repName={rep.name}
-                    onClose={() => onManageMixed(null)}
-                />
-            )}
-
             {isAdding || editingSchedule ? (
                 <SpecialScheduleWizard
                     repId={rep.id}
@@ -132,41 +122,25 @@ export function SortableRepCard({ rep, onEdit, onAddSchedule, addingScheduleFor,
                     initialSchedule={editingSchedule || undefined}
                 />
             ) : (
-                <div style={{ marginTop: '12px', display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
-                    {/* Special button for mixed shift reps */}
-                    {rep.mixProfile && (
-                        <button
-                            onClick={() => onManageMixed(rep.id)}
-                            style={{
-                                fontSize: '12px',
-                                fontWeight: 600,
-                                color: '#6366f1',
-                                background: '#eef2ff',
-                                border: '1px solid #c7d2fe',
-                                borderRadius: '6px',
-                                padding: '6px 12px',
-                                cursor: 'pointer',
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: '6px',
-                            }}
-                        >
-                            <Calendar size={14} />
-                            Gestionar Horario Mixto
-                        </button>
-                    )}
+                <div style={{ marginTop: '12px', display: 'flex', gap: '12px' }}>
                     <button
                         onClick={() => onAddSchedule(rep.id)}
                         style={{
-                            fontSize: '12px',
-                            fontWeight: 500,
-                            color: '#4338ca',
-                            background: 'none',
-                            border: 'none',
+                            fontSize: '13px',
+                            fontWeight: 600,
+                            color: '#4f46e5',
+                            background: '#eef2ff',
+                            border: '1px solid #c7d2fe',
+                            borderRadius: '6px',
+                            padding: '8px 12px',
                             cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '6px'
                         }}
                     >
-                        + Añadir horario especial
+                        <Calendar size={14} />
+                        Gestión de Horarios Especiales
                     </button>
                 </div>
             )}

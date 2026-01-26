@@ -15,10 +15,10 @@ import {
   ShiftAssignment,
   RepresentativeRole,
   SpecialSchedule,
-  EffectiveSchedulePeriod,
   WeeklyPattern,
   DailyDuty,
 } from '@/domain/types'
+import { buildDisciplinaryKey } from '@/domain/incidents/buildDisciplinaryKey'
 import { Manager } from '@/domain/management/types'
 import { createInitialState, createBaseSchedule } from '@/domain/state'
 import { loadState, saveState } from '@/persistence/storage'
@@ -36,11 +36,11 @@ import { resolveIncidentDates } from '@/domain/incidents/resolveIncidentDates'
 import React, { ReactNode } from 'react'
 import { calculatePoints } from '@/domain/analytics/computeMonthlySummary'
 import { AuditEvent } from '@/domain/audit/types'
-import { recordAuditEvent } from '@/domain/audit/auditRecorder'
+
 import * as humanize from '@/application/presenters/humanize'
 import { BackupPayload } from '@/application/backup/types'
-import { validateNoOverlap } from '@/domain/planning/effectivePeriodHelpers'
 import { ManagementScheduleSlice, createManagementScheduleSlice } from './managementScheduleSlice'
+import { useAuditStore } from './useAuditStore'
 
 // --- UI Slice Types ---
 type ConfirmIntent = 'danger' | 'warning' | 'info'
@@ -152,14 +152,9 @@ export type AppState = PlanningBaseState & ManagementScheduleSlice & {
   normalizeOrderIndexes: (shift: 'DAY' | 'NIGHT') => void
 
   // Special Schedule Actions
-  addSpecialSchedule: (data: Omit<SpecialSchedule, 'id'>) => void
-  updateSpecialSchedule: (id: string, updates: Partial<Omit<SpecialSchedule, 'id' | 'representativeId'>>) => void
+  addSpecialSchedule: (data: Omit<SpecialSchedule, 'id'>) => { success: boolean; message?: string }
+  updateSpecialSchedule: (id: string, updates: Partial<Omit<SpecialSchedule, 'id' | 'representativeId'>>) => { success: boolean; message?: string }
   removeSpecialSchedule: (id: string) => void
-
-  // Effective Period Actions
-  addEffectivePeriod: (data: Omit<EffectiveSchedulePeriod, 'id' | 'createdAt'>) => { success: boolean; error?: string }
-  updateEffectivePeriod: (id: string, updates: Partial<Omit<EffectiveSchedulePeriod, 'id' | 'representativeId'>>) => { success: boolean; error?: string }
-  deleteEffectivePeriod: (id: string) => void
 
   // History Actions
   addHistoryEvent: (data: Omit<HistoryEvent, 'id' | 'timestamp'>) => void
@@ -182,6 +177,42 @@ export type AppState = PlanningBaseState & ManagementScheduleSlice & {
   // Manager Actions (Entity Management Only)
   addManager: (data: Omit<Manager, 'id'>) => void
   removeManager: (id: string) => void
+}
+
+// ----------------------------------------------------------------------
+// 🧹 HELPER: Normalizar horarios especiales legacy (Migration)
+// ----------------------------------------------------------------------
+function normalizeLegacySpecialSchedule(ss: any): SpecialSchedule | null {
+  // 1. Si ya es válido (tiene weeklyPattern completo), lo dejamos pasar
+  if (
+    ss.weeklyPattern &&
+    typeof ss.weeklyPattern === 'object' &&
+    [0, 1, 2, 3, 4, 5, 6].every(d => d in ss.weeklyPattern)
+  ) {
+    return ss as SpecialSchedule
+  }
+
+  // 2. Si es Legacy (falta weeklyPattern), intentamos reconstruirlo
+  // Lógica: Si kind='OFF' -> todos OFF. Si tiene shift -> todos ese shift.
+  // Default: 'DAY' (asumiendo que era un horario especial de día)
+  const targetState = (ss.kind === 'OFF' ? 'OFF' : (ss.shift || 'DAY'))
+
+  const weeklyPattern = {
+    0: targetState,
+    1: targetState,
+    2: targetState,
+    3: targetState,
+    4: targetState,
+    5: targetState,
+    6: targetState,
+  }
+
+  console.log(`[Migration] Legacy schedule recovered: ${ss.id || 'unknown'} -> ${targetState} pattern`)
+
+  return {
+    ...ss,
+    weeklyPattern
+  } as SpecialSchedule
 }
 
 export const useAppStore = create<AppState>()(
@@ -223,6 +254,20 @@ export const useAppStore = create<AppState>()(
               rep.orderIndex = index
             }
           })
+
+          // 🧹 MIGRACIÓN SUAVE: Normalizar legacy sin weeklyPattern
+          // En lugar de borrar, reconstruimos el patrón para no perder datos históricos
+          if (s.specialSchedules && s.specialSchedules.length > 0) {
+            const initialCount = s.specialSchedules.length
+
+            s.specialSchedules = s.specialSchedules
+              .map(normalizeLegacySpecialSchedule)
+              .filter((ss): ss is SpecialSchedule => !!ss)
+
+            if (s.specialSchedules.length < initialCount) {
+              console.warn(`🧹 Migración: Se descartaron ${initialCount - s.specialSchedules.length} reglas irrecuperables.`)
+            }
+          }
 
           s.isLoading = false;
         });
@@ -382,6 +427,44 @@ export const useAppStore = create<AppState>()(
         ...incidentData,
       };
 
+      /**
+       * 🔒 SLOT RESPONSIBILITY VALIDATION
+       * 
+       * INVARIANT ENFORCEMENT:
+       * 1. UNASSIGNED slots cannot have absences
+       * 2. COVERAGE absences MUST have slotOwnerId
+       * 3. Absence cannot be assigned to slot owner when coverage exists
+       * 
+       * This prevents the system from being used incorrectly.
+       */
+      if (newIncident.type === 'AUSENCIA') {
+        // Rule 1: Coverage absences must include slotOwnerId
+        if (newIncident.source === 'COVERAGE' && !newIncident.slotOwnerId) {
+          throw new Error(
+            '🔒 INVARIANT VIOLATION: Coverage absence must include slotOwnerId'
+          )
+        }
+
+        // Rule 2: Cannot assign absence to slot owner when coverage existed
+        if (
+          newIncident.source === 'COVERAGE' &&
+          newIncident.slotOwnerId &&
+          newIncident.representativeId === newIncident.slotOwnerId
+        ) {
+          throw new Error(
+            '🔒 INVARIANT VIOLATION: Absence cannot be assigned to slot owner when coverage existed. ' +
+            'The absence must be assigned to the covering representative.'
+          )
+        }
+
+        // Rule 3: SWAP absences must include slotOwnerId
+        if (newIncident.source === 'SWAP' && !newIncident.slotOwnerId) {
+          throw new Error(
+            '🔒 INVARIANT VIOLATION: Swap absence must include slotOwnerId'
+          )
+        }
+      }
+
       const validation = validateIncident(
         newIncident,
         incidents,
@@ -433,54 +516,66 @@ export const useAppStore = create<AppState>()(
 
       addHistoryEvent({
         category: 'INCIDENT',
-        title: `${humanize.incidentLabel(newIncident.type)} registrada`,
+        title: `${humanize.incidentLabel(newIncident.type)} registrada${newIncident.source === 'COVERAGE' ? ' (Cobertura)' : ''}`,
         subject: rep.name,
         impact: newIncident.type !== 'OVERRIDE' && newIncident.type !== 'VACACIONES' && newIncident.type !== 'LICENCIA' ? `-${calculatePoints(newIncident)} pts` : undefined,
-        description: newIncident.note,
+        description: newIncident.note || (newIncident.source === 'COVERAGE' ? `Fallo de cobertura para ${newIncident.slotOwnerId}` : undefined),
       })
       addAuditEvent({
-        actor: { id: 'admin', name: 'Administrador' },
-        action: 'INCIDENT_CREATED',
-        target: {
-          entity: 'INCIDENT',
-          entityId: newIncident.id,
-          label: humanize.incidentLabel(newIncident.type),
-        },
-        context: {
+        type: 'INCIDENT_CREATED',
+        actor: 'SYSTEM',
+        payload: {
+          entity: { type: 'INCIDENT', id: newIncident.id },
+          incidentType: newIncident.type,
           date: newIncident.startDate,
           representativeId: newIncident.representativeId,
-          reason: newIncident.note,
-        },
+          note: newIncident.note,
+          source: newIncident.source,
+          slotOwnerId: newIncident.slotOwnerId
+        }
       })
 
 
+
+
+      const newDisciplinaryKey = buildDisciplinaryKey(newIncident)
+
+      // Update newIncident with the key
+      const incidentWithKey = {
+        ...newIncident,
+        disciplinaryKey: newDisciplinaryKey
+      }
+
       set(state => {
-        if (newIncident.type === 'AUSENCIA') {
+        if (incidentWithKey.type === 'AUSENCIA') {
           const removedIncidents = state.incidents.filter(
             i =>
-              i.representativeId === newIncident.representativeId &&
-              i.startDate === newIncident.startDate
+              i.representativeId === incidentWithKey.representativeId &&
+              i.startDate === incidentWithKey.startDate &&
+              // 🧠 IDENTITY CHECK: Only replace if disciplinary key matches
+              i.disciplinaryKey === newDisciplinaryKey
           )
           if (removedIncidents.length > 0) {
             addHistoryEvent({
               category: 'SYSTEM',
-              title: `Incidencias limpiadas por AUSENCIA`,
+              title: `Incidencia actualizada`,
               subject: rep.name,
-              description: `Se eliminaron ${removedIncidents.length} evento(s) previos.`,
+              description: `Se reemplazó un evento previo (${newDisciplinaryKey}).`,
             })
           }
           state.incidents = state.incidents.filter(
             i =>
               !(
-                i.representativeId === newIncident.representativeId &&
-                i.startDate === newIncident.startDate
+                i.representativeId === incidentWithKey.representativeId &&
+                i.startDate === incidentWithKey.startDate &&
+                i.disciplinaryKey === newDisciplinaryKey
               )
           )
         }
 
-        // Ensure we are not adding a duplicate. This can happen with fast clicks.
-        if (!state.incidents.some(i => i.id === newIncident.id)) {
-          state.incidents.push(newIncident);
+        // Ensure we are not adding a duplicate ID
+        if (!state.incidents.some(i => i.id === incidentWithKey.id)) {
+          state.incidents.push(incidentWithKey);
         }
 
         if (newIncident.type !== 'OVERRIDE') {
@@ -533,18 +628,15 @@ export const useAppStore = create<AppState>()(
           metadata: { incident: incidentToRemove },
         })
         addAuditEvent({
-          actor: { id: 'admin', name: 'Administrador' },
-          action: 'INCIDENT_DELETED',
-          target: {
-            entity: 'INCIDENT',
-            entityId: incidentToRemove.id,
-            label: humanize.incidentLabel(incidentToRemove.type),
-          },
-          context: {
+          type: 'INCIDENT_REMOVED',
+          actor: 'SYSTEM',
+          payload: {
+            entity: { type: 'INCIDENT', id: incidentToRemove.id },
+            incidentType: incidentToRemove.type,
             date: incidentToRemove.startDate,
             representativeId: incidentToRemove.representativeId,
-            reason: 'Eliminación manual',
-          },
+            reason: 'Manual deletion'
+          }
         })
       }
 
@@ -574,19 +666,15 @@ export const useAppStore = create<AppState>()(
       set(state => {
         incidentsToRemove.forEach(incident => {
           if (incident.type === 'OVERRIDE') return
-          recordAuditEvent(state, {
-            action: 'INCIDENT_DELETED',
-            actor: { id: 'admin', name: 'Administrador' },
-            target: {
-              entity: 'INCIDENT',
-              entityId: incident.id,
-              label: humanize.incidentLabel(incident.type),
-            },
-            context: {
-              date: incident.startDate,
-              representativeId: incident.representativeId,
-              reason: 'Eliminación múltiple',
-            },
+          // Legacy logger removed. Replaced with direct appendEvent.
+          useAuditStore.getState().appendEvent({
+            type: 'INCIDENT_REMOVED',
+            actor: 'SYSTEM',
+            payload: {
+              entity: { type: 'INCIDENT', id: incident.id },
+              incidentType: incident.type,
+              reason: 'Bulk deletion'
+            }
           })
         })
         state.incidents = state.incidents.filter(i => !ids.includes(i.id))
@@ -783,25 +871,141 @@ export const useAppStore = create<AppState>()(
         })
       })
     },
-    addSpecialSchedule: data => {
-      set(state => {
-        const newSchedule: SpecialSchedule = {
-          id: `ss-${crypto.randomUUID()}`,
-          ...data,
+    addSpecialSchedule: (data) => {
+      const state = get() // Access current state for validation
+
+      // 🔒 VALIDACIÓN DE PROPIEDADES BÁSICAS
+      if (data.from > data.to) {
+        return { success: false, message: 'La fecha de inicio no puede ser posterior a la fecha de fin.' }
+      }
+
+      // 🔒 BLINDAJE DE DOMINIO: Validar capacidad MIXTO en pattern explícito
+      if (data.scope === 'INDIVIDUAL' && data.targetId && data.weeklyPattern) {
+        const rep = state.representatives.find(r => r.id === data.targetId)
+        if (rep && !rep.mixProfile) {
+          // Check if pattern tries to assign MIXTO
+          const days = [0, 1, 2, 3, 4, 5, 6] as const
+          const usesMixto = days.some(d => data.weeklyPattern[d] === 'MIXTO')
+
+          if (usesMixto) {
+            console.error(`⛔ VIOLACIÓN DE DOMINIO: Intento de asignar MIXTO a ${rep.name} (no mixto).`)
+            return { success: false, message: `El representante ${rep.name} no tiene contrato mixto.` }
+          }
         }
-        state.specialSchedules.push(newSchedule)
+      }
+
+      // 🔒 BLINDAJE DE COLISIÓN INTEGRAL: REPLACE-ON-OVERLAP
+      // Si la nueva regla choca con una existente del mismo usuario, 
+      // la existente se ELIMINA para dar paso a la nueva (Last Write Wins).
+      // Esto evita la duplicación conceptual de reglas.
+      if (data.scope === 'INDIVIDUAL' && data.targetId) {
+        set(s => {
+          // Filtrar (eliminar) las que colisionan
+          s.specialSchedules = s.specialSchedules.filter(existing => {
+            // Si es Global o de otro usuario, se queda
+            if (existing.scope !== 'INDIVIDUAL' || existing.targetId !== data.targetId) return true
+
+            // Check Overlap
+            const overlaps = (data.from <= existing.to && data.to >= existing.from)
+
+            // Si se solapa, se va (false)
+            return !overlaps
+          })
+
+          // Generate ID
+          const newSchedule: SpecialSchedule = {
+            id: crypto.randomUUID(),
+            ...data
+          } as SpecialSchedule
+
+          s.specialSchedules.push(newSchedule)
+
+          // History
+          const repName = data.targetId ? s.representatives.find(r => r.id === data.targetId)?.name : 'Global'
+          const newEvent: HistoryEvent = {
+            id: `hist-${crypto.randomUUID()}`,
+            timestamp: new Date().toISOString(),
+            category: 'RULE',
+            title: 'Excepción de Horario Creada',
+            subject: repName,
+            description: data.note || 'Patrón semanal explícito',
+            metadata: { from: data.from, to: data.to }
+          }
+          s.historyEvents.unshift(newEvent)
+        })
+
+        get()._generateCalendarDays()
+        return { success: true }
+      }
+
+      set(s => {
+        // Generate ID (Global case or fallback logic if needed, though strictly we handled Ind above)
+        // Actually, we can merge logic. If Global, just push. 
+        // But for clarity let's keep the standard push here if it wasn't Individual (which implies no collision logic for global?)
+        // Wait, user only asked for Individual collision replacement. 
+        // Let's unify.
+
+        const newSchedule: SpecialSchedule = {
+          id: crypto.randomUUID(),
+          ...data
+        } as SpecialSchedule
+
+        s.specialSchedules.push(newSchedule)
+
+        // History
+        const repName = data.targetId ? s.representatives.find(r => r.id === data.targetId)?.name : 'Global'
+        const newEvent = {
+          id: `hist-${crypto.randomUUID()}`,
+          timestamp: new Date().toISOString(),
+          category: 'RULE' as const,
+          title: 'Excepción de Horario Creada',
+          subject: repName,
+          description: data.note || 'Patrón semanal explícito',
+          metadata: { from: data.from, to: data.to }
+        }
+        s.historyEvents.unshift(newEvent)
       })
+
+      get()._generateCalendarDays()
+      return { success: true }
     },
+
     updateSpecialSchedule: (id, updates) => {
-      set(state => {
-        const index = state.specialSchedules.findIndex(ss => ss.id === id)
-        if (index !== -1) {
-          state.specialSchedules[index] = {
-            ...state.specialSchedules[index],
+      const state = get()
+      const index = state.specialSchedules.findIndex(ss => ss.id === id)
+      if (index === -1) return { success: false, message: 'Horario no encontrado.' }
+
+      const current = state.specialSchedules[index]
+      const prospective = { ...current, ...updates }
+
+      // 🔒 VALIDACIÓN DE FECHAS
+      if (prospective.from > prospective.to) {
+        return { success: false, message: 'La fecha de inicio no puede ser posterior a la fecha de fin.' }
+      }
+
+      set(s => {
+        // 🔒 BLINDAJE DE COLISIÓN (Update): REPLACE-ON-OVERLAP
+        // Al actualizar, si cambiamos fechas y ahora piso a otro, el oponente muere.
+        if (prospective.scope === 'INDIVIDUAL' && prospective.targetId) {
+          s.specialSchedules = s.specialSchedules.filter(existing => {
+            if (existing.id === id) return true // I am myself, I stay (will be updated later)
+            if (existing.scope !== 'INDIVIDUAL' || existing.targetId !== prospective.targetId) return true
+
+            const overlaps = (prospective.from <= existing.to && prospective.to >= existing.from)
+            return !overlaps // Die if overlap
+          })
+        }
+
+        const idx = s.specialSchedules.findIndex(x => x.id === id) // Re-find index after filter potentially shifted things (though unlikely to shift self)
+        if (idx !== -1) {
+          s.specialSchedules[idx] = {
+            ...s.specialSchedules[idx],
             ...updates,
           }
         }
       })
+
+      return { success: true }
     },
     removeSpecialSchedule: id => {
       set(state => {
@@ -835,66 +1039,6 @@ export const useAppStore = create<AppState>()(
       })
     },
 
-
-
-    // ===============================================
-    // Effective Period Actions
-    // ===============================================
-    addEffectivePeriod: data => {
-      const { effectivePeriods } = get()
-
-      // Validate no overlap
-      const error = validateNoOverlap(effectivePeriods, data)
-      if (error) {
-        return { success: false, error }
-      }
-
-      set(state => {
-        const newPeriod: EffectiveSchedulePeriod = {
-          id: `ep-${crypto.randomUUID()}`,
-          createdAt: new Date().toISOString().split('T')[0],
-          ...data,
-        }
-        state.effectivePeriods.push(newPeriod)
-      })
-
-      return { success: true }
-    },
-
-    updateEffectivePeriod: (id, updates) => {
-      const { effectivePeriods } = get()
-      const existing = effectivePeriods.find(p => p.id === id)
-
-      if (!existing) {
-        return { success: false, error: 'Período no encontrado' }
-      }
-
-      // Create updated period for validation
-      const updated = { ...existing, ...updates }
-
-      // Validate no overlap (excluding this period)
-      const error = validateNoOverlap(effectivePeriods, updated, id)
-      if (error) {
-        return { success: false, error }
-      }
-
-      set(state => {
-        const period = state.effectivePeriods.find(p => p.id === id)
-        if (period) {
-          Object.assign(period, updates)
-        }
-      })
-
-      return { success: true }
-    },
-
-    deleteEffectivePeriod: id => {
-      set(state => {
-        state.effectivePeriods = state.effectivePeriods.filter(
-          p => p.id !== id
-        )
-      })
-    },
     openDetailModal: (personId, month) => {
       set({ detailModalState: { isOpen: true, personId, month } })
     },
@@ -912,8 +1056,12 @@ export const useAppStore = create<AppState>()(
       })
     },
     addAuditEvent: (event: Omit<AuditEvent, 'id' | 'timestamp'>) => {
-      set(state => {
-        recordAuditEvent(state, event)
+      // 2. 🟢 NEW: Write to Append-Only Audit Store (Forensic)
+      useAuditStore.getState().appendEvent({
+        type: event.type,
+        actor: event.actor,
+        repId: event.repId,
+        payload: event.payload
       })
     },
     pushUndo: (action, timeoutMs = 6000) => {
@@ -957,7 +1105,6 @@ export const useAppStore = create<AppState>()(
         coverageRules,
         swaps,
         specialSchedules,
-        effectivePeriods,
         historyEvents,
         auditLog,
         managers,
@@ -972,7 +1119,6 @@ export const useAppStore = create<AppState>()(
         coverageRules,
         swaps,
         specialSchedules,
-        effectivePeriods,
         historyEvents,
         auditLog,
         managers,
@@ -993,7 +1139,6 @@ export const useAppStore = create<AppState>()(
         historyEvents: data.historyEvents ?? [],
         auditLog: data.auditLog ?? [],
         specialSchedules: data.specialSchedules ?? [],
-        effectivePeriods: data.effectivePeriods ?? [],
         managers: data.managers ?? [],
         managementSchedules: data.managementSchedules ?? {},
         version: DOMAIN_VERSION,
@@ -1026,7 +1171,6 @@ export const stateToPersist = (state: AppState): PlanningBaseState => {
     coverageRules,
     swaps,
     specialSchedules,
-    effectivePeriods,
     historyEvents,
     auditLog,
     managers,
@@ -1040,7 +1184,6 @@ export const stateToPersist = (state: AppState): PlanningBaseState => {
     coverageRules,
     swaps,
     specialSchedules,
-    effectivePeriods,
     historyEvents,
     auditLog,
     managers,

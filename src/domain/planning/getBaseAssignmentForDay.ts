@@ -26,54 +26,25 @@ export function getBaseAssignmentForDay(params: {
 }): ShiftType | 'OFF' | null {
   const { rep, date, day, incidents, specialSchedules, allCalendarDays } = params
 
-  // Resolver incidentes formales (vacaciones, licencias)
-  const resolvedFormalIncidents = incidents
-    .filter(i => i.type === 'VACACIONES' || i.type === 'LICENCIA')
-    .map(i => resolveIncidentDates(i, allCalendarDays, rep))
-    .filter(resolved => resolved.dates.length > 0)
-
-  const formalIncident = resolvedFormalIncidents.find(
-    resolved =>
-      resolved.incident.representativeId === rep.id &&
-      resolved.dates.includes(date)
-  )
-
-  // Incidentes de un solo día (override, ausencia)
-  const singleDayIncident = incidents.find(
-    i =>
-      (i.type === 'OVERRIDE' || i.type === 'AUSENCIA') &&
-      i.representativeId === rep.id &&
-      i.startDate === date
-  )
-
-  const overrideIncident =
-    singleDayIncident?.type === 'OVERRIDE' ? singleDayIncident : undefined
-  const isAbsenceDay = singleDayIncident?.type === 'AUSENCIA'
-
-  // Special schedules
-  const parsedDate = parseISO(date)
-  const specialSchedule = specialSchedules.find(
-    ss =>
-      ss.representativeId === rep.id &&
-      isWithinInterval(parsedDate, {
-        start: parseISO(ss.startDate),
-        end: parseISO(ss.endDate),
-      }) &&
-      ss.daysOfWeek.includes(day.dayOfWeek)
+  // Collect all relevant incidents for this day
+  const dailyIncidents = incidents.filter(
+    i => i.representativeId === rep.id && (
+      (i.type === 'OVERRIDE' || i.type === 'AUSENCIA' || i.type === 'SWAP') && i.startDate === date ||
+      (i.type === 'VACACIONES' || i.type === 'LICENCIA') &&
+      resolveIncidentDates(i, allCalendarDays, rep).dates.includes(date)
+    )
   )
 
   // Resolver estado del día
   const resolvedDay = resolveDayStatus(
     rep,
     day,
-    isAbsenceDay,
-    formalIncident,
-    overrideIncident,
-    specialSchedule
+    dailyIncidents,
+    specialSchedules
   )
 
   // Convertir ShiftAssignment a ShiftType | 'OFF'
-  const assignment = resolvedDay.assignment
+  const assignment = resolvedDay.plan.assignment
   if (!assignment) {
     return 'OFF'
   }

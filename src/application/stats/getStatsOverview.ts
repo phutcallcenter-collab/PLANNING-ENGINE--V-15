@@ -5,7 +5,7 @@ import {
   SwapEvent,
   DayInfo,
   CoverageRule,
-  EffectiveSchedulePeriod,
+  SpecialSchedule,
 } from '@/domain/types'
 import { computeMonthlySummary } from '@/domain/analytics/computeMonthlySummary'
 import { getEffectiveDailyCoverage } from '@/application/ui-adapters/getEffectiveDailyCoverage'
@@ -18,7 +18,7 @@ export interface StatsOverviewInput {
   weeklyPlans: WeeklyPlan[] // Array of all weekly plans for the month
   monthDays: DayInfo[]
   coverageRules: CoverageRule[]
-  effectivePeriods: EffectiveSchedulePeriod[]
+  specialSchedules: SpecialSchedule[]
 }
 
 export interface StatsOverviewResult {
@@ -104,7 +104,7 @@ export function getStatsOverview(
       incidents,
       monthDays,
       representatives,
-      input.effectivePeriods
+      input.specialSchedules
     )
 
     if (

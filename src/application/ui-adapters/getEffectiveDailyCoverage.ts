@@ -1,4 +1,4 @@
-import { WeeklyPlan, SwapEvent, CoverageRule, ISODate, ShiftType, Incident, Representative, EffectiveSchedulePeriod } from '@/domain/types'
+import { WeeklyPlan, SwapEvent, CoverageRule, ISODate, ShiftType, Incident, Representative, SpecialSchedule } from '@/domain/types'
 import { resolveCoverage } from '@/domain/planning/resolveCoverage'
 import { DayInfo } from '@/domain/calendar/types'
 import { getDailyShiftStats } from './getDailyShiftStats'
@@ -31,7 +31,7 @@ export function getEffectiveDailyCoverage(
     incidents: Incident[],
     allCalendarDays: DayInfo[],
     representatives: Representative[],
-    effectivePeriods: EffectiveSchedulePeriod[] = []
+    specialSchedules: SpecialSchedule[] = []
 ): DailyCoverageMap {
     // 🔒 CANONICAL SOURCE: getDailyShiftStats
     const dayStats = getDailyShiftStats(
@@ -41,7 +41,7 @@ export function getEffectiveDailyCoverage(
         'DAY',
         allCalendarDays,
         representatives,
-        effectivePeriods
+        specialSchedules
     )
 
     const nightStats = getDailyShiftStats(
@@ -51,7 +51,7 @@ export function getEffectiveDailyCoverage(
         'NIGHT',
         allCalendarDays,
         representatives,
-        effectivePeriods
+        specialSchedules
     )
 
     // Resolve Requirements (Rules)

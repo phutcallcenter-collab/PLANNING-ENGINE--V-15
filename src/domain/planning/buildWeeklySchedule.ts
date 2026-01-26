@@ -16,103 +16,137 @@ import {
   WeeklyPresence,
   DailyPresence,
   SpecialSchedule,
+  ShiftAssignment
 } from '../types'
 import { resolveIncidentDates } from '../incidents/resolveIncidentDates'
-import { ShiftAssignment } from './shiftAssignment'
 import { isWithinInterval, parseISO } from 'date-fns'
+import { getEffectiveSchedule } from '@/application/scheduling/specialScheduleAdapter'
+import { DayPlan, DayReality, DayResolution } from './dayResolution'
+import { computeDayMetrics } from './computeDayMetrics'
+import { dayResolutionToDailyPresence } from './dayResolutionAdapter'
+import { CoverageLookup, Coverage, findCoverageForDay } from './coverage'
 
 /**
  * The core deterministic function that resolves the status for a single representative on a single day.
- * It follows a strict priority order:
- * 1. Formal Incident (VACATION/LICENSE): Highest priority. Always results in OFF and blocks overrides.
- * 2. Manual Override (OVERRIDE): Second highest. It REPLACES the day's assignment completely.
- * 3. Special Schedule: A temporary schedule that overrides the base/mix profile.
- * 4. Absence Incident (AUSENCIA): An 'AUSENCIA' annotates the day but does not change the plan's status.
- * 5. Base Schedule & Mix Profile: The final fallback, determines the "natural" assignment for the day.
- *
- * @returns An object containing the final status, assignment, and the source of that decision.
+ * It follows a Layered Approach (Composition over Inheritance):
+ * 
+ * Layer 1: Assignment Resolution (Where should they be?)
+ * - Priority A: Manual Override (OVERRIDE type)
+ * - Priority B: Swap (SWAP type)
+ * - Priority C: Special Schedule (Adapter)
+ * - Priority D: Base Schedule (Adapter fallback)
+ * 
+ * Layer 2: Condition Overlay (What is happening?)
+ * - Priority A: Formal Absence (VACATION/LICENSE) -> Forces OFF state
+ * - Priority B: Casual Absence (AUSENCIA) -> Annotates Assignment
+ * - Default: WORKING
+ * 
+ * Layer 3: Coverage Projection (Optional)
+ * - Coverage is injected at compute time, not during resolution
+ * - Adds badges without changing plan or reality
+ * 
+ * @returns DayResolution with plan, reality, and computed layers
  */
 export function resolveDayStatus(
   rep: Representative,
   dayInfo: DayInfo,
-  isAbsenceDay: boolean,
-  formalIncident: ReturnType<typeof resolveIncidentDates> | undefined,
-  overrideIncident: Incident | undefined,
-  specialSchedule: SpecialSchedule | undefined
-): Omit<DailyPresence, 'isModified'> {
-  // --- Priority 1: Hard blocks (Formal Absences) ---
-  if (formalIncident) {
-    return {
-      status: 'OFF',
-      source: 'INCIDENT',
-      type: formalIncident.incident.type,
-      assignment: { type: 'NONE' },
-    }
-  }
+  dailyIncidents: Incident[], // All incidents for this day
+  specialSchedules: SpecialSchedule[],
+  coverage?: CoverageLookup // Optional coverage lookup
+): DayResolution {
 
-  // --- Priority 2: Explicit Manual Override ---
+  // --- Step 0: Identify Inputs (Deterministic Selection) ---
+  // If multiple incidents of the same type exist, the most recent one wins.
+  const byCreatedAtDesc = (a: Incident, b: Incident) =>
+    new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+
+  const formalIncident = dailyIncidents
+    .filter(i => i.type === 'VACACIONES' || i.type === 'LICENCIA')
+    .sort(byCreatedAtDesc)[0]
+
+  const overrideIncident = dailyIncidents
+    .filter(i => i.type === 'OVERRIDE')
+    .sort(byCreatedAtDesc)[0]
+
+  const swapIncident = dailyIncidents
+    .filter(i => i.type === 'SWAP')
+    .sort(byCreatedAtDesc)[0]
+
+  const absenceIncident = dailyIncidents
+    .filter(i => i.type === 'AUSENCIA')
+    .sort(byCreatedAtDesc)[0]
+
+  // --- Step 1: Resolve Assignment (The "Plan") ---
+  let assignment: ShiftAssignment = { type: 'NONE' }
+  let source: DayPlan['source'] = 'BASE'
+
+  // Priority 1: Manual Override
   if (overrideIncident && overrideIncident.assignment) {
-    return {
-      status: overrideIncident.assignment.type === 'NONE' ? 'OFF' : 'WORKING',
-      source: 'OVERRIDE',
-      assignment: overrideIncident.assignment,
-    }
-  }
-
-  // --- Priority 3: Special Schedule ---
-  // If a special schedule applies, it determines the assignment.
-  if (specialSchedule) {
-    return {
-      status: specialSchedule.assignment.type === 'NONE' ? 'OFF' : 'WORKING',
-      source: 'BASE', // Considered a base modification, not an "incident" or "override"
-      assignment: specialSchedule.assignment,
-    }
-  }
-
-
-  // --- Priority 4: Base Schedule & Mix Profile (Natural Assignment) ---
-  const baseStatus = rep.baseSchedule?.[dayInfo.dayOfWeek] ?? 'OFF'
-
-  if (baseStatus === 'OFF') {
-    return {
-      status: 'OFF',
-      source: 'BASE',
-      assignment: { type: 'NONE' },
-    }
-  }
-
-  let naturalAssignment: ShiftAssignment
-  const isWeekday = dayInfo.dayOfWeek >= 1 && dayInfo.dayOfWeek <= 4
-  const isWeekend =
-    dayInfo.dayOfWeek === 0 ||
-    dayInfo.dayOfWeek === 5 ||
-    dayInfo.dayOfWeek === 6
-
-  if (
-    (rep.mixProfile?.type === 'WEEKDAY' && isWeekday) ||
-    (rep.mixProfile?.type === 'WEEKEND' && isWeekend)
-  ) {
-    naturalAssignment = { type: 'BOTH' }
+    assignment = overrideIncident.assignment
+    source = 'OVERRIDE'
+  } else if (swapIncident && swapIncident.assignment) {
+    // Priority 2: Swap (Peer Exchange)
+    assignment = swapIncident.assignment
+    source = 'SWAP'
   } else {
-    naturalAssignment = { type: 'SINGLE', shift: rep.baseShift }
-  }
+    // Priority 3: Adapter (Special > Base)
+    const effective = getEffectiveSchedule({
+      representative: rep,
+      dateStr: dayInfo.date,
+      baseSchedule: rep.baseSchedule,
+      specialSchedules
+    })
 
-  // --- Priority 5: Absence Annotation ---
-  if (isAbsenceDay) {
-    return {
-      status: 'WORKING',
-      source: 'INCIDENT',
-      type: 'AUSENCIA',
-      assignment: naturalAssignment,
+    if (effective.type === 'OFF') {
+      assignment = { type: 'NONE' }
+      source = 'BASE'
+    } else if (effective.type === 'MIXTO') {
+      assignment = { type: 'BOTH' }
+      source = effective.source ? 'SPECIAL' : 'BASE' // 🔧 FIX: Check if source exists (truthy)
+    } else if (effective.type === 'OVERRIDE' && effective.shift) {
+      assignment = { type: 'SINGLE', shift: effective.shift }
+      source = 'SPECIAL'
+    } else if (effective.type === 'BASE' && effective.shift) {
+      assignment = { type: 'SINGLE', shift: effective.shift }
+      source = 'BASE'
     }
   }
 
-  // If no other rules apply, return the natural assignment.
-  return {
-    status: 'WORKING',
-    source: 'BASE',
-    assignment: naturalAssignment,
+  const plan: DayPlan = { assignment, source }
+
+  // --- Step 2: Resolve Condition (The "Reality") ---
+
+  // Priority 1: Hard Blocks (Vacations/License)
+  if (formalIncident) {
+    const reality: DayReality = {
+      status: 'OFF',
+      incidentType: formalIncident.type,
+      incidentId: formalIncident.id
+    }
+
+    const computed = computeDayMetrics(plan, reality, coverage)
+    return { plan, reality, computed }
   }
+
+  // Priority 2: Absence (Annotates the plan)
+  if (absenceIncident) {
+    const reality: DayReality = {
+      status: 'WORKING', // Semantically "Scheduled to work", but absent
+      incidentType: 'AUSENCIA',
+      incidentId: absenceIncident.id
+    }
+
+    const computed = computeDayMetrics(plan, reality, coverage)
+    return { plan, reality, computed }
+  }
+
+  // Default: Working as planned or OFF
+  const reality: DayReality = {
+    status: assignment.type === 'NONE' ? 'OFF' : 'WORKING'
+  }
+
+  const computed = computeDayMetrics(plan, reality, coverage)
+  return { plan, reality, computed }
 }
 
 export function buildWeeklySchedule(
@@ -120,79 +154,89 @@ export function buildWeeklySchedule(
   incidents: Incident[],
   specialSchedules: SpecialSchedule[],
   weekDays: DayInfo[],
-  allCalendarDays: DayInfo[]
+  allCalendarDays: DayInfo[],
+  coverages: Coverage[] = [] // New parameter for coverage relationships
 ): WeeklyPlan {
   if (weekDays.length !== 7) {
     throw new Error('buildWeeklySchedule expects an array of 7 DayInfo objects.')
   }
 
   const weekStart = weekDays[0].date
-  const agentMap = new Map(agents.map(a => [a.id, a]))
 
-  const resolvedFormalIncidents = incidents
-    .filter(i => i.type === 'VACACIONES' || i.type === 'LICENCIA')
-    .map(i => {
-      const representative = agentMap.get(i.representativeId)
-      return resolveIncidentDates(i, allCalendarDays, representative)
-    })
-    .filter(resolved => resolved.dates.length > 0)
+  // 1. Pre-process Incidents (Range Expansion)
+  // We need to map [Date] -> [Incidents[]] for O(1) lookup per agent/day
+  // Key: "repId:date" -> Incident[]
+  const dailyIncidentMap = new Map<string, Incident[]>()
 
-  const singleDayIncidentMap = new Map<string, Incident>()
+  // A. Range Incidents (Vacation/License)
   incidents
-    .filter(i => i.type === 'OVERRIDE' || i.type === 'AUSENCIA')
-    .forEach(o => {
-      singleDayIncidentMap.set(`${o.representativeId}:${o.startDate}`, o)
+    .filter(i => i.type === 'VACACIONES' || i.type === 'LICENCIA')
+    .forEach(i => {
+      const resolved = resolveIncidentDates(i, allCalendarDays)
+      resolved.dates.forEach(date => {
+        const key = `${i.representativeId}:${date}`
+        if (!dailyIncidentMap.has(key)) dailyIncidentMap.set(key, [])
+        dailyIncidentMap.get(key)!.push(i)
+      })
     })
 
-  const specialSchedulesMap = new Map<string, SpecialSchedule[]>()
+  // B. Single Day Incidents (Override/Absence/Swap)
+  // Although typically 1 day, we use the resolver to safely handle any duration.
+  incidents
+    .filter(i => i.type === 'OVERRIDE' || i.type === 'AUSENCIA' || i.type === 'SWAP')
+    .forEach(i => {
+      const resolved = resolveIncidentDates(i, allCalendarDays)
+      resolved.dates.forEach(date => {
+        const key = `${i.representativeId}:${date}`
+        if (!dailyIncidentMap.has(key)) dailyIncidentMap.set(key, [])
+        dailyIncidentMap.get(key)!.push(i)
+      })
+    })
+
+
+  // 2. Separate Global vs Individual Special Schedules
+  const globalSchedules = specialSchedules.filter(ss => ss.scope === 'GLOBAL')
+
+  // 3. Map Individual Schedules by ID
+  const individualSchedulesMap = new Map<string, SpecialSchedule[]>()
   specialSchedules.forEach(ss => {
-    if (!specialSchedulesMap.has(ss.representativeId)) {
-      specialSchedulesMap.set(ss.representativeId, [])
+    if (ss.scope === 'INDIVIDUAL' && ss.targetId) {
+      if (!individualSchedulesMap.has(ss.targetId)) {
+        individualSchedulesMap.set(ss.targetId, [])
+      }
+      individualSchedulesMap.get(ss.targetId)!.push(ss)
     }
-    specialSchedulesMap.get(ss.representativeId)!.push(ss)
   })
 
   return {
     weekStart,
     agents: agents.map(agent => {
       const days: WeeklyPresence['days'] = {}
-      const agentSpecialSchedules = specialSchedulesMap.get(agent.id) || []
+      const repSchedules = individualSchedulesMap.get(agent.id) || []
+      const applicableSchedules = [...globalSchedules, ...repSchedules]
 
       for (const day of weekDays) {
         const date = day.date
-        const parsedDate = parseISO(date)
 
-        const formalIncident = resolvedFormalIncidents.find(
-          resolved =>
-            resolved.incident.representativeId === agent.id &&
-            resolved.dates.includes(date)
-        )
+        // Get all incidents for this specific day/agent combo
+        const dayIncidents = dailyIncidentMap.get(`${agent.id}:${date}`) || []
 
-        const singleDayIncident = singleDayIncidentMap.get(`${agent.id}:${date}`)
-        const overrideIncident =
-          singleDayIncident?.type === 'OVERRIDE' ? singleDayIncident : undefined
-        const isAbsenceDay = singleDayIncident?.type === 'AUSENCIA'
+        // 🔄 NEW: Find coverage for this day (if any)
+        const coverage = findCoverageForDay(agent.id, date, coverages)
 
-        const specialSchedule = agentSpecialSchedules.find(ss =>
-          isWithinInterval(parsedDate, { start: parseISO(ss.startDate), end: parseISO(ss.endDate) }) &&
-          ss.daysOfWeek.includes(day.dayOfWeek)
-        )
-
-        const resolvedDay = resolveDayStatus(
+        const resolution = resolveDayStatus(
           agent,
           day,
-          isAbsenceDay,
-          formalIncident,
-          overrideIncident,
-          specialSchedule
+          dayIncidents,
+          applicableSchedules,
+          coverage // Pass coverage to resolution
         )
 
-        days[date] = {
-          status: resolvedDay.status,
-          source: resolvedDay.source,
-          type: resolvedDay.type,
-          assignment: resolvedDay.assignment,
-        }
+        // 🔄 TEMPORARY: Use adapter for backward compatibility
+        // TODO: Migrate consumers to use resolution.computed directly
+        const legacyPresence = dayResolutionToDailyPresence(resolution, coverage)
+
+        days[date] = legacyPresence
       }
 
       return {

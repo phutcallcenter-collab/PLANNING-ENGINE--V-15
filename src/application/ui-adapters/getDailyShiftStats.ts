@@ -1,5 +1,6 @@
-import { WeeklyPlan, Incident, ISODate, ShiftType, DayInfo, Representative, EffectiveSchedulePeriod } from '@/domain/types'
+import { WeeklyPlan, Incident, ISODate, ShiftType, DayInfo, Representative, SpecialSchedule } from '@/domain/types'
 import { getPlannedAgentsForDay } from './getPlannedAgentsForDay'
+import { isSlotOperationallyEmpty } from '@/domain/planning/isSlotOperationallyEmpty'
 
 /**
  * ⚠️ CANONICAL SOURCE OF TRUTH FOR DAILY SHIFT STATISTICS
@@ -20,7 +21,7 @@ export function getDailyShiftStats(
     shift: ShiftType,
     allCalendarDays: DayInfo[],
     representatives: Representative[],
-    effectivePeriods: EffectiveSchedulePeriod[] = []
+    specialSchedules: SpecialSchedule[] = []
 ) {
     if (!weeklyPlan) {
         return { planned: 0, present: 0 }
@@ -34,17 +35,20 @@ export function getDailyShiftStats(
         shift,
         allCalendarDays,
         representatives,
-        effectivePeriods
+        specialSchedules
     )
 
     // 2. Calculate Present (Planned - Absences)
-    // Logic: You are present if you were planned AND didn't have an absence recorded for this date.
+    // Logic: You are present if you were planned AND didn't have an absence recorded against your SLOT.
+    // 🧠 OPERATIONAL REALITY: delegated to isSlotOperationallyEmpty
     const present = planned.filter(p => {
-        return !incidents.some(i =>
-            i.representativeId === p.representativeId &&
-            i.type === 'AUSENCIA' &&
-            i.startDate === date
+        const isEmpty = isSlotOperationallyEmpty(
+            p.representativeId,
+            date,
+            shift,
+            incidents
         )
+        return !isEmpty
     })
 
     return {

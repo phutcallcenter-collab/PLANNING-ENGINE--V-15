@@ -80,7 +80,7 @@ const OverviewHeader = ({
 export function StatsOverview() {
   const [currentDate, setCurrentDate] = useState(new Date())
 
-  const { incidents, representatives, swaps, calendar, coverageRules, weeklyPlans: allWeeklyPlans, allCalendarDaysForRelevantMonths, effectivePeriods } = useAppStore(state => ({
+  const { incidents, representatives, swaps, calendar, coverageRules, weeklyPlans: allWeeklyPlans, allCalendarDaysForRelevantMonths, specialSchedules } = useAppStore(state => ({
     incidents: state.incidents,
     representatives: state.representatives,
     swaps: state.swaps,
@@ -88,7 +88,7 @@ export function StatsOverview() {
     coverageRules: state.coverageRules,
     weeklyPlans: state.historyEvents.filter(e => e.category === 'PLANNING').map(e => e.metadata?.weeklyPlan), // This needs a proper source
     allCalendarDaysForRelevantMonths: state.allCalendarDaysForRelevantMonths,
-    effectivePeriods: state.effectivePeriods ?? [],
+    specialSchedules: state.specialSchedules,
   }))
 
   const monthISO = useMemo(() => format(currentDate, 'yyyy-MM'), [currentDate])
@@ -113,9 +113,9 @@ export function StatsOverview() {
       weeklyPlans: weeklyPlansForMonth,
       monthDays: allCalendarDaysForRelevantMonths.filter(d => d.date.startsWith(monthISO)),
       coverageRules,
-      effectivePeriods
+      specialSchedules
     });
-  }, [monthISO, incidents, representatives, swaps, weeklyPlansForMonth, allCalendarDaysForRelevantMonths, coverageRules, effectivePeriods]);
+  }, [monthISO, incidents, representatives, swaps, weeklyPlansForMonth, allCalendarDaysForRelevantMonths, coverageRules, specialSchedules]);
 
 
   if (!stats) {

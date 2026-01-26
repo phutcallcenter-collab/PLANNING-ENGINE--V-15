@@ -1,7 +1,7 @@
 // src/ui/stats/audit/AuditActionBadge.tsx
 'use client'
 
-import { AuditActionType } from '@/domain/audit/types'
+import { AuditEventType } from '@/domain/audit/types'
 import React from 'react'
 
 const ACTION_STYLES: Record<
@@ -71,7 +71,7 @@ const ACTION_STYLES: Record<
   DATA_EXPORTED: { label: 'Exportación', bg: '#e5e7eb', text: '#4b5563' },
 }
 
-export function AuditActionBadge({ action }: { action: AuditActionType }) {
+export function AuditActionBadge({ action }: { action: AuditEventType | string }) {
   const style = ACTION_STYLES[action] || {
     label: action,
     bg: '#f3f4f6',

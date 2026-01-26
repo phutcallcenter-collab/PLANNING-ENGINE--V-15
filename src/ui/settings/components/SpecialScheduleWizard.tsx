@@ -1,56 +1,18 @@
 /**
- * Special Schedule Wizard
+ * 🟢 CANONICAL WIZARD: Explicit Weekly Pattern Constructor
  * 
- * Guided interface for creating schedule exceptions.
- * Progressive single-view design: one question at a time, all choices visible.
+ * Determines the simplified, explicit schedule for a range of dates.
+ * "What you see is what you get."
  */
 
-import { useState, useMemo, useEffect } from 'react'
+import React, { useState, useMemo } from 'react'
 import { useAppStore } from '@/store/useAppStore'
-import { WizardState, ScheduleIntent } from './wizardTypes'
-import { wizardToSpecialSchedule } from './wizardToSpecialSchedule'
-import { format, parseISO, differenceInWeeks } from 'date-fns'
-import { SpecialSchedule } from '@/domain/types'
-
-const DaysOfWeekSelector = ({
-    selectedDays,
-    onToggle
-}: {
-    selectedDays: number[]
-    onToggle: (day: number) => void
-}) => {
-    const days = ['D', 'L', 'M', 'X', 'J', 'V', 'S'] // 0 = Sunday
-
-    return (
-        <div style={{ display: 'flex', gap: '4px' }}>
-            {days.map((day, index) => (
-                <button
-                    key={index}
-                    type="button"
-                    onClick={() => onToggle(index)}
-                    style={{
-                        width: '36px',
-                        height: '36px',
-                        borderRadius: '50%',
-                        border: '2px solid',
-                        cursor: 'pointer',
-                        fontWeight: 600,
-                        fontSize: '13px',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        background: selectedDays.includes(index) ? '#eef2ff' : 'white',
-                        borderColor: selectedDays.includes(index) ? '#6366f1' : '#d1d5db',
-                        color: selectedDays.includes(index) ? '#4f46e5' : '#6b7280',
-                        transition: 'all 120ms ease',
-                    }}
-                >
-                    {day}
-                </button>
-            ))}
-        </div>
-    )
-}
+import { SpecialSchedule, DailyScheduleState, Representative } from '@/domain/types'
+import { resolveWeeklyPatternSnapshot } from '@/application/scheduling/resolveWeeklyPatternSnapshot'
+import { canUseMixto } from '@/application/scheduling/scheduleCapabilities'
+import { Calendar, Check, X, Info, Moon, Sun, Ban, Shuffle, LayoutTemplate, RotateCcw, AlertTriangle } from 'lucide-react'
+import { format, addDays, startOfWeek } from 'date-fns'
+import { es } from 'date-fns/locale'
 
 export function SpecialScheduleWizard({
     repId,
@@ -63,421 +25,304 @@ export function SpecialScheduleWizard({
     onSave: () => void
     initialSchedule?: SpecialSchedule
 }) {
-    const [state, setState] = useState<WizardState>({
-        intent: null,
-        days: [],
-        replaceBaseMixedDays: true, // Default: replace (normal operational rule)
-    })
-
-    useEffect(() => {
-        if (initialSchedule) {
-            let intent: ScheduleIntent = 'WORK_SINGLE_SHIFT';
-            let shift: 'DAY' | 'NIGHT' | undefined;
-
-            if (initialSchedule.assignment.type === 'NONE') {
-                intent = 'OFF';
-            } else if (initialSchedule.assignment.type === 'BOTH') {
-                intent = 'WORK_BOTH_SHIFTS';
-            } else {
-                intent = 'WORK_SINGLE_SHIFT';
-                shift = initialSchedule.assignment.shift;
-            }
-
-            setState({
-                intent,
-                shift,
-                startDate: initialSchedule.startDate,
-                endDate: initialSchedule.endDate,
-                days: initialSchedule.daysOfWeek,
-                note: initialSchedule.note || initialSchedule.reason, // Backwards compatibility
-                replaceBaseMixedDays: true // Default assumption for edit
-            });
-        }
-    }, [initialSchedule]);
-
-    const addSpecialSchedule = useAppStore(s => s.addSpecialSchedule)
-    const updateSpecialSchedule = useAppStore(s => s.updateSpecialSchedule)
-    const representatives = useAppStore(s => s.representatives ?? [])
-
-    // Detect if base schedule is mixed
+    const { representatives, addSpecialSchedule, updateSpecialSchedule } = useAppStore()
     const representative = representatives.find(r => r.id === repId)
-    const baseMixedDays = representative?.mixProfile?.type === 'WEEKDAY'
-        ? [1, 2, 3, 4] // Mon-Thu
-        : representative?.mixProfile?.type === 'WEEKEND'
-            ? [5, 6, 0] // Fri-Sun
-            : []
-    const isBaseMixed = baseMixedDays.length > 0
 
-    // Helper to update wizard state
-    const updateState = (partial: Partial<WizardState>) => {
-        setState(prev => ({ ...prev, ...partial }))
-    }
+    // Guards
+    if (!representative) return null
 
-    // Quick shortcuts for days
-    const selectWeekdays = () => updateState({ days: [1, 2, 3, 4, 5] })
-    const selectWeekend = () => updateState({ days: [0, 6] })
-    const selectAllDays = () => updateState({ days: [0, 1, 2, 3, 4, 5, 6] })
+    const isMixedProfile = canUseMixto(representative)
+    const baseShift = representative.baseShift || 'DAY'
 
-    // Dynamic feedback
-    const dayNames = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado']
-    const selectedDayNames = state.days
-        .sort((a, b) => a - b)
-        .map(d => dayNames[d])
-        .join(', ')
+    // 🟢 UI State: Includes 'BASE' as a "soft" state that resolves to hard state on save
+    type UiDayState = DailyScheduleState | 'BASE_REF'
 
-    const weeksDuration = useMemo(() => {
-        if (!state.startDate || !state.endDate) return null
-        try {
-            const weeks = differenceInWeeks(parseISO(state.endDate), parseISO(state.startDate))
-            return weeks
-        } catch {
-            return null
-        }
-    }, [state.startDate, state.endDate])
-
-    // Summary for final confirmation
-    const canShowSummary = state.intent && state.days.length > 0 && state.startDate && state.endDate
-
-    const summaryText = useMemo(() => {
-        if (!canShowSummary) return null
-
-        let actionText = ''
-        switch (state.intent) {
-            case 'WORK_SINGLE_SHIFT':
-                actionText = state.shift === 'DAY' ? 'Trabajará en turno Día' : 'Trabajará en turno Noche'
-                break
-            case 'WORK_BOTH_SHIFTS':
-                actionText = 'Trabajará en ambos turnos (mixto)'
-                break
-            case 'OFF':
-                actionText = 'No trabajará (libre)'
-                break
-        }
-
-        return {
-            action: actionText,
-            period: `${format(parseISO(state.startDate!), 'dd/MM/yyyy')} – ${format(parseISO(state.endDate!), 'dd/MM/yyyy')}`,
-            days: selectedDayNames,
-        }
-    }, [canShowSummary, state.intent, state.shift, state.startDate, state.endDate, selectedDayNames])
-
-    const handleSubmit = (e: React.FormEvent) => {
-        e.preventDefault()
-
-        try {
-            const schedules = wizardToSpecialSchedule(state, repId, baseMixedDays)
-
-            if (initialSchedule) {
-                // For edit, we assume the wizard produces one main schedule that replaces the initial one.
-                // The `wizardToSpecialSchedule` can potentially return multiple if splitting ranges, but for this wizard flow it usually returns one block unless logic changed.
-                // However, `wizardToSpecialSchedule` creates NEW objects with NEW IDs.
-                // We should take the properties and update the existing ID.
-
-                const updatedData = schedules[0]; // Take the first one as the update target
-                // Update the existing schedule
-                updateSpecialSchedule(initialSchedule.id, {
-                    startDate: updatedData.startDate,
-                    endDate: updatedData.endDate,
-                    daysOfWeek: updatedData.daysOfWeek,
-                    assignment: updatedData.assignment,
-                    reason: updatedData.reason,
-                    note: state.note // Explicit note from wizard state
-                });
-            } else {
-                schedules.forEach(schedule => addSpecialSchedule({
-                    ...schedule,
-                    note: state.note
-                }))
+    // Initialize logic
+    const getInitialPattern = (): UiDayState[] => {
+        if (initialSchedule) {
+            // Map existing explicit pattern to UI
+            // Note: If the save logic resolved 'BASE', we won't see 'BASE_REF' here, which is correct.
+            // The history is frozen.
+            const pattern: UiDayState[] = []
+            for (let i = 0; i < 7; i++) {
+                pattern.push(initialSchedule.weeklyPattern[i as 0 | 1 | 2 | 3 | 4 | 5 | 6] || 'OFF')
             }
+            return pattern
+        }
+        return Array(7).fill('BASE_REF')
+    }
+
+    const [dayStates, setDayStates] = useState<UiDayState[]>(getInitialPattern())
+    const [activeDayMenu, setActiveDayMenu] = useState<number | null>(null)
+
+    // Dates
+    const defaultStart = format(startOfWeek(new Date(), { locale: es, weekStartsOn: 1 }), 'yyyy-MM-dd')
+    const defaultEnd = format(addDays(new Date(), 90), 'yyyy-MM-dd')
+
+    const [startDate, setStartDate] = useState(initialSchedule?.from || defaultStart)
+    const [endDate, setEndDate] = useState(initialSchedule?.to || defaultEnd)
+    const [note, setNote] = useState(initialSchedule?.note || '')
+
+    // Interaction Logic
+    const handleDayClick = (index: number) => {
+        setActiveDayMenu(activeDayMenu === index ? null : index)
+    }
+
+    const selectState = (index: number, next: UiDayState) => {
+        setDayStates(prev => {
+            const newStates = [...prev]
+            newStates[index] = next
+            return newStates
+        })
+        setActiveDayMenu(null)
+    }
+
+    const handleSave = () => {
+        // 🟢 RESOLUTION AT SAVE (Snapshotting)
+        // Delegated to pure domain helper
+        const finalPattern = resolveWeeklyPatternSnapshot(representative, dayStates)
+
+        const payload = {
+            targetId: repId,
+            scope: 'INDIVIDUAL' as const,
+            from: startDate,
+            to: endDate,
+            weeklyPattern: finalPattern,
+            note: note || 'Ajuste de Horario Especial'
+        }
+
+        let result
+        if (initialSchedule) {
+            result = updateSpecialSchedule(initialSchedule.id, payload)
+        } else {
+            result = addSpecialSchedule(payload)
+        }
+
+        if (result.success) {
             onSave()
-        } catch (error) {
-            alert(error instanceof Error ? error.message : 'Error al guardar')
+        } else {
+            alert(result.message || 'Error al guardar')
         }
     }
 
-    const radioStyle = (selected: boolean): React.CSSProperties => ({
-        display: 'flex',
-        alignItems: 'center',
-        gap: '12px',
-        padding: '14px 16px',
-        border: '2px solid',
-        borderRadius: '8px',
-        borderColor: selected ? '#6366f1' : '#e5e7eb',
-        background: selected ? '#f5f3ff' : 'white',
-        cursor: 'pointer',
-        transition: 'all 120ms ease',
-        fontSize: '15px',
-        fontWeight: 500,
-        color: selected ? '#4f46e5' : '#374151',
-    })
+    // Render Helpers
+    const dayNames = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado']
+    const dayAbbrev = ['D', 'L', 'M', 'X', 'J', 'V', 'S']
+
+    const renderIcon = (state: UiDayState) => {
+        switch (state) {
+            case 'OFF': return <Ban size={16} />
+            case 'MIXTO': return <Shuffle size={16} />
+            case 'DAY': return <Sun size={16} />
+            case 'NIGHT': return <Moon size={16} />
+            case 'BASE_REF': return <RotateCcw size={14} />
+        }
+    }
+
+    const getStyle = (state: UiDayState, isInvalidMixto: boolean) => {
+        const base = {
+            border: '2px solid transparent',
+            bg: 'var(--bg-muted)',
+            text: 'var(--text-muted)',
+            label: 'BASE'
+        }
+
+        if (isInvalidMixto) return { ...base, bg: '#fff7ed', border: '#fdba74', text: '#c2410c', label: 'INVALID' }
+        if (state === 'OFF') return { ...base, bg: '#fef2f2', border: '#fca5a5', text: '#991b1b', label: 'LIBRE' }
+        if (state === 'MIXTO') return { ...base, bg: '#f3e8ff', border: '#d8b4fe', text: '#6b21a8', label: 'MIXTO' }
+        if (state === 'DAY') return { ...base, bg: '#eff6ff', border: '#93c5fd', text: '#1e40af', label: 'DÍA' }
+        if (state === 'NIGHT') return { ...base, bg: '#f0fdf4', border: '#86efac', text: '#166534', label: 'NOCHE' } // Using green for night/shift distinct
+
+        return base
+    }
+
+    const explicitOptions: { label: string, value: UiDayState }[] = [
+        { label: 'Día Libre', value: 'OFF' },
+        { label: 'Turno Día', value: 'DAY' },
+        { label: 'Turno Noche', value: 'NIGHT' },
+    ]
+
+    if (isMixedProfile) {
+        explicitOptions.push({ label: 'Turno Mixto', value: 'MIXTO' })
+    }
 
     return (
-        <form
-            onSubmit={handleSubmit}
-            style={{
-                background: 'var(--bg-panel)',
-                padding: '24px',
-                borderRadius: '12px',
-                border: '1px solid var(--border-subtle)',
-                margin: '16px 0',
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '24px',
-            }}
-        >
-            {/* Header */}
-            <div>
-                <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 600, color: 'var(--text-main)' }}>
-                    {initialSchedule ? 'Editar Horario Especial' : 'Ajuste temporal de horario'}
-                </h3>
-                <p style={{ margin: '4px 0 0 0', fontSize: '14px', color: 'var(--text-muted)' }}>
-                    Define excepciones al horario habitual durante un período
-                </p>
-            </div>
+        <div style={{
+            background: 'var(--bg-panel)',
+            padding: '24px',
+            borderRadius: '12px',
+            border: '1px solid var(--border-subtle)',
+            margin: '16px 0',
+            boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
+            position: 'relative' // Context for backdrop
+        }}>
+            {/* Backdrop for click away */}
+            {activeDayMenu !== null && (
+                <div
+                    style={{ position: 'fixed', inset: 0, zIndex: 40, cursor: 'default' }}
+                    onClick={() => setActiveDayMenu(null)}
+                />
+            )}
 
-            {/* Step 1: Intent */}
-            <div>
-                <label style={{ display: 'block', fontSize: '15px', fontWeight: 600, marginBottom: '12px', color: 'var(--text-main)' }}>
-                    ¿Qué cambio necesitas?
-                </label>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                    <label style={radioStyle(state.intent === 'WORK_SINGLE_SHIFT')}>
-                        <input
-                            type="radio"
-                            name="intent"
-                            checked={state.intent === 'WORK_SINGLE_SHIFT'}
-                            onChange={() => updateState({ intent: 'WORK_SINGLE_SHIFT', shift: 'DAY' })}
-                            style={{ width: '18px', height: '18px', cursor: 'pointer' }}
-                        />
-                        Trabajará en un turno específico
-                    </label>
-                    <label style={radioStyle(state.intent === 'WORK_BOTH_SHIFTS')}>
-                        <input
-                            type="radio"
-                            name="intent"
-                            checked={state.intent === 'WORK_BOTH_SHIFTS'}
-                            onChange={() => updateState({ intent: 'WORK_BOTH_SHIFTS', shift: undefined })}
-                            style={{ width: '18px', height: '18px', cursor: 'pointer' }}
-                        />
-                        Trabajará en ambos turnos (mixto)
-                    </label>
-                    <label style={radioStyle(state.intent === 'OFF')}>
-                        <input
-                            type="radio"
-                            name="intent"
-                            checked={state.intent === 'OFF'}
-                            onChange={() => updateState({ intent: 'OFF', shift: undefined })}
-                            style={{ width: '18px', height: '18px', cursor: 'pointer' }}
-                        />
-                        No trabajará (libre)
-                    </label>
+            <div style={{ marginBottom: '20px', display: 'flex', justifyContent: 'space-between' }}>
+                <div>
+                    <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 600 }}>Constructo de Semana</h3>
+                    <p style={{ margin: '4px 0 0 0', fontSize: '14px', color: 'var(--text-muted)' }}>
+                        Define explícitamente el patrón para {repName} en este período.
+                    </p>
                 </div>
             </div>
 
-            {/* Step 1.5: Mixed shift replacement question (conditional) */}
-            {state.intent === 'WORK_BOTH_SHIFTS' && isBaseMixed && (
-                <div>
-                    <label style={{ display: 'block', fontSize: '15px', fontWeight: 600, marginBottom: '12px', color: 'var(--text-main)' }}>
-                        ¿Este ajuste reemplaza los días mixtos habituales?
-                    </label>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                        <label style={radioStyle(state.replaceBaseMixedDays === true)}>
-                            <input
-                                type="radio"
-                                name="replaceBaseMixedDays"
-                                checked={state.replaceBaseMixedDays === true}
-                                onChange={() => updateState({ replaceBaseMixedDays: true })}
-                                style={{ width: '18px', height: '18px', cursor: 'pointer' }}
-                            />
-                            Sí, solo estos días serán mixtos
-                        </label>
-                        <label style={radioStyle(state.replaceBaseMixedDays === false)}>
-                            <input
-                                type="radio"
-                                name="replaceBaseMixedDays"
-                                checked={state.replaceBaseMixedDays === false}
-                                onChange={() => updateState({ replaceBaseMixedDays: false })}
-                                style={{ width: '18px', height: '18px', cursor: 'pointer' }}
-                            />
-                            No, se suman a los habituales (caso especial)
-                        </label>
-                    </div>
-                </div>
-            )}
+            {/* Pattern Grid */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '8px', marginBottom: '24px' }}>
+                {dayStates.map((state, index) => {
+                    // Check logic consistency
+                    const isInvalidMixto = state === 'MIXTO' && !isMixedProfile
+                    const style = getStyle(state, isInvalidMixto)
+                    const isActive = activeDayMenu === index
+                    return (
+                        <div key={index} style={{ position: 'relative', zIndex: isActive ? 50 : 1 }}>
+                            <button
+                                onClick={() => handleDayClick(index)}
+                                style={{
+                                    width: '100%',
+                                    padding: '12px 4px',
+                                    borderRadius: '8px',
+                                    border: `2px solid ${style.border}`,
+                                    background: style.bg,
+                                    color: style.text,
+                                    cursor: 'pointer',
+                                    minHeight: '80px',
+                                    display: 'flex',
+                                    flexDirection: 'column',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    transition: 'all 0.1s ease',
+                                    boxShadow: isActive ? '0 0 0 4px rgba(0,0,0,0.05)' : 'none',
+                                    position: 'relative'
+                                }}
+                            >
+                                {isInvalidMixto && (
+                                    <div style={{ position: 'absolute', top: 4, right: 4, color: '#c2410c' }}>
+                                        <AlertTriangle size={12} />
+                                    </div>
+                                )}
+                                <div style={{ fontSize: '12px', fontWeight: 600, marginBottom: '6px' }}>{dayAbbrev[index]}</div>
+                                {renderIcon(state)}
+                                <div style={{ fontSize: '10px', fontWeight: 700, marginTop: '6px' }}>{style.label}</div>
+                            </button>
 
-            {/* Step 2: Shift selection (conditional) */}
-            {state.intent === 'WORK_SINGLE_SHIFT' && (
-                <div>
-                    <label style={{ display: 'block', fontSize: '15px', fontWeight: 600, marginBottom: '12px', color: 'var(--text-main)' }}>
-                        ¿En qué turno trabajará?
-                    </label>
-                    <div style={{ display: 'flex', gap: '12px' }}>
-                        <label style={radioStyle(state.shift === 'DAY')}>
-                            <input
-                                type="radio"
-                                name="shift"
-                                checked={state.shift === 'DAY'}
-                                onChange={() => updateState({ shift: 'DAY' })}
-                                style={{ width: '18px', height: '18px', cursor: 'pointer' }}
-                            />
-                            Turno Día
-                        </label>
-                        <label style={radioStyle(state.shift === 'NIGHT')}>
-                            <input
-                                type="radio"
-                                name="shift"
-                                checked={state.shift === 'NIGHT'}
-                                onChange={() => updateState({ shift: 'NIGHT' })}
-                                style={{ width: '18px', height: '18px', cursor: 'pointer' }}
-                            />
-                            Turno Noche
-                        </label>
-                    </div>
-                </div>
-            )}
+                            {/* Dropdown Menu */}
+                            {isActive && (
+                                <div style={{
+                                    position: 'absolute',
+                                    top: 'calc(100% + 8px)',
+                                    left: '50%',
+                                    transform: 'translateX(-50%)',
+                                    width: '180px',
+                                    background: 'var(--bg-surface)',
+                                    border: '1px solid var(--border-subtle)',
+                                    borderRadius: '8px',
+                                    boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)',
+                                    overflow: 'hidden',
+                                    display: 'flex',
+                                    flexDirection: 'column',
+                                    padding: '4px'
+                                }}>
+                                    {/* Explicit Options */}
+                                    <div style={{ padding: '0 0 4px 0' }}>
+                                        {explicitOptions.map(opt => (
+                                            <button
+                                                key={opt.value}
+                                                onClick={() => selectState(index, opt.value)}
+                                                style={{
+                                                    width: '100%',
+                                                    padding: '8px 12px',
+                                                    textAlign: 'left',
+                                                    background: 'transparent',
+                                                    border: 'none',
+                                                    borderRadius: '4px',
+                                                    cursor: 'pointer',
+                                                    fontSize: '13px',
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    gap: '8px',
+                                                    color: 'var(--text-main)',
+                                                    fontWeight: state === opt.value ? 600 : 400
+                                                }}
+                                                onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-muted)'}
+                                                onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                                            >
+                                                {renderIcon(opt.value)}
+                                                {opt.label}
+                                            </button>
+                                        ))}
+                                    </div>
 
-            {state.intent === 'WORK_BOTH_SHIFTS' && (
-                <div style={{ padding: '12px 16px', background: '#f0fdf4', border: '1px solid #86efac', borderRadius: '8px', fontSize: '14px', color: '#166534' }}>
-                    Trabajará en ambos turnos
-                </div>
-            )}
+                                    {/* Divider */}
+                                    <div style={{ height: '1px', background: 'var(--border-subtle)', margin: '4px 0' }} />
 
-            {state.intent === 'OFF' && (
-                <div style={{ padding: '12px 16px', background: '#fef3c7', border: '1px solid #fde047', borderRadius: '8px', fontSize: '14px', color: '#854d0e' }}>
-                    No tendrá asignación
-                </div>
-            )}
-
-            {/* Step 3: Days of week */}
-            {state.intent && (
-                <div>
-                    <label style={{ display: 'block', fontSize: '15px', fontWeight: 600, marginBottom: '8px', color: 'var(--text-main)' }}>
-                        ¿Qué días se verán afectados?
-                    </label>
-                    <DaysOfWeekSelector
-                        selectedDays={state.days}
-                        onToggle={(day) => {
-                            const newDays = state.days.includes(day)
-                                ? state.days.filter(d => d !== day)
-                                : [...state.days, day]
-                            updateState({ days: newDays })
-                        }}
-                    />
-                    <div style={{ marginTop: '12px', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                        <button type="button" onClick={selectWeekdays} style={{ padding: '6px 12px', fontSize: '13px', border: '1px solid var(--border-strong)', borderRadius: '6px', background: 'var(--bg-panel)', cursor: 'pointer' }}>
-                            Lunes a Viernes
-                        </button>
-                        <button type="button" onClick={selectWeekend} style={{ padding: '6px 12px', fontSize: '13px', border: '1px solid var(--border-strong)', borderRadius: '6px', background: 'var(--bg-panel)', cursor: 'pointer' }}>
-                            Fin de semana
-                        </button>
-                        <button type="button" onClick={selectAllDays} style={{ padding: '6px 12px', fontSize: '13px', border: '1px solid var(--border-strong)', borderRadius: '6px', background: 'var(--bg-panel)', cursor: 'pointer' }}>
-                            Todos
-                        </button>
-                    </div>
-                    {state.days.length > 0 && (
-                        <p style={{ marginTop: '8px', fontSize: '14px', color: 'var(--text-muted)' }}>
-                            Se aplicará los <strong>{selectedDayNames}</strong>
-                        </p>
-                    )}
-                </div>
-            )}
-
-            {/* Step 4: Date range */}
-            {state.intent && state.days.length > 0 && (
-                <div>
-                    <label style={{ display: 'block', fontSize: '15px', fontWeight: 600, marginBottom: '12px', color: 'var(--text-main)' }}>
-                        ¿Durante qué período aplica este ajuste?
-                    </label>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                        <div>
-                            <label style={{ display: 'block', fontSize: '13px', fontWeight: 500, marginBottom: '6px', color: 'var(--text-muted)' }}>
-                                Desde
-                            </label>
-                            <input
-                                type="date"
-                                value={state.startDate || ''}
-                                onChange={e => updateState({ startDate: e.target.value })}
-                                style={{ width: '100%', padding: '10px', border: '1px solid var(--border-strong)', borderRadius: '6px', fontSize: '14px' }}
-                            />
+                                    {/* Restore Option */}
+                                    <button
+                                        onClick={() => selectState(index, 'BASE_REF')}
+                                        style={{
+                                            width: '100%',
+                                            padding: '8px 12px',
+                                            textAlign: 'left',
+                                            background: 'transparent',
+                                            border: 'none',
+                                            borderRadius: '4px',
+                                            cursor: 'pointer',
+                                            fontSize: '13px',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: '8px',
+                                            color: 'var(--text-muted)'
+                                        }}
+                                        onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-muted)'}
+                                        onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                                    >
+                                        <RotateCcw size={14} />
+                                        Restaurar Original
+                                    </button>
+                                </div>
+                            )}
                         </div>
-                        <div>
-                            <label style={{ display: 'block', fontSize: '13px', fontWeight: 500, marginBottom: '6px', color: 'var(--text-muted)' }}>
-                                Hasta
-                            </label>
-                            <input
-                                type="date"
-                                value={state.endDate || ''}
-                                onChange={e => updateState({ endDate: e.target.value })}
-                                style={{ width: '100%', padding: '10px', border: '1px solid var(--border-strong)', borderRadius: '6px', fontSize: '14px' }}
-                            />
-                        </div>
-                    </div>
-                    {weeksDuration !== null && weeksDuration >= 0 && (
-                        <p style={{ marginTop: '8px', fontSize: '14px', color: 'var(--text-muted)' }}>
-                            Este ajuste estará activo durante <strong>{weeksDuration} semana{weeksDuration !== 1 ? 's' : ''}</strong>
-                        </p>
-                    )}
-                </div>
-            )}
+                    )
+                })}
+            </div>
 
-            {/* Step 5: Summary (The Guardian) */}
-            {summaryText && (
-                <div style={{ padding: '16px', background: '#f9fafb', border: '2px solid #e5e7eb', borderRadius: '8px' }}>
-                    <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '8px' }}>
-                        🧾 Resumen del ajuste
-                    </div>
-                    <div style={{ fontSize: '15px', color: 'var(--text-main)', lineHeight: 1.6 }}>
-                        <div style={{ fontWeight: 600, marginBottom: '4px' }}>{repName}</div>
-                        <div>Durante el período <strong>{summaryText.period}</strong></div>
-                        <div><strong>{summaryText.action}</strong></div>
-                        <div>Los días: <strong>{summaryText.days}</strong></div>
-                    </div>
-                </div>
-            )}
-
-            {/* Optional note */}
-            {state.intent && (
+            {/* Dates & Note */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
                 <div>
-                    <label style={{ display: 'block', fontSize: '13px', fontWeight: 500, marginBottom: '6px', color: 'var(--text-muted)' }}>
-                        Motivo (opcional)
-                    </label>
-                    <input
-                        type="text"
-                        value={state.note || ''}
-                        onChange={e => updateState({ note: e.target.value })}
-                        placeholder="Ej: Universidad, Capacitación, Familiar enfermo"
-                        style={{ width: '100%', padding: '10px', border: '1px solid var(--border-strong)', borderRadius: '6px', fontSize: '14px' }}
-                    />
+                    <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, marginBottom: '4px' }}>Desde</label>
+                    <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)}
+                        style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid var(--border-strong)' }} />
                 </div>
-            )}
+                <div>
+                    <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, marginBottom: '4px' }}>Hasta</label>
+                    <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)}
+                        style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid var(--border-strong)' }} />
+                </div>
+            </div>
 
-            {/* Actions */}
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', paddingTop: '8px', borderTop: '1px solid #e5e7eb' }}>
-                <button
-                    type="button"
-                    onClick={onSave}
-                    style={{ padding: '10px 16px', border: '1px solid var(--border-strong)', borderRadius: '8px', background: 'var(--bg-panel)', cursor: 'pointer', fontSize: '14px', fontWeight: 500 }}
-                >
-                    Cancelar
-                </button>
-                <button
-                    type="submit"
-                    disabled={!canShowSummary}
-                    style={{
-                        padding: '10px 20px',
-                        background: canShowSummary ? '#111827' : '#d1d5db',
-                        color: 'white',
-                        border: 'none',
-                        borderRadius: '8px',
-                        cursor: canShowSummary ? 'pointer' : 'not-allowed',
-                        fontWeight: 600,
-                        fontSize: '14px',
-                    }}
-                >
-                    {initialSchedule ? 'Actualizar Horario' : 'Guardar Horario'}
+            <div style={{ marginBottom: '24px' }}>
+                <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, marginBottom: '4px' }}>Motivo / Nota</label>
+                <input type="text" value={note} onChange={e => setNote(e.target.value)} placeholder="Ej: Acuerdo de estudios"
+                    style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid var(--border-strong)' }} />
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', borderTop: '1px solid var(--border-subtle)', paddingTop: '16px' }}>
+                <button onClick={onSave} style={{
+                    padding: '8px 16px', borderRadius: '8px', border: '1px solid var(--border-strong)', background: 'transparent', cursor: 'pointer'
+                }}>Cancelar</button>
+                <button onClick={handleSave} style={{
+                    padding: '8px 24px', borderRadius: '8px', border: 'none', background: 'var(--accent)', color: 'white', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px'
+                }}>
+                    <Check size={16} />
+                    {initialSchedule ? 'Guardar Cambios' : 'Crear Regla'}
                 </button>
             </div>
-        </form>
+        </div>
     )
 }
-

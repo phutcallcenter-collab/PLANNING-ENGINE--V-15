@@ -33,4 +33,8 @@ export const INCIDENT_STYLES: Record<
     label: 'Cambio de Turno',
     variant: 'neutral',
   },
+  SWAP: {
+    label: 'Intercambio',
+    variant: 'info',
+  },
 }

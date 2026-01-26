@@ -12,32 +12,49 @@ import {
   ShiftType,
   WeeklyPlan,
   SwapEvent,
-  EffectiveSchedulePeriod,
 } from '../../domain/types'
 import { resolveIncidentDates } from '../../domain/incidents/resolveIncidentDates'
 import { checkIncidentConflicts } from '../../domain/incidents/checkIncidentConflicts'
-import { ChevronLeft, ChevronRight, Calendar as CalendarIcon } from 'lucide-react'
+import { isSlotOperationallyEmpty } from '@/domain/planning/isSlotOperationallyEmpty'
+import {
+  MoreVertical,
+  Clock,
+  AlertTriangle,
+  UserX,
+  UserCheck,
+  FileText,
+  MessageSquare,
+  Shield,
+  RefreshCw,
+  ChevronLeft, // 🔧 FIX: Re-added missing icon
+  ChevronRight, // 🔧 FIX: Re-added missing icon
+  Calendar as CalendarIcon, // 🔧 FIX: Re-added missing icon
+} from 'lucide-react'
 import { useAppStore } from '@/store/useAppStore'
+import { useEditMode } from '@/hooks/useEditMode'
+import { useCoverageStore } from '@/store/useCoverageStore'
+import { findCoverageForDay } from '@/domain/planning/coverage'
 import { InlineAlert } from '../components/InlineAlert'
 import { ConfirmDialog } from '../components/ConfirmDialog'
+import { CoverageManagerModal } from '../planning/coverage/CoverageManagerModal' // 🔄 NEW
+import { CoverageAbsenceModal } from './CoverageAbsenceModal' // 🎯 SLOT RESPONSIBILITY
+import { resolveSlotResponsibility } from '@/domain/planning/resolveSlotResponsibility' // 🎯 SLOT RESPONSIBILITY
+import type { ResponsibilityResolution } from '@/domain/planning/slotResponsibility' // 🎯 SLOT RESPONSIBILITY
 import {
   getEffectiveDailyLogData,
   DailyLogEntry,
   LogStatus
 } from '@/application/ui-adapters/getEffectiveDailyLogData'
 import { getPlannedAgentsForDay } from '@/application/ui-adapters/getPlannedAgentsForDay'
+
 import { getDailyShiftStats } from '@/application/ui-adapters/getDailyShiftStats'
+import { getOngoingIncidents } from '@/application/ui-adapters/getOngoingIncidents'
 import { format, parseISO, addDays, subDays, isToday, startOfWeek, endOfWeek, startOfMonth, endOfMonth } from 'date-fns'
 import { es } from 'date-fns/locale'
 import { CalendarGrid } from '../components/CalendarGrid'
+import { EnrichedIncident } from './logHelpers'
 
-export type EnrichedIncident = Incident & {
-  repName: string
-  repShift?: ShiftType
-  dayCount?: number
-  totalDuration?: number
-  returnDate?: string
-}
+
 
 const styles = {
   label: { display: 'block', marginBottom: 4, fontWeight: 500, fontSize: '0.875rem', color: '#374151' },
@@ -97,22 +114,7 @@ function ShiftStatusDisplay({ label, isActive, onClick, presentCount, plannedCou
   )
 }
 
-function calculateShiftCounts(data: DailyLogEntry[], shift: ShiftType) {
-  const shiftEntries = data.filter(e => e.shift === shift)
 
-  // Planned: Expected to be there (Working, Covering, Double, Swapped In, Absent)
-  // Excluded: OFF, COVERED, SWAPPED_OUT
-  const planned = shiftEntries.filter(e =>
-    ['WORKING', 'COVERING', 'DOUBLE', 'SWAPPED_IN', 'ABSENT'].includes(e.logStatus)
-  ).length
-
-  // Present: Actually there (Working, Covering, Double, Swapped In)
-  const present = shiftEntries.filter(e =>
-    ['WORKING', 'COVERING', 'DOUBLE', 'SWAPPED_IN'].includes(e.logStatus)
-  ).length
-
-  return { planned, present }
-}
 
 export function DailyLogView() {
   const {
@@ -120,7 +122,6 @@ export function DailyLogView() {
     incidents,
     swaps,
     specialSchedules,
-    effectivePeriods,
     allCalendarDaysForRelevantMonths,
     isLoading,
     addIncident,
@@ -132,7 +133,6 @@ export function DailyLogView() {
     incidents: s.incidents,
     swaps: s.swaps,
     specialSchedules: s.specialSchedules,
-    effectivePeriods: s.effectivePeriods,
     allCalendarDaysForRelevantMonths: s.allCalendarDaysForRelevantMonths,
     isLoading: s.isLoading,
     addIncident: s.addIncident,
@@ -154,7 +154,7 @@ export function DailyLogView() {
   const [customPoints, setCustomPoints] = useState<number | ''>('')
   const [isCalendarOpen, setIsCalendarOpen] = useState(false)
   const [activeShift, setActiveShift] = useState<'DAY' | 'NIGHT'>('DAY')
-  const [confirmConfig, setConfirmConfig] = useState<any>(null)
+
 
   // 🟢 Absence Confirmation Modal State
   const [absenceConfirmState, setAbsenceConfirmState] = useState<{
@@ -169,9 +169,42 @@ export function DailyLogView() {
     onCancel: () => { }
   })
 
+  // 🎯 SLOT RESPONSIBILITY: Coverage Resolution Modal State
+  const [coverageResolution, setCoverageResolution] = useState<(Extract<ResponsibilityResolution, { kind: 'RESOLVED' }> & { source: 'COVERAGE' }) | null>(null)
+
   const calendarRef = useRef<HTMLDivElement>(null)
 
   const dateForLog = useMemo(() => parseISO(logDate), [logDate])
+
+  // 🟢 CANVAS READY: Performance Optimization for Coverage
+  // 1. Read plain state (not derived functions) for stable references
+  const coverages = useCoverageStore(state => state.coverages)
+  const [isCoverageManagerOpen, setIsCoverageManagerOpen] = useState(false) // 🔄 NEW: Modal State
+
+  // 2. Memoize active coverages for this specific day (pure derivation)
+  const activeCoveragesForDay = useMemo(() => {
+    return coverages.filter(
+      c => c.status === 'ACTIVE' && c.date === logDate
+    )
+  }, [coverages, logDate]) // Stable dependencies - no function references
+
+  // 3. Pre-calculate lookup map O(1) access
+  // This prevents O(n*m) complexity inside the render loop
+  const coverageByRepId = useMemo(() => {
+    const map = new Map<string, ReturnType<typeof findCoverageForDay>>()
+
+    // We only care about reps in the current list context
+    // but calculating for all is cheap enough and safer for cache
+    for (const rep of representatives) {
+      map.set(
+        rep.id,
+        findCoverageForDay(rep.id, logDate, activeCoveragesForDay, activeShift) // ✅ Pass activeShift
+      )
+    }
+
+    return map
+  }, [representatives, logDate, activeCoveragesForDay, activeShift]) // ✅ Add activeShift to dependencies
+
 
   // Calculate the Weekly Plan for the logDate context
   const activeWeeklyPlan = useMemo(() => {
@@ -216,7 +249,7 @@ export function DailyLogView() {
       activeShift,
       allCalendarDaysForRelevantMonths,
       representatives,
-      effectivePeriods ?? []
+      specialSchedules
     )
 
     const repMap = new Map(representatives.map(r => [r.id, r]))
@@ -228,11 +261,12 @@ export function DailyLogView() {
     isAdministrativeIncident,
     representatives,
     activeWeeklyPlan,
+    incidentType,
     incidents,
     logDate,
     activeShift,
     allCalendarDaysForRelevantMonths,
-    effectivePeriods
+    specialSchedules
   ])
 
   const filteredRepresentatives = useMemo(() => {
@@ -269,7 +303,7 @@ export function DailyLogView() {
       'DAY',
       allCalendarDaysForRelevantMonths,
       representatives,
-      effectivePeriods ?? []
+      specialSchedules
     )
 
     const nightStats = getDailyShiftStats(
@@ -279,7 +313,7 @@ export function DailyLogView() {
       'NIGHT',
       allCalendarDaysForRelevantMonths,
       representatives,
-      effectivePeriods ?? []
+      specialSchedules
     )
 
     return {
@@ -288,7 +322,7 @@ export function DailyLogView() {
       nightPresent: nightStats.present,
       nightPlanned: nightStats.planned
     }
-  }, [activeWeeklyPlan, incidents, logDate, allCalendarDaysForRelevantMonths, representatives, effectivePeriods])
+  }, [activeWeeklyPlan, incidents, logDate, allCalendarDaysForRelevantMonths, representatives, specialSchedules])
 
   const conflictCheck = useMemo(() => {
     if (!selectedRep) return { hasConflict: false, messages: [] }
@@ -313,8 +347,19 @@ export function DailyLogView() {
   }, [selectedRep, incidentType, logDate, duration, note, incidents, allCalendarDaysForRelevantMonths])
 
 
-  const { dayIncidents, ongoingIncidents } = useMemo(() => {
-    if (isLoading) return { dayIncidents: [], ongoingIncidents: [] };
+  // 🟢 CANONICAL: ONGOING EVENTS (Powered by Adapter)
+  const ongoingIncidents = useMemo(() => {
+    if (isLoading) return []
+    return getOngoingIncidents(
+      incidents,
+      representatives,
+      logDate, // Context Date
+      allCalendarDaysForRelevantMonths
+    )
+  }, [incidents, representatives, logDate, allCalendarDaysForRelevantMonths, isLoading])
+
+  const { dayIncidents } = useMemo(() => {
+    if (isLoading) return { dayIncidents: [] };
 
     const repMap = new Map(representatives.map(r => [r.id, r]))
 
@@ -335,6 +380,10 @@ export function DailyLogView() {
     // First map to potentially null, then filter
     const candidates = incidents.map(incident => {
       if (incident.type === 'OVERRIDE') return null
+
+      // 🧠 STRICT RULE: Point Events Only in Daily Log
+      if (incident.type === 'VACACIONES' || incident.type === 'LICENCIA') return null
+
       const rep = repMap.get(incident.representativeId)
       if (!rep) return null
       const resolved = resolveIncidentDates(
@@ -354,45 +403,14 @@ export function DailyLogView() {
       let dayCount = resolved.dates.indexOf(logDate) + 1
       let totalDuration = resolved.dates.length
 
-      // 🧠 SMART DISPLAY FOR VACATIONS
-      if (incident.type === 'VACACIONES') {
-        totalDuration = incident.duration ?? 14
-
-        let workingDaysSoFar = 0
-        const visibleDates = resolved.dates
-        // Fix: dayCount should be relative to START of vacation until TODAY (or logDate)
-        // But only if logDate is inside the duration.
-        // If viewing past logDate, show day X of Y for that date? Yes.
-        const todaysIndex = visibleDates.indexOf(logDate)
-
-        if (todaysIndex >= 0) {
-          for (let i = 0; i <= todaysIndex; i++) {
-            const dString = visibleDates[i]
-            const dInfo = allCalendarDaysForRelevantMonths.find(d => d.date === dString)
-            const dayOfWeek = parseISO(dString).getUTCDay()
-            const isBaseOff = rep.baseSchedule[dayOfWeek] === 'OFF'
-            const isHoliday = dInfo?.isSpecial === true
-            if (!isBaseOff && !isHoliday) {
-              workingDaysSoFar++
-            }
-          }
-          dayCount = Math.max(1, workingDaysSoFar)
-        } else {
-          // If filter is Week/Month, and logDate is NOT in the vacation, but incident is shown...
-          // We should probably show "Day X" relative to logDate if feasible, or just relative to Start.
-          // If logDate is outside, maybe use the last visible date in range?
-          // For now, if not found, just fallback to index 1 or 0.
-          dayCount = 1
-        }
-      }
-
       const enriched: EnrichedIncident = {
         ...incident,
         repName: rep.name,
         repShift: rep.baseShift,
-        dayCount,
-        totalDuration,
-        returnDate: resolved.returnDate,
+        dayCount: 1, // Point events are always day 1
+        totalDuration: 1,
+        returnDate: incident.startDate, // Ends same day
+        progressRatio: 1 // Completed
       }
       return enriched
     })
@@ -400,17 +418,14 @@ export function DailyLogView() {
     const allRelevantIncidents = candidates.filter((i): i is EnrichedIncident => i !== null)
 
     return {
-      dayIncidents: allRelevantIncidents.filter(
-        i => i.type !== 'VACACIONES' && i.type !== 'LICENCIA'
-      ),
-      ongoingIncidents: allRelevantIncidents.filter(
-        i => i.type === 'VACACIONES' || i.type === 'LICENCIA'
-      ),
+      dayIncidents: allRelevantIncidents
     }
   }, [incidents, logDate, dateForLog, allCalendarDaysForRelevantMonths, representatives, isLoading, filterMode])
 
 
-  // 🛡️ UX PROTECTION
+
+
+  // �🛡️ UX PROTECTION
   useEffect(() => {
     if (!selectedRep) return
     const stillVisible = baseRepresentativeList.some(r => r.id === selectedRep.id)
@@ -467,21 +482,52 @@ export function DailyLogView() {
     if (!selectedRep) return
 
     let finalIncidentType = incidentType
-    let details: string | undefined
+    let details
 
     // 🟢 INTERSTITIAL CONFIRMATION for ABSENCE
+    // 🎯 SLOT RESPONSIBILITY: Canonical Resolution Flow
     if (incidentType === 'AUSENCIA') {
+      // Domain resolves responsibility - UI only provides context
+      const resolution = resolveSlotResponsibility(
+        selectedRep.id,
+        logDate,
+        activeShift,
+        activeWeeklyPlan!,
+        activeCoveragesForDay,
+        representatives
+      )
+
+      // CASE 1: UNASSIGNED - Cannot register absence
+      if (resolution.kind === 'UNASSIGNED') {
+        await showConfirm({
+          title: resolution.displayContext.title,
+          description: resolution.displayContext.subtitle,
+          intent: 'warning',
+          confirmLabel: 'Entendido'
+        })
+        return
+      }
+
+      // CASE 2: COVERAGE - Show specialized modal
+      if (resolution.source === 'COVERAGE') {
+        setCoverageResolution(resolution as any)
+        return
+      }
+
+      // CASE 3: BASE - Standard absence flow
       setAbsenceConfirmState({
         isOpen: true,
         rep: selectedRep,
         onConfirm: (isJustified) => {
           submit({
-            representativeId: selectedRep.id,
+            representativeId: resolution.targetRepId,
             type: 'AUSENCIA',
             startDate: logDate,
             duration: 1,
             note: note.trim() || undefined,
-            details: isJustified ? 'JUSTIFICADA' : 'INJUSTIFICADA' // INJUSTIFICADA explicita si es false
+            source: resolution.source,
+            slotOwnerId: resolution.slotOwnerId !== resolution.targetRepId ? resolution.slotOwnerId : undefined,
+            details: isJustified ? 'JUSTIFICADA' : 'INJUSTIFICADA'
           }, selectedRep)
           setAbsenceConfirmState(prev => ({ ...prev, isOpen: false }))
         },
@@ -567,20 +613,44 @@ export function DailyLogView() {
             <label style={{ ...styles.label, marginBottom: 0 }}>
               Representantes del Turno
             </label>
-            <button
-              onClick={() => setHideAbsent(!hideAbsent)}
-              style={{
-                background: 'none',
-                border: 'none',
-                cursor: 'pointer',
-                color: hideAbsent ? '#2563eb' : '#6b7280',
-                fontSize: '12px',
-                fontWeight: 500
-              }}
-              title="Solo afecta la vista, no el conteo"
-            >
-              {hideAbsent ? 'Mostrar Ausentes' : 'Ocultar Ausentes'}
-            </button>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              {/* 🔄 NEW: Manage Coverages Button */}
+              {activeCoveragesForDay.length > 0 && (
+                <button
+                  onClick={() => setIsCoverageManagerOpen(true)}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    cursor: 'pointer',
+                    color: '#1e40af', // Blue to match coverage theme
+                    fontSize: '12px',
+                    fontWeight: 600,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '4px'
+                  }}
+                  title="Gestionar coberturas activas"
+                >
+                  <Shield size={12} />
+                  {activeCoveragesForDay.length}
+                </button>
+              )}
+
+              <button
+                onClick={() => setHideAbsent(!hideAbsent)}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  color: hideAbsent ? '#2563eb' : '#6b7280',
+                  fontSize: '12px',
+                  fontWeight: 500
+                }}
+                title="Solo afecta la vista, no el conteo"
+              >
+                {hideAbsent ? 'Mostrar Ausentes' : 'Ocultar Ausentes'}
+              </button>
+            </div>
           </div>
           {(incidentType === 'VACACIONES' || incidentType === 'LICENCIA') && (
             <div style={{ marginBottom: 'var(--space-sm)', fontSize: 'var(--font-size-xs)', color: '#059669', background: '#ecfdf5', padding: '6px 10px', borderRadius: 'var(--radius-sm)', border: '1px solid #a7f3d0' }}>
@@ -604,11 +674,40 @@ export function DailyLogView() {
             }}
           >
             {filteredRepresentatives.map(rep => {
+              // 🧠 OPERATIONAL TRUTH: Use canonical check for strikethrough
+              const isOperationallyAbsent = isSlotOperationallyEmpty(
+                rep.id,
+                logDate,
+                activeShift,
+                incidents
+              )
+
               const isAbsent = incidents.some(i =>
                 i.representativeId === rep.id &&
                 i.type === 'AUSENCIA' &&
                 i.startDate === logDate
               )
+
+              // 🎯 SLOT RESPONSIBILITY: Use domain logic for visualization
+              // We need to know if this slot is UNASSIGNED or COVERED
+              const resolution = activeWeeklyPlan ? resolveSlotResponsibility(
+                rep.id,
+                logDate,
+                activeShift,
+                activeWeeklyPlan,
+                activeCoveragesForDay,
+                representatives
+              ) : null
+
+              const isUnassigned = resolution?.kind === 'UNASSIGNED'
+              const isCovered = resolution?.kind === 'RESOLVED' && resolution.source === 'COVERAGE'
+
+              // Helper to check if they are covering someone else
+              const coverage = coverageByRepId.get(rep.id)
+              const isCovering = coverage?.isCovering
+              const coveringName = coverage?.covering?.repId
+                ? representatives.find(r => r.id === coverage.covering!.repId)?.name
+                : undefined
 
               return (
                 <button
@@ -620,24 +719,95 @@ export function DailyLogView() {
                     alignItems: 'center',
                     justifyContent: 'space-between',
                     ...(selectedRep?.id === rep.id ? styles.activeListItem : {}),
-                    ...(isAbsent ? { opacity: 0.7 } : {})
+                    ...(isOperationallyAbsent ? { opacity: 0.7 } : {}),
+                    ...(isUnassigned ? { borderLeft: '4px solid #ef4444', backgroundColor: '#fef2f2' } : {})
                   }}
                 >
-                  <span style={{ textDecoration: isAbsent ? 'line-through' : 'none', color: isAbsent ? '#6b7280' : 'inherit' }}>
+                  <span style={{
+                    textDecoration: isOperationallyAbsent ? 'line-through' : 'none',
+                    color: isOperationallyAbsent ? '#6b7280' : (isUnassigned ? '#b91c1c' : 'inherit'),
+                    fontWeight: isUnassigned ? 600 : 400
+                  }}>
                     {rep.name}
                   </span>
-                  {isAbsent && (
-                    <span style={{
-                      fontSize: '10px',
-                      background: '#fecaca',
-                      color: '#991b1b',
-                      padding: '2px 6px',
-                      borderRadius: '4px',
-                      fontWeight: 600
-                    }}>
-                      Ausente
-                    </span>
-                  )}
+
+                  <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+                    {/* 🎯 VISUALIZATION: Unassigned / Failed Coverage */}
+                    {isUnassigned && (
+                      <span
+                        title="Este turno debería estar cubierto pero no tiene responsable asignado"
+                        style={{
+                          fontSize: '10px',
+                          background: '#fee2e2',
+                          color: '#b91c1c',
+                          padding: '2px 6px',
+                          borderRadius: '4px',
+                          fontWeight: 700,
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '2px',
+                          cursor: 'help',
+                          border: '1px solid #fca5a5'
+                        }}
+                      >
+                        <AlertTriangle size={10} /> DESCUBIERTO
+                      </span>
+                    )}
+
+                    {/* 🎯 VISUALIZATION: Covered (Resolved) */}
+                    {isCovered && resolution?.kind === 'RESOLVED' && (
+                      <span
+                        title={`Cubierto por ${resolution.displayContext.targetName}`}
+                        style={{
+                          fontSize: '10px',
+                          background: '#dbeafe',
+                          color: '#1e40af',
+                          padding: '2px 6px',
+                          borderRadius: '4px',
+                          fontWeight: 600,
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '2px',
+                          cursor: 'help'
+                        }}
+                      >
+                        <Shield size={10} /> Cubierto
+                      </span>
+                    )}
+
+                    {isCovering && (
+                      <span
+                        title={`Cubriendo a ${coveringName ?? '—'}`}
+                        style={{
+                          fontSize: '10px',
+                          background: '#f3e8ff',
+                          color: '#6b21a8',
+                          padding: '2px 6px',
+                          borderRadius: '4px',
+                          fontWeight: 600,
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '2px',
+                          cursor: 'help'
+                        }}
+                      >
+                        <RefreshCw size={10} /> Cubriendo
+                      </span>
+                    )}
+
+                    {isAbsent && (
+                      <span style={{
+                        fontSize: '10px',
+                        background: '#fecaca',
+                        color: '#991b1b',
+                        padding: '2px 6px',
+                        borderRadius: '4px',
+                        fontWeight: 600
+                      }}>
+                        Ausente
+                      </span>
+                    )}
+                  </div>
                 </button>
               )
             })}
@@ -953,14 +1123,15 @@ export function DailyLogView() {
               backgroundColor: 'var(--bg-surface)',
               border: '1px solid var(--border-subtle)',
               borderRadius: 'var(--radius-card)',
-              padding: 'var(--space-lg)',
+              padding: 'var(--space-xl)', // 🟢 Increased Padding
               overflowY: 'auto',
               marginBottom: 'var(--space-md)',
               boxShadow: 'var(--shadow-sm)',
+              maxHeight: 'calc(100vh - 200px)', // 🟢 Adjusted Dynamic Height
             }}
           >
             <DailyEventsList
-              title="Eventos en Curso (Todos)"
+              title="Eventos en Curso (Monitor)"
               incidents={ongoingIncidents}
               emptyMessage="No hay licencias o vacaciones activas."
             />
@@ -1042,6 +1213,35 @@ export function DailyLogView() {
           </div>
         </div>
       )}
+      {/* 🎯 SLOT RESPONSIBILITY: Coverage Resolution Modal */}
+      {coverageResolution && (
+        <CoverageAbsenceModal
+          resolution={coverageResolution}
+          onConfirm={(isJustified) => {
+            const targetRep = representatives.find(r => r.id === coverageResolution.targetRepId)
+            if (targetRep) {
+              submit({
+                representativeId: coverageResolution.targetRepId,
+                type: 'AUSENCIA',
+                startDate: logDate,
+                duration: 1,
+                source: 'COVERAGE',
+                slotOwnerId: coverageResolution.slotOwnerId,
+                details: isJustified ? 'JUSTIFICADA' : 'INJUSTIFICADA'
+              }, targetRep)
+            }
+            setCoverageResolution(null)
+          }}
+          onCancel={() => setCoverageResolution(null)}
+        />
+      )}
+
+      {/* 🔄 NEW: Coverage Manager Modal */}
+      <CoverageManagerModal
+        isOpen={isCoverageManagerOpen}
+        onClose={() => setIsCoverageManagerOpen(false)}
+        date={logDate}
+      />
     </div>
   )
 }

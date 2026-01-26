@@ -20,6 +20,7 @@ import { useAppStore } from '@/store/useAppStore'
 import { CalendarGrid, CalendarDay } from '../components/CalendarGrid'
 import { resolveIncidentDates } from '@/domain/incidents/resolveIncidentDates'
 import { calculatePoints } from '@/domain/analytics/computeMonthlySummary'
+import { parseLocalDate } from '@/domain/calendar/parseLocalDate'
 
 const RiskBadge = ({ level }: { level: RiskLevel }) => {
   const styles: Record<RiskLevel, React.CSSProperties> = {
@@ -86,10 +87,7 @@ function Stat({ label, value }: { label: string; value: string | number }) {
   )
 }
 
-function parseLocalDate(dateStr: string): Date {
-  const [year, month, day] = dateStr.split('-').map(Number)
-  return new Date(year, month - 1, day)
-}
+// Helper removed - imported from domain/calendar/parseLocalDate
 
 export function PersonDetailModal({
   summary,
@@ -156,7 +154,7 @@ export function PersonDetailModal({
 
     const dateKey = format(selectedDate, 'yyyy-MM-dd')
 
-    return currentPersonSummary.incidents.filter(i => {
+    const result = currentPersonSummary.incidents.filter(i => {
       // Para vacaciones/licencias, verificar si la fecha seleccionada está en el rango
       if (i.type === 'VACACIONES' || i.type === 'LICENCIA') {
         const resolved = resolveIncidentDates(i, allCalendarDays, currentRepresentative)
@@ -165,6 +163,11 @@ export function PersonDetailModal({
       // Para otros, verificar fecha de inicio
       return i.startDate === dateKey
     })
+
+    // Sort: Chronological ASC (strictly by start date)
+    const today = format(new Date(), 'yyyy-MM-dd')
+
+    return result.sort((a, b) => a.startDate.localeCompare(b.startDate))
   }, [selectedDate, currentPersonSummary, currentRepresentative, allCalendarDays])
 
   const calendarDays = useMemo((): CalendarDay[] => {

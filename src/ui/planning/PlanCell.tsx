@@ -37,6 +37,7 @@ export const PlanCell = React.memo(function PlanCell({
     userSelect: 'none',
     position: 'relative',
     display: 'flex',
+    flexDirection: 'column',
     alignItems: 'center',
     justifyContent: 'center',
 
@@ -49,6 +50,24 @@ export const PlanCell = React.memo(function PlanCell({
     opacity: resolved.canEdit ? 1 : 0.6,
     borderRadius: '6px',
     transition: 'background-color 120ms ease, transform 100ms ease, box-shadow 120ms ease',
+  }
+
+  // Badge styling
+  const badgeStyle: React.CSSProperties = {
+    fontSize: '9px',
+    fontWeight: 700,
+    padding: '2px 6px',
+    borderRadius: '4px',
+    marginTop: '2px',
+    whiteSpace: 'nowrap',
+  }
+
+  const badgeColors: Record<string, { bg: string; fg: string }> = {
+    CUBIERTO: { bg: '#dbeafe', fg: '#1e40af' },
+    CUBRIENDO: { bg: '#f3e8ff', fg: '#6b21a8' },
+    AUSENCIA: { bg: '#fee2e2', fg: '#991b1b' },
+    VACACIONES: { bg: '#d1fae5', fg: '#065f46' },
+    LICENCIA: { bg: '#fce7f3', fg: '#9f1239' },
   }
 
   return (
@@ -73,6 +92,23 @@ export const PlanCell = React.memo(function PlanCell({
         {Icon && <Icon size={14} strokeWidth={2} />}
         {resolved.label && <span>{resolved.label}</span>}
       </div>
+
+      {/* 🔄 NEW: Render badge if present */}
+      {resolved.badge && (
+        <div
+          style={{
+            ...badgeStyle,
+            background: badgeColors[resolved.badge]?.bg || '#f3f4f6',
+            color: badgeColors[resolved.badge]?.fg || '#374151',
+          }}
+        >
+          {resolved.badge === 'CUBIERTO' && '🔄'}
+          {resolved.badge === 'CUBRIENDO' && '🤝'}
+          {resolved.badge === 'AUSENCIA' && '⚠️'}
+          {resolved.badge === 'VACACIONES' && '🏖️'}
+          {resolved.badge === 'LICENCIA' && '📋'}
+        </div>
+      )}
     </div>
   )
 })

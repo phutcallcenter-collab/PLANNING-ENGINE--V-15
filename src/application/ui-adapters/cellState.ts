@@ -10,6 +10,11 @@ export type VisualVariant =
     | 'ABSENT_JUSTIFIED'
 
 /**
+ * Badge types for coverage and incidents
+ */
+export type CellBadge = 'CUBIERTO' | 'CUBRIENDO' | 'AUSENCIA' | 'VACACIONES' | 'LICENCIA'
+
+/**
  * UI CONTRACT — DO NOT BREAK
  *
  * One color = one truth
@@ -27,4 +32,5 @@ export interface ResolvedCellState {
     ariaLabel: string
     canEdit: boolean
     canContextMenu: boolean
+    badge?: CellBadge // 🔄 NEW: Coverage/incident badge
 }

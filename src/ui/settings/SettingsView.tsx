@@ -9,7 +9,6 @@ import { RepresentativeManagement } from './RepresentativeManagement'
 import {
   Shield,
   History,
-  FileCheck,
   RotateCcw,
   Users,
   Calendar,
@@ -19,12 +18,12 @@ import { useToast } from '../components/ToastProvider'
 import { BackupManagement } from './BackupManagement'
 import { CoverageRulesMatrix } from '../coverage/CoverageRulesMatrix'
 import { LogViewerModal } from '../components/LogViewerModal'
-import { AuditEvent } from '@/domain/audit/types'
 import { format, parseISO } from 'date-fns'
 import { es } from 'date-fns/locale'
 
 import { Briefcase } from 'lucide-react'
 import { ManagerScheduleManagement } from './ManagerScheduleManagement'
+import { AuditPanel } from '@/ui/audit/AuditPanel'
 
 type SettingsTab = 'equipo' | 'calendario' | 'sistema' | 'gerencia'
 type EquipoSection = 'representatives' | 'demand'
@@ -41,16 +40,14 @@ export function SettingsView() {
   const isAdvancedMode = mode === 'ADMIN_OVERRIDE'
 
   const { showToast } = useToast()
-  const { resetState, showConfirm, historyEvents, auditLog } = useAppStore(s => ({
+  const { resetState, showConfirm, historyEvents } = useAppStore(s => ({
     resetState: s.resetState,
     showConfirm: s.showConfirm,
     historyEvents: s.historyEvents || [],
-    auditLog: s.auditLog || [],
   }))
 
   // Sort logs desc
   const sortedHistory = [...historyEvents].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
-  const sortedAudit = [...auditLog].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
 
   const handleReset = async () => {
     const confirmed = await showConfirm({
@@ -177,34 +174,6 @@ export function SettingsView() {
     </div>
   )
 
-  const renderAuditItem = (item: AuditEvent) => (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-        <span style={{
-          fontSize: '11px',
-          fontWeight: 700,
-          color: '#059669',
-          background: '#ecfdf5',
-          padding: '2px 6px',
-          borderRadius: '4px'
-        }}>
-          {item.action}
-        </span>
-        <span style={{ fontSize: '12px', color: '#9ca3af' }}>
-          {format(parseISO(item.timestamp), "d MMM yyyy, HH:mm:ss", { locale: es })}
-        </span>
-      </div>
-      <div style={{ fontSize: '13px', color: '#374151', marginTop: '4px' }}>
-        <span style={{ fontWeight: 600 }}>{item.actor.name}</span>: {item.target.entity} {item.target.label ? `(${item.target.label})` : ''}
-      </div>
-      {item.change && (
-        <div style={{ fontSize: '12px', fontFamily: 'monospace', background: '#f9fafb', padding: '4px', borderRadius: '4px', marginTop: '4px' }}>
-          {item.change.field}: {String(item.change.from)} ➔ {String(item.change.to)}
-        </div>
-      )}
-    </div>
-  )
-
   return (
     <div style={{ padding: '0px 20px 40px 20px', maxWidth: '1200px', margin: '0 auto' }}>
 
@@ -216,15 +185,6 @@ export function SettingsView() {
         items={sortedHistory}
         renderItem={renderHistoryItem}
         emptyMessage="No hay eventos en el historial reciente."
-      />
-
-      <LogViewerModal
-        title="Auditoría del Sistema"
-        isOpen={showAudit}
-        onClose={() => setShowAudit(false)}
-        items={sortedAudit}
-        renderItem={renderAuditItem}
-        emptyMessage="No hay registros de auditoría."
       />
 
       {/* Tabs Header */}
@@ -325,11 +285,6 @@ export function SettingsView() {
           <HolidayManagement />
         )}
 
-
-
-
-
-
         {activeTab === 'sistema' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
 
@@ -371,37 +326,54 @@ export function SettingsView() {
               </div>
             </div>
 
-            {/* 4. Auditoría */}
+            {/* 4. Auditoría (SECURE EMBED) */}
             <div style={settingItemStyle}>
               <h3 style={{ margin: '0 0 4px 0', fontSize: '16px', color: 'var(--text-main)' }}>
-                Auditoría del Sistema
+                Historial y Auditoría
               </h3>
               <p style={{ margin: '0 0 12px 0', fontSize: '13px', color: 'var(--text-muted)' }}>
-                Historial detallado de cambios y acciones administrativas.
+                Registro de acciones operativas y evidencia forense.
               </p>
-              <div style={{ display: 'flex', gap: '12px' }}>
-                <button
-                  style={{
-                    ...buttonStyle,
-                    opacity: isAdvancedMode ? 1 : 0.5,
-                    cursor: isAdvancedMode ? 'pointer' : 'not-allowed'
-                  }}
-                  onClick={() => isAdvancedMode && setShowHistory(true)}
-                >
-                  <History size={16} />
-                  Historial
-                </button>
-                <button
-                  style={{
-                    ...buttonStyle,
-                    opacity: isAdvancedMode ? 1 : 0.5,
-                    cursor: isAdvancedMode ? 'pointer' : 'not-allowed'
-                  }}
-                  onClick={() => isAdvancedMode && setShowAudit(true)}
-                >
-                  <FileCheck size={16} />
-                  Auditoría
-                </button>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                {/* Historial Operativo */}
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <button
+                    style={{
+                      ...buttonStyle,
+                      opacity: isAdvancedMode ? 1 : 0.5,
+                      cursor: isAdvancedMode ? 'pointer' : 'not-allowed'
+                    }}
+                    onClick={() => isAdvancedMode && setShowHistory(true)}
+                  >
+                    <History size={16} />
+                    Historial Operativo
+                  </button>
+
+                  <button
+                    style={{
+                      ...buttonStyle,
+                      opacity: isAdvancedMode ? 1 : 0.5,
+                      cursor: isAdvancedMode ? 'pointer' : 'not-allowed'
+                    }}
+                    onClick={() => isAdvancedMode && setShowAudit(prev => !prev)}
+                  >
+                    <Shield size={16} />
+                    {showAudit ? 'Ocultar Auditoría Forense' : 'Auditoría Forense'}
+                  </button>
+                </div>
+
+                {/* Secure Embedded Panel - Only renders in Admin Mode */}
+                {isAdvancedMode && showAudit && (
+                  <div
+                    style={{
+                      marginTop: '16px',
+                      borderTop: '1px solid var(--border-subtle)',
+                      paddingTop: '16px',
+                    }}
+                  >
+                    <AuditPanel embedded />
+                  </div>
+                )}
               </div>
             </div>
 
