@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest'
+
 import { buildWeeklySchedule, resolveDayStatus } from '@/domain/planning/buildWeeklySchedule'
 import { Representative, DayInfo, Incident, SpecialSchedule } from '@/domain/types'
 

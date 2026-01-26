@@ -80,8 +80,14 @@ export function resolveDayStatus(
   let assignment: ShiftAssignment = { type: 'NONE' }
   let source: DayPlan['source'] = 'BASE'
 
-  // Priority 1: Manual Override
-  if (overrideIncident && overrideIncident.assignment) {
+  // Priority 0: Formal Absence (Hard Block)
+  // 🛑 FIX: Formal incidents (Vacation/License) MUST clear the assignment.
+  // They are not just "Status OFF", they are "Assignment NONE".
+  if (formalIncident) {
+    assignment = { type: 'NONE' }
+    source = 'BASE' // Source remains valid but assignment is purged
+  } else if (overrideIncident && overrideIncident.assignment) {
+    // Priority 1: Manual Override
     assignment = overrideIncident.assignment
     source = 'OVERRIDE'
   } else if (swapIncident && swapIncident.assignment) {

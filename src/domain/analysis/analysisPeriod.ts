@@ -13,6 +13,7 @@
 
 import { startOfMonth, endOfMonth, startOfQuarter, endOfQuarter, format } from 'date-fns'
 import { AnalysisPeriod, PeriodKind } from './analysisTypes'
+import { parseLocalDate } from '../calendar/parseLocalDate'
 
 const MONTHS = [
     'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
@@ -110,7 +111,7 @@ export function createAnalysisPeriod(input:
  */
 export function getPreviousPeriod(period: AnalysisPeriod): AnalysisPeriod {
     if (period.kind === 'MONTH') {
-        const date = new Date(period.from)
+        const date = parseLocalDate(period.from)
         const prevDate = new Date(date.getFullYear(), date.getMonth() - 1, 1)
 
         return createAnalysisPeriod({
@@ -121,7 +122,7 @@ export function getPreviousPeriod(period: AnalysisPeriod): AnalysisPeriod {
     }
 
     // QUARTER
-    const date = new Date(period.from)
+    const date = parseLocalDate(period.from)
     const prevDate = new Date(date.getFullYear(), date.getMonth() - 3, 1)
     const quarter = Math.floor(prevDate.getMonth() / 3) + 1
 
@@ -141,7 +142,7 @@ export function getPreviousPeriod(period: AnalysisPeriod): AnalysisPeriod {
  */
 export function getYearAgoPeriod(period: AnalysisPeriod): AnalysisPeriod {
     if (period.kind === 'MONTH') {
-        const date = new Date(period.from)
+        const date = parseLocalDate(period.from)
 
         return createAnalysisPeriod({
             kind: 'MONTH',
@@ -151,7 +152,7 @@ export function getYearAgoPeriod(period: AnalysisPeriod): AnalysisPeriod {
     }
 
     // QUARTER
-    const date = new Date(period.from)
+    const date = parseLocalDate(period.from)
     const quarter = Math.floor(date.getMonth() / 3) + 1
 
     return createAnalysisPeriod({

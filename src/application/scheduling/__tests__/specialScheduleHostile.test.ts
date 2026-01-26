@@ -1,5 +1,5 @@
 
-import { describe, it, expect } from 'vitest'
+
 import { getEffectiveSchedule } from '../specialScheduleAdapter'
 import { Representative, SpecialSchedule, DailyScheduleState } from '@/domain/types'
 

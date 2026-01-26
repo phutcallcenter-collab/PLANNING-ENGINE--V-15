@@ -121,14 +121,15 @@ export function getCoverageRiskSummary(
     // Logic is valid but complex. Do not refactor without explicit definition.
 
     let dailyTotalDeficit = 0
-    let hadDeficit = false
+    let dayHadDeficit = false
 
+    // 1. Calculate Daily Total FIRST
     for (const shift of ['DAY', 'NIGHT'] as ShiftType[]) {
       const { required, actual } = coverage[shift]
       const deficit = Math.max(0, required - actual)
 
       if (deficit > 0) {
-        hadDeficit = true
+        dayHadDeficit = true
         dailyTotalDeficit += deficit
         shiftDeficits[shift] += deficit
 
@@ -142,7 +143,8 @@ export function getCoverageRiskSummary(
       }
     }
 
-    if (hadDeficit) {
+    // 2. Evaluate Day-Level Metrics
+    if (dayHadDeficit) {
       daysWithDeficitSet.add(day.date)
     }
 

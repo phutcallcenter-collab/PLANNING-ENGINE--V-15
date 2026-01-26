@@ -1,6 +1,11 @@
-import { describe, it, expect } from 'vitest'
+
 import { createWeeklySnapshot } from './createWeeklySnapshot'
 import { WeeklyPlan } from '@/domain/types'
+
+// 🩹 MOCK INFRASTRUCTURE: nanoid es ESM, Jest es CJS. Mockeamos para evitar crash.
+jest.mock('nanoid', () => ({
+    nanoid: () => 'test-id-123'
+}))
 
 describe('Coverage Responsibility Invariant (Hostile)', () => {
     it('assigns absence to covering rep when coverage commitment is not executed', () => {

@@ -1,38 +1,44 @@
 
-import { describe, it, expect } from 'vitest'
+
 import { getOngoingIncidents } from '../../../application/ui-adapters/getOngoingIncidents'
 import { enrichOngoingIncident } from '../logHelpers'
 import { Incident, Representative } from '../../../domain/types'
 
 // Mock Data
-const mockRep: Representative = {
-    id: 'rep-1',
-    name: 'Test Rep',
-    baseShift: 'DAY',
-    baseSchedule: {
-        0: 'OFF',
-        1: 'WORKING',
-        2: 'WORKING',
-        3: 'WORKING',
-        4: 'WORKING',
-        5: 'WORKING',
-        6: 'OFF'
-    },
-    role: 'SALES',
-    orderIndex: 1,
-    isActive: true
+// Mock Factory for Strict Domain Compliance
+function createMockRepresentative(overrides: Partial<Representative> = {}): Representative {
+    return {
+        id: 'rep-1',
+        name: 'Test Rep',
+        baseShift: 'DAY',
+        baseSchedule: {
+            0: 'OFF',
+            1: 'WORKING',
+            2: 'WORKING',
+            3: 'WORKING',
+            4: 'WORKING',
+            5: 'WORKING',
+            6: 'OFF'
+        },
+        role: 'SALES',
+        orderIndex: 1,
+        isActive: true,
+        ...overrides
+    }
 }
+
+const mockRep = createMockRepresentative()
 
 const mockCalendarDays = [
     // A standard week
-    { date: '2024-01-01', isSpecial: false }, // Mon - Work
-    { date: '2024-01-02', isSpecial: false }, // Tue - Work
-    { date: '2024-01-03', isSpecial: false }, // Wed - Work
-    { date: '2024-01-04', isSpecial: false }, // Thu - Work
-    { date: '2024-01-05', isSpecial: false }, // Fri - Work
-    { date: '2024-01-06', isSpecial: false }, // Sat - OFF
-    { date: '2024-01-07', isSpecial: false }, // Sun - OFF
-    { date: '2024-01-08', isSpecial: false }, // Mon - Work
+    { date: '2024-01-01', isSpecial: false, dayOfWeek: 1, kind: 'WORKING' as const }, // Mon - Work
+    { date: '2024-01-02', isSpecial: false, dayOfWeek: 2, kind: 'WORKING' as const }, // Tue - Work
+    { date: '2024-01-03', isSpecial: false, dayOfWeek: 3, kind: 'WORKING' as const }, // Wed - Work
+    { date: '2024-01-04', isSpecial: false, dayOfWeek: 4, kind: 'WORKING' as const }, // Thu - Work
+    { date: '2024-01-05', isSpecial: false, dayOfWeek: 5, kind: 'WORKING' as const }, // Fri - Work
+    { date: '2024-01-06', isSpecial: false, dayOfWeek: 6, kind: 'WORKING' as const },     // Sat - OFF
+    { date: '2024-01-07', isSpecial: false, dayOfWeek: 0, kind: 'WORKING' as const },     // Sun - OFF
+    { date: '2024-01-08', isSpecial: false, dayOfWeek: 1, kind: 'WORKING' as const }, // Mon - Work
 ]
 
 describe('🛡️ HOSTILE TESTING: Ongoing Incidents Architecture', () => {

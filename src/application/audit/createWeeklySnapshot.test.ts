@@ -1,3 +1,9 @@
+import { WeeklySnapshot } from '@/domain/audit/WeeklySnapshot'
+
+// 🩹 MOCK INFRASTRUCTURE
+jest.mock('nanoid', () => ({
+    nanoid: () => 'test-id-123'
+}))
 import { createWeeklySnapshot } from './createWeeklySnapshot'
 import { WeeklyPlan } from '@/domain/types'
 

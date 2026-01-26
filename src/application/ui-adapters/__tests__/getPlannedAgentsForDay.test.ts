@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest'
+
 import { getPlannedAgentsForDay } from '../getPlannedAgentsForDay'
 import { Representative, SpecialSchedule, DailyScheduleState, WeeklyPlan } from '@/domain/types'
 

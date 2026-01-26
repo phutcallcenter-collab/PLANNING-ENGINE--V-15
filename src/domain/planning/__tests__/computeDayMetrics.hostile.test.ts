@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest'
+
 import { computeDayMetrics } from '@/domain/planning/computeDayMetrics'
 import { DayPlan, DayReality } from '@/domain/planning/dayResolution'
 

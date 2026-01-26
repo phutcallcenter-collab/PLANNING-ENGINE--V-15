@@ -2,6 +2,7 @@
 import { addDays, parseISO, formatISO, isValid } from 'date-fns'
 import type { Incident, Representative } from '../types'
 import type { DayInfo, ISODate } from '../calendar/types'
+import { parseLocalDate } from '../calendar/parseLocalDate'
 
 export interface ResolvedIncident {
   incident: Incident
@@ -54,7 +55,7 @@ function resolveLicenseDates(incident: Incident, allCalendarDays: DayInfo[], rep
   const result: ISODate[] = []
 
   // Simple continuous expansion
-  let cursor = parseISO(incident.startDate)
+  let cursor = parseLocalDate(incident.startDate)
   for (let i = 0; i < duration; i++) {
     const currentDate = formatISO(cursor, { representation: 'date' })
     result.push(currentDate)
@@ -62,8 +63,8 @@ function resolveLicenseDates(incident: Incident, allCalendarDays: DayInfo[], rep
   }
 
   const endDate = result[result.length - 1]
-  // 🟢 FIX: Licenses return checking should IGNORE holidays (treat them as working days if rep works that day)
-  const returnDate = findNextWorkingDay(endDate, allCalendarDays, representative, true)
+  // 🟢 FIX: Return date must be a real working day (respecting holidays)
+  const returnDate = findNextWorkingDay(endDate, allCalendarDays, representative, false)
 
   return {
     incident,
@@ -86,7 +87,7 @@ function resolveVacationDates(
   const result: ISODate[] = []
   const calendarMap = new Map(allCalendarDays.map(d => [d.date, d]))
 
-  let cursor = parseISO(incident.startDate)
+  let cursor = parseLocalDate(incident.startDate)
   let consumedDays = 0
   let daysScanned = 0
   const maxDaysToScan = duration * 3 + 30 // Safety break
@@ -146,7 +147,7 @@ function resolveSingleDayIncident(incident: Incident, allCalendarDays: DayInfo[]
   // For single day incidents, returnDate is typically just the next day, 
   // OR we could say "next working day". Usually incidental events don't have a "return".
   // But let's keep consistency with previous logic: simple addDays(1)
-  const returnDate = formatISO(addDays(parseISO(date), 1), { representation: 'date' })
+  const returnDate = formatISO(addDays(parseLocalDate(date), 1), { representation: 'date' })
 
   return {
     incident,
@@ -167,7 +168,7 @@ function findNextWorkingDay(
   ignoreHolidays: boolean = false
 ): ISODate {
   const calendarMap = new Map(allCalendarDays.map(d => [d.date, d]))
-  let cursor = addDays(parseISO(fromIndexDate), 1)
+  let cursor = addDays(parseLocalDate(fromIndexDate), 1)
   let found = false
   const maxSearch = 20
   let i = 0
@@ -197,5 +198,5 @@ function findNextWorkingDay(
   }
 
   // Fallback if not found (unexpected)
-  return formatISO(addDays(parseISO(fromIndexDate), 1), { representation: 'date' })
+  return formatISO(addDays(parseLocalDate(fromIndexDate), 1), { representation: 'date' })
 }

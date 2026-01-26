@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest'
+
 import { resolveWeeklyPatternSnapshot } from '@/application/scheduling/resolveWeeklyPatternSnapshot'
 import { Representative } from '@/domain/types'
 
