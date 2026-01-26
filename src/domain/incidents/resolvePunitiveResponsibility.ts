@@ -1,5 +1,5 @@
 import { resolveEffectiveDuty } from '../swaps/resolveEffectiveDuty'
-import { WeeklyPlan, SwapEvent, Incident, ISODate, ShiftType, DayInfo, Representative, EffectiveSchedulePeriod } from '../types'
+import { WeeklyPlan, SwapEvent, Incident, ISODate, ShiftType, DayInfo, Representative, SpecialSchedule } from '../types'
 
 /**
  * Determines if a representative should be punished (e.g. absent) for missing a shift.
@@ -16,7 +16,7 @@ export function resolvePunitiveResponsibility(
     representativeId: string,
     allCalendarDays: DayInfo[],
     representatives: Representative[],
-    effectivePeriods: EffectiveSchedulePeriod[] = []
+    specialSchedules: SpecialSchedule[] = []
 ): boolean {
     const result = resolveEffectiveDuty(
         weeklyPlan,
@@ -27,7 +27,7 @@ export function resolvePunitiveResponsibility(
         representativeId,
         allCalendarDays,
         representatives,
-        effectivePeriods
+        specialSchedules
     )
 
     return result.shouldWork

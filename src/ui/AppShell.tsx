@@ -14,6 +14,7 @@ import { AnimatePresence } from 'framer-motion'
 import { useMonthlySummary } from '@/hooks/useMonthlySummary'
 import { MixedShiftConfirmModal } from './planning/MixedShiftConfirmModal'
 
+
 function AppShellInner() {
   const {
     isLoading,
@@ -152,6 +153,7 @@ function AppShellInner() {
           >
             Configuración
           </button>
+
         </nav>
       </header>
 
@@ -162,6 +164,7 @@ function AppShellInner() {
         )}
         {activeView === 'STATS' && <StatsView />}
         {activeView === 'SETTINGS' && <SettingsView />}
+
       </main>
 
       <footer

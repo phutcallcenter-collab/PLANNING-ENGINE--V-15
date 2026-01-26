@@ -235,6 +235,13 @@ export function RepresentativeManagement() {
   const nightReps = useMemo(() => getRepresentativesByShift(activeReps, 'NIGHT'), [activeReps])
 
   const handleSave = (data: Omit<Representative, 'id' | 'isActive' | 'orderIndex'>, id?: string) => {
+    // ⚠️ UX: Explicit Confirmation for Operational Impact
+    const message = id
+      ? 'Editar un representante afecta la planificación histórica y futura.\n\n¿Estás seguro de que la información es correcta?'
+      : 'Agregar un representante impactará los reportes y cobertura desde hoy.\n\n¿Estás seguro de continuar?'
+
+    if (!confirm(message)) return
+
     if (id) {
       const existingRep = allReps.find(r => r.id === id);
       if (existingRep) {

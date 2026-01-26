@@ -2,6 +2,7 @@
 
 import { useEffect } from 'react'
 import { OfflineBanner } from '@/ui/system/OfflineBanner'
+import { UndoToast } from '@/ui/components/UndoToast'
 
 export default function ClientLayout({
     children,
@@ -41,6 +42,7 @@ export default function ClientLayout({
     return (
         <>
             <OfflineBanner />
+            <UndoToast />
             {children}
         </>
     )

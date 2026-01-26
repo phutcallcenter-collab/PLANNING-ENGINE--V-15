@@ -48,7 +48,7 @@ export function ConfirmDialog({
   const modalOverlayStyle: React.CSSProperties = {
     position: 'fixed',
     inset: 0,
-    zIndex: 50,
+    zIndex: 100, // High priority - must appear above all other modals
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',

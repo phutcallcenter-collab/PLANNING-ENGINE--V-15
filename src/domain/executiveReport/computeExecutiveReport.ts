@@ -15,13 +15,12 @@ function summarizeShift(
 ) {
   const filtered = list.filter(p => p.shift === shift)
   if (filtered.length === 0) {
-    return { incidents: 0, points: 0, avgPointsPerRep: 0 }
+    return { incidents: 0, points: 0 }
   }
   const points = filtered.reduce((a, p) => a + p.points, 0)
   return {
     incidents: filtered.reduce((a, p) => a + p.incidents, 0),
     points,
-    avgPointsPerRep: round(points / filtered.length),
   }
 }
 
@@ -33,7 +32,7 @@ function summarizeByType(incidents: Incident[]) {
     prev.points += calculatePoints(i)
     map.set(i.type, prev)
   })
-  return Array.from(map.values()).sort((a,b) => b.count - a.count);
+  return Array.from(map.values()).sort((a, b) => b.count - a.count);
 }
 
 
@@ -66,8 +65,8 @@ export function computeExecutiveReport(
     if (!entry) return
     const points = calculatePoints(i)
     if (points > 0) {
-       entry.incidents++
-       entry.points += points
+      entry.incidents++
+      entry.points += points
     }
   })
 
@@ -75,9 +74,6 @@ export function computeExecutiveReport(
 
   const totalIncidents = people.reduce((sum, p) => sum + p.incidents, 0)
   const totalPoints = people.reduce((sum, p) => sum + p.points, 0)
-
-  const avgPoints =
-    people.length === 0 ? 0 : totalPoints / people.length
 
   const shiftStats = {
     DAY: summarizeShift(people, 'DAY'),
@@ -91,11 +87,10 @@ export function computeExecutiveReport(
     kpis: {
       totalIncidents,
       totalPoints,
-      averagePointsPerRep: round(avgPoints),
     },
     shifts: shiftStats,
     incidentTypes,
-    candidates: people.filter(p => p.incidents === 0).sort((a,b) => a.name.localeCompare(b.name)),
+    candidates: people.filter(p => p.incidents === 0).sort((a, b) => a.name.localeCompare(b.name)),
     needsAttention: people
       .filter(p => p.points > 0)
       .sort((a, b) => b.points - a.points),

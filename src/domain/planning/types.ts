@@ -9,9 +9,14 @@ import { ShiftAssignment } from './shiftAssignment'
  */
 export interface DailyPresence {
   status: DailyStatus
-  source: 'BASE' | 'OVERRIDE' | 'INCIDENT'
-  type?: IncidentType
+  source: 'BASE' | 'OVERRIDE' | 'INCIDENT' | 'SWAP'
+  type?: IncidentType | 'MIXTO' | 'DAY' | 'NIGHT' | 'OFF'
   assignment?: ShiftAssignment
+  badge?: 'CUBIERTO' | 'CUBRIENDO' | 'AUSENCIA' | 'VACACIONES' | 'LICENCIA' // 🔄 Coverage badge
+  coverageContext?: { // 🔄 NEW: Coverage context for tooltips
+    coveredByRepId?: RepresentativeId
+    coveringRepId?: RepresentativeId
+  }
 }
 
 /**

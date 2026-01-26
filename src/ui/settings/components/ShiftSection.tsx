@@ -8,7 +8,7 @@ interface ShiftSectionProps {
     shift: ShiftType
     representatives: Representative[]
     onEdit: (rep: Representative) => void
-    onAddSchedule: (repId: string) => void
+    onAddSchedule: (repId: string | null) => void
     addingScheduleFor: string | null
     advancedEditMode: boolean // 🔒 Controla si el drag está habilitado
     managingMixedFor: string | null

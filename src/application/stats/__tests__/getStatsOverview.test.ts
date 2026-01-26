@@ -55,6 +55,7 @@ describe('getStatsOverview', () => {
       weeklyPlans: [mockWeeklyPlan],
       monthDays: mockMonthDays,
       coverageRules: [],
+      specialSchedules: []
     }
   })
 
@@ -66,6 +67,8 @@ describe('getStatsOverview', () => {
       peopleAtRisk: 0,
       deficitDays: 0,
       totalSwaps: 0,
+      licenseEvents: 0,
+      vacationsEvents: 0,
     })
   })
 

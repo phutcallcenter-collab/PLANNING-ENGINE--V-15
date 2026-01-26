@@ -2,9 +2,10 @@ import { Representative, Incident, ISODate, IncidentType } from '@/domain/types'
 import { resolveIncidentDates } from '@/domain/incidents/resolveIncidentDates'
 import { DayInfo } from '@/domain/calendar/types'
 
-interface ConflictCheck {
+export interface ConflictCheck {
   hasConflict: boolean
   message?: string
+  messages?: string[]
   conflictType?: 'VACATION' | 'LICENSE' | 'OVERLAP'
 }
 
@@ -46,6 +47,7 @@ export function checkIncidentConflicts(
       return {
         hasConflict: true,
         message: `Ya tiene vacaciones activas desde ${from} hasta ${to}`,
+        messages: [`Ya tiene vacaciones activas desde ${from} hasta ${to}`],
         conflictType: 'VACATION',
       }
     }
@@ -64,6 +66,7 @@ export function checkIncidentConflicts(
       return {
         hasConflict: true,
         message: `Ya tiene licencia activa desde ${from} hasta ${to}`,
+        messages: [`Ya tiene licencia activa desde ${from} hasta ${to}`],
         conflictType: 'LICENSE',
       }
     }
@@ -99,6 +102,7 @@ export function checkIncidentConflicts(
           return {
             hasConflict: true,
             message: `Se solapa con ${existing.type === 'VACACIONES' ? 'vacaciones' : 'licencia'} del ${from} al ${to}`,
+            messages: [`Se solapa con ${existing.type === 'VACACIONES' ? 'vacaciones' : 'licencia'} del ${from} al ${to}`],
             conflictType: 'OVERLAP',
           }
         }
@@ -106,5 +110,5 @@ export function checkIncidentConflicts(
     }
   }
 
-  return { hasConflict: false }
+  return { hasConflict: false, messages: [] }
 }

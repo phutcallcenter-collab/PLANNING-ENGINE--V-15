@@ -1,6 +1,7 @@
 // ... imports ...
 import { useState, useMemo, useEffect } from 'react'
 import { useAppStore } from '@/store/useAppStore'
+import { useCoverageStore } from '@/store/useCoverageStore'
 import { useEditMode } from '@/hooks/useEditMode'
 import { ISODate, ShiftType, SwapEvent, SwapType, WeeklyPlan } from '@/domain/types'
 import {
@@ -59,10 +60,13 @@ export function SwapModal({
     swaps: s.swaps,
   }))
 
+  // 🔄 NEW: Coverage store
+  const { createCoverage } = useCoverageStore()
+
   const { mode } = useEditMode()
   const [date, setDate] = useState<ISODate>(initialDate || planningAnchorDate)
-  const [activeTab, setActiveTab] = useState<'SWAP' | 'COVER' | 'FREE'>(
-    'SWAP'
+  const [activeTab, setActiveTab] = useState<'SWAP' | 'COVER' | 'FREE' | 'COBERTURA'>( // 🔄 NEW: Add COBERTURA
+    'COBERTURA' // 🔄 NEW: Default to COBERTURA
   )
   const [shift, setShift] = useState<ShiftType>(initialShift || 'DAY')
 
@@ -113,15 +117,34 @@ export function SwapModal({
 
   const canSubmit = useMemo(() => {
     if (validationError) return false
+
+    // 🔄 NEW: COBERTURA validation
+    if (activeTab === 'COBERTURA') return !!(fromId && toId && date)
+
     if (type === 'COVER' || type === 'SWAP') return !!(fromId && toId && date)
     if (type === 'DOUBLE') return !!(toId && date)
     return false
-  }, [type, fromId, toId, validationError, date])
+  }, [type, fromId, toId, validationError, date, activeTab])
 
   const previewText = useMemo(() => {
-    if (!canSubmit || (!fromId && type !== 'DOUBLE') || !toId) return null
+    if (!canSubmit || (!fromId && type !== 'DOUBLE' && activeTab !== 'COBERTURA') || !toId) return null
     const fromName = repName(representatives, fromId)
     const toName = repName(representatives, toId)
+
+    // 🔄 NEW: COBERTURA preview
+    if (activeTab === 'COBERTURA') {
+      const shiftName = effectiveShift === 'DAY' ? 'Día' : 'Noche'
+      return (
+        <>
+          <strong>{toName}</strong> cubrirá el turno <strong>{shiftName}</strong>{' '}
+          de <strong>{fromName}</strong>.
+          <br />
+          <span style={{ fontSize: '12px', color: '#6b7280' }}>
+            ✅ Este cambio solo proyecta badges, no mueve personas entre turnos.
+          </span>
+        </>
+      )
+    }
 
     if (type === 'COVER') {
       const shiftName = effectiveShift === 'DAY' ? 'Día' : 'Noche'
@@ -201,6 +224,26 @@ export function SwapModal({
 
   const handleSubmit = () => {
     if (!canSubmit || (!fromId && type !== 'DOUBLE')) return
+
+    // 🔄 NEW: Handle COBERTURA type using Coverage store
+    if (activeTab === 'COBERTURA' && fromId && toId) {
+      createCoverage({
+        date,
+        shift: effectiveShift,
+        coveredRepId: fromId,
+        coveringRepId: toId,
+        note,
+      })
+
+      addHistoryEvent({
+        category: 'PLANNING',
+        title: 'Cobertura creada',
+        description: `${repName(representatives, toId)} cubrirá el turno ${effectiveShift === 'DAY' ? 'Día' : 'Noche'} de ${repName(representatives, fromId)}`,
+      })
+
+      onClose()
+      return
+    }
 
     if (type === 'COVER' && fromId) {
       addSwap({
@@ -426,17 +469,17 @@ export function SwapModal({
               <div
                 style={{
                   display: 'grid',
-                  gridTemplateColumns: '1fr 1fr 1fr',
+                  gridTemplateColumns: '1fr 1fr 1fr', // 🔄 Back to 3 columns
                   gap: '12px',
                   marginBottom: '24px',
                 }}
               >
                 <TypeCard
-                  active={type === 'COVER'}
-                  onClick={() => setType('COVER')}
-                  icon={Shield}
-                  label="Cubrir"
-                  color="blue"
+                  active={activeTab === 'COBERTURA'}
+                  onClick={() => setActiveTab('COBERTURA')}
+                  icon={Shield} // 🔄 Changed to Shield icon
+                  label="Cubrir" // 🔄 Renamed from "Cobertura"
+                  color="blue" // 🔄 Changed to blue
                 />
                 <TypeCard
                   active={type === 'SWAP'}
@@ -715,6 +758,12 @@ function TypeCard({ active, onClick, icon: Icon, label, color }: any) {
       }
 
     switch (c) {
+      case 'purple': // 🔄 NEW: Purple for COBERTURA
+        return {
+          backgroundColor: '#f3e8ff',
+          borderColor: '#d8b4fe',
+          color: '#7c3aed',
+        }
       case 'blue':
         return {
           backgroundColor: '#eff6ff',

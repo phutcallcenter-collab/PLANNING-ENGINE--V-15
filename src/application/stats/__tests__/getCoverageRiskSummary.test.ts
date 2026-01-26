@@ -41,6 +41,7 @@ describe('getCoverageRiskSummary', () => {
       swaps: [],
       coverageRules: [],
       incidents: [],
+      representatives: [],
     }
   })
 
@@ -60,11 +61,12 @@ describe('getCoverageRiskSummary', () => {
     const rules: CoverageRule[] = [
       { id: 'r1', scope: { type: 'GLOBAL' }, required: 1 },
     ]
-    // Day 1: DAY=1 (ok), NIGHT=0 (deficit) -> 1 day with deficit
-    // Day 2: DAY=1 (ok), NIGHT=0 (deficit) -> 1 day with deficit
-    // Day 3: DAY=0 (deficit), NIGHT=1 (ok) -> 1 day with deficit
+    // Day 1-3: Deficits as analyzed (3 days)
+    // Day 4-7: Full deficit (4 days)
+    // Total: 7 days with deficit.
+    // The Strict Risk Eval Rule evaluates all days in the plan range.
     const result = getCoverageRiskSummary({ ...baseInput, coverageRules: rules })
-    expect(result.daysWithDeficit).toBe(3)
+    expect(result.daysWithDeficit).toBe(7)
   })
 
   it('calculates criticalDeficitDays for deficits > 2', () => {
@@ -74,10 +76,13 @@ describe('getCoverageRiskSummary', () => {
     ]
     // Day 1: DAY deficit 1, NIGHT deficit 2. Total 3 -> CRITICAL
     // Day 2: DAY deficit 1, NIGHT deficit 2. Total 3 -> CRITICAL
+    // Day 3: DAY deficit 2, NIGHT deficit 1. Total 3 -> CRITICAL
+    // Day 4-7: DAY deficit 2, NIGHT deficit 2. Total 4 -> CRITICAL (x4)
+    // Total Critical: 3 + 4 = 7
     const result = getCoverageRiskSummary({ ...baseInput, coverageRules: rules })
-    expect(result.criticalDeficitDays).toBe(2)
+    expect(result.criticalDeficitDays).toBe(7)
   })
-  
+
   it('calculates totalDeficit as sum of all shift deficits', () => {
     const rules: CoverageRule[] = [
       { id: 'r-day', scope: { type: 'SHIFT', shift: 'DAY' }, required: 2 }, // deficit 1 on day 1&2
@@ -86,14 +91,16 @@ describe('getCoverageRiskSummary', () => {
     // Day 1: deficit 1 (day) + 1 (night) = 2
     // Day 2: deficit 1 (day) + 1 (night) = 2
     // Day 3: deficit 2 (day) + 0 (night) = 2
+    // Day 4-7: deficit 2 (day) + 1 (night) = 3 * 4 = 12
+    // Total: 6 + 12 = 18
     const result = getCoverageRiskSummary({ ...baseInput, coverageRules: rules })
-    expect(result.totalDeficit).toBe(6)
+    expect(result.totalDeficit).toBe(18)
   });
 
   it('identifies the worst shift correctly', () => {
     const rules: CoverageRule[] = [
-        { id: 'r-day', scope: { type: 'SHIFT', shift: 'DAY' }, required: 5 }, // High deficit
-        { id: 'r-night', scope: { type: 'SHIFT', shift: 'NIGHT' }, required: 1 }, // Low deficit
+      { id: 'r-day', scope: { type: 'SHIFT', shift: 'DAY' }, required: 5 }, // High deficit
+      { id: 'r-night', scope: { type: 'SHIFT', shift: 'NIGHT' }, required: 1 }, // Low deficit
     ]
     const result = getCoverageRiskSummary({ ...baseInput, coverageRules: rules });
     expect(result.worstShift.shift).toBe('DAY');
@@ -102,26 +109,24 @@ describe('getCoverageRiskSummary', () => {
 
   it('populates dailyDeficits with detailed deficit information', () => {
     const rules: CoverageRule[] = [
-        { id: 'r-global', scope: { type: 'GLOBAL' }, required: 1 },
+      { id: 'r-global', scope: { type: 'GLOBAL' }, required: 1 },
     ];
-    // Plan has 1 DAY on day 1 -> deficit on NIGHT
-    // Plan has 1 DAY on day 2 -> deficit on NIGHT
-    // Plan has 1 NIGHT on day 3 -> deficit on DAY
+    // All 7 days have deficit.
     const result = getCoverageRiskSummary({ ...baseInput, coverageRules: rules });
-    expect(result.dailyDeficits.length).toBe(3);
+    expect(result.dailyDeficits.length).toBe(7);
     expect(result.dailyDeficits).toContainEqual({
-        date: '2025-01-01',
-        shift: 'NIGHT',
-        deficit: 1,
-        actual: 0,
-        required: 1,
+      date: '2025-01-01',
+      shift: 'NIGHT',
+      deficit: 1,
+      actual: 0,
+      required: 1,
     });
     expect(result.dailyDeficits).toContainEqual({
-        date: '2025-01-03',
-        shift: 'DAY',
-        deficit: 1,
-        actual: 0,
-        required: 1,
+      date: '2025-01-03',
+      shift: 'DAY',
+      deficit: 1,
+      actual: 0,
+      required: 1,
     });
   });
 

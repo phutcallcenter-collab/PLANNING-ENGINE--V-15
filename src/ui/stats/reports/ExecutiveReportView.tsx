@@ -153,10 +153,6 @@ const ShiftCard = ({
         <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Puntos</div>
         <div style={{ fontSize: 20, fontWeight: 700 }}>{stats.points}</div>
       </div>
-      <div style={{ textAlign: 'center' }}>
-        <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Ptos/Rep</div>
-        <div style={{ fontSize: 20, fontWeight: 700 }}>{stats.avgPointsPerRep}</div>
-      </div>
     </div>
   </div>
 )
@@ -314,14 +310,13 @@ export function ExecutiveReportView() {
       <div
         style={{
           display: 'grid',
-          gridTemplateColumns: '1fr 1fr 1fr',
+          gridTemplateColumns: '1fr 1fr',
           gap: '1rem',
           marginBottom: '32px',
         }}
       >
         <KPICard label="Total Incidencias" value={report.kpis.totalIncidents} Icon={BarChart} />
         <KPICard label="Total Puntos" value={report.kpis.totalPoints} Icon={TrendingDown} />
-        <KPICard label="Puntos / Rep Prom." value={report.kpis.averagePointsPerRep} Icon={Target} />
       </div>
 
       {/* Requieren Atención - Riesgo primero */}

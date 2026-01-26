@@ -8,19 +8,16 @@ export type ExecutivePeriod = {
 export type ExecutiveKPI = {
   totalIncidents: number
   totalPoints: number
-  averagePointsPerRep: number
 }
 
 export type ShiftStats = {
   DAY: {
     incidents: number
     points: number
-    avgPointsPerRep: number
   }
   NIGHT: {
     incidents: number
     points: number
-    avgPointsPerRep: number
   }
 }
 

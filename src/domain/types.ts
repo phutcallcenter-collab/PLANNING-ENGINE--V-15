@@ -21,7 +21,7 @@ import { AuditEvent } from './audit/types'
 import { HistoryEvent } from '@/store/useAppStore'
 import { SwapEvent, SwapType } from './planning/swap'
 import { ShiftAssignment } from './planning/shiftAssignment'
-import { EffectiveSchedulePeriod } from './planning/effectiveSchedulePeriod'
+
 
 // Re-export ISODate to be available from the root domain types
 export type { ISODate, DayInfo, SpecialDay, DayKind } from './calendar/types'
@@ -47,7 +47,7 @@ export type { AvailabilityStatus }
 export type { AuditEvent }
 export type { SwapEvent, SwapType }
 export type { ShiftAssignment }
-export type { EffectiveSchedulePeriod, WeeklyPattern, DailyDuty } from './planning/effectiveSchedulePeriod'
+export type { WeeklyPattern, DailyDuty } from './planning/effectiveSchedulePeriod'
 import { Manager, ManagerSchedule, ManagerDuty, ManagerAssignment } from './management/types'
 export type { Manager, ManagerSchedule, ManagerDuty, ManagerAssignment }
 
@@ -74,16 +74,38 @@ export interface CoverageRule {
 }
 
 /**
- * Defines a temporary, special schedule that overrides the base schedule for a representative.
+ * 🟢 CANONICAL SPECIAL SCHEDULE
+ * Represents any exception to the base schedule.
+ * Flattened, explicit, and unambiguous.
  */
+
+export type DailyScheduleState = 'OFF' | 'DAY' | 'NIGHT' | 'MIXTO'
+
 export interface SpecialSchedule {
   id: string
-  representativeId: RepresentativeId
-  startDate: ISODate
-  endDate: ISODate
-  daysOfWeek: number[] // 0=Sun, 1=Mon, ..., 6=Sat
-  assignment: ShiftAssignment
-  reason?: string
+
+  // 🟢 Scope: Who does this apply to?
+  scope: 'GLOBAL' | 'INDIVIDUAL'
+  targetId?: string // Required if scope === 'INDIVIDUAL'
+
+  // 🟢 Period (Flattened)
+  from: ISODate
+  to: ISODate
+
+  // 🟢 Pattern: Explicit 7-day state
+  // KEY: Day of week (0=Sun, ..., 6=Sat)
+  // VALUE: The definitive state for that day
+  weeklyPattern: {
+    0: DailyScheduleState
+    1: DailyScheduleState
+    2: DailyScheduleState
+    3: DailyScheduleState
+    4: DailyScheduleState
+    5: DailyScheduleState
+    6: DailyScheduleState
+  }
+
+  note?: string
 }
 
 
@@ -97,7 +119,6 @@ export type PlanningBaseState = {
   calendar: CalendarState
   coverageRules: CoverageRule[]
   specialSchedules: SpecialSchedule[]
-  effectivePeriods: EffectiveSchedulePeriod[]
   historyEvents: HistoryEvent[]
   auditLog: AuditEvent[]
   swaps: SwapEvent[]

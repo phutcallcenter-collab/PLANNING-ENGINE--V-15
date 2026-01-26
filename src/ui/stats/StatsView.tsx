@@ -4,7 +4,7 @@ import React, { useState } from 'react'
 import { StatsTabs, type StatsTab } from './StatsTabs'
 import { MonthlySummaryView } from './monthly/MonthlySummaryView'
 import { PointsReportView } from './reports/PointsReportView'
-import { ExecutiveReportView } from './reports/ExecutiveReportView'
+import { OperationalReportView } from './reports/OperationalReportView'
 
 export type ExtendedStatsTab = StatsTab | 'points' | 'executive'
 
@@ -57,7 +57,7 @@ export function StatsView() {
           style={tabStyle(activeTab === 'executive')}
           onClick={() => setActiveTab('executive')}
         >
-          Reporte Ejecutivo
+          Reporte Operativo
         </button>
       </div>
 
@@ -72,7 +72,7 @@ export function StatsView() {
       >
         {activeTab === 'monthly' && <MonthlySummaryView />}
         {activeTab === 'points' && <PointsReportView />}
-        {activeTab === 'executive' && <ExecutiveReportView />}
+        {activeTab === 'executive' && <OperationalReportView />}
       </div>
     </div>
   )

@@ -15,6 +15,7 @@ import { PlannerAssignmentsMap } from '@/application/ui-adapters/getEffectiveAss
 import { mapEffectiveDutyToCellState } from '@/application/ui-adapters/mapEffectiveDutyToCellState'
 import { PLANNER_WIDTHS } from './constants'
 import { useAppStore } from '@/store/useAppStore'
+import { CellBadge } from '@/application/ui-adapters/cellState'
 
 interface PlanRowProps {
   agent: Representative
@@ -29,6 +30,7 @@ interface PlanRowProps {
 
 export const PlanRow = React.memo(function PlanRow({
   agent,
+  weeklyPlan,
   weekDays,
   activeShift,
   assignmentsMap,
@@ -39,6 +41,9 @@ export const PlanRow = React.memo(function PlanRow({
   const { representatives } = useAppStore(s => ({
     representatives: s.representatives,
   }))
+
+  // Find this agent's data in weeklyPlan
+  const agentPlan = weeklyPlan.agents.find(a => a.representativeId === agent.id)
 
   return (
     <div
@@ -67,12 +72,28 @@ export const PlanRow = React.memo(function PlanRow({
           // Lookup effective duty from adapter map
           const effectiveDuty = assignmentsMap[agent.id]?.[day.date]?.[activeShift]
 
+          // 🔄 Extract badge and coverage context from weeklyPlan (DailyPresence)
+          const dayData = agentPlan?.days[day.date]
+          const badge = dayData?.badge
+
+          // 🔄 NEW: Build coverage info for tooltip
+          const coverageInfo = dayData?.coverageContext ? {
+            coveredByName: dayData.coverageContext.coveredByRepId
+              ? representatives.find(r => r.id === dayData.coverageContext!.coveredByRepId)?.name
+              : undefined,
+            coveringName: dayData.coverageContext.coveringRepId
+              ? representatives.find(r => r.id === dayData.coverageContext!.coveringRepId)?.name
+              : undefined,
+          } : undefined
+
           // 🧠 MAPPER: Convert domain state to UI-ready state
           const resolvedCell = mapEffectiveDutyToCellState(
             effectiveDuty,
             day,
             agent,
-            representatives
+            representatives,
+            badge, // 👈 Pass badge from domain
+            coverageInfo // 👈 Pass coverage names for tooltip
           )
 
           return (

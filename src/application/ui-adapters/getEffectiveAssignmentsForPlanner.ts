@@ -1,4 +1,4 @@
-import { WeeklyPlan, SwapEvent, Incident, ISODate, ShiftType, Representative, EffectiveSchedulePeriod } from '@/domain/types'
+import { WeeklyPlan, SwapEvent, Incident, ISODate, ShiftType, Representative, SpecialSchedule } from '@/domain/types'
 import { resolveEffectiveDuty, EffectiveDutyResult } from '@/domain/swaps/resolveEffectiveDuty'
 import { DayInfo } from '@/domain/calendar/types'
 
@@ -21,7 +21,7 @@ export function getEffectiveAssignmentsForPlanner(
     incidents: Incident[],
     allCalendarDays: DayInfo[],
     representatives: Representative[],
-    effectivePeriods: EffectiveSchedulePeriod[] = []
+    specialSchedules: SpecialSchedule[] = []
 ): PlannerAssignmentsMap {
     const result: PlannerAssignmentsMap = {}
 
@@ -44,7 +44,7 @@ export function getEffectiveAssignmentsForPlanner(
                     agent.representativeId,
                     allCalendarDays,
                     representatives,
-                    effectivePeriods
+                    specialSchedules
                 ),
                 NIGHT: resolveEffectiveDuty(
                     weeklyPlan,
@@ -55,7 +55,7 @@ export function getEffectiveAssignmentsForPlanner(
                     agent.representativeId,
                     allCalendarDays,
                     representatives,
-                    effectivePeriods
+                    specialSchedules
                 )
             }
         }

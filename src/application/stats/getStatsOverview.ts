@@ -5,6 +5,7 @@ import {
   SwapEvent,
   DayInfo,
   CoverageRule,
+  SpecialSchedule,
 } from '@/domain/types'
 import { computeMonthlySummary } from '@/domain/analytics/computeMonthlySummary'
 import { getEffectiveDailyCoverage } from '@/application/ui-adapters/getEffectiveDailyCoverage'
@@ -17,6 +18,7 @@ export interface StatsOverviewInput {
   weeklyPlans: WeeklyPlan[] // Array of all weekly plans for the month
   monthDays: DayInfo[]
   coverageRules: CoverageRule[]
+  specialSchedules: SpecialSchedule[]
 }
 
 export interface StatsOverviewResult {
@@ -24,6 +26,8 @@ export interface StatsOverviewResult {
   peopleAtRisk: number
   deficitDays: number
   totalSwaps: number
+  licenseEvents: number
+  vacationsEvents: number
 }
 
 /**
@@ -45,7 +49,14 @@ export function getStatsOverview(
   } = input
 
   if (!representatives.length) {
-    return { totalIncidents: 0, peopleAtRisk: 0, deficitDays: 0, totalSwaps: 0 }
+    return {
+      totalIncidents: 0,
+      peopleAtRisk: 0,
+      deficitDays: 0,
+      totalSwaps: 0,
+      licenseEvents: 0,
+      vacationsEvents: 0
+    }
   }
 
   // 1. Total Incidents & People at Risk (Leverage existing monthly summary logic)
@@ -59,6 +70,10 @@ export function getStatsOverview(
   const peopleAtRisk = monthlySummary.byPerson.filter(
     p => p.riskLevel === 'danger'
   ).length
+
+  // New Metrics: License and Vacation Events (Count events, not days)
+  const licenseEvents = incidents.filter(i => i.type === 'LICENCIA' && i.startDate?.startsWith(month)).length
+  const vacationsEvents = incidents.filter(i => i.type === 'VACACIONES' && i.startDate?.startsWith(month)).length
 
   // 2. Deficit Days
   const deficitDaysSet = new Set<string>()
@@ -88,7 +103,8 @@ export function getStatsOverview(
       day.date,
       incidents,
       monthDays,
-      representatives
+      representatives,
+      input.specialSchedules
     )
 
     if (
@@ -107,5 +123,7 @@ export function getStatsOverview(
     peopleAtRisk,
     deficitDays: deficitDaysSet.size,
     totalSwaps,
+    licenseEvents,
+    vacationsEvents
   }
 }

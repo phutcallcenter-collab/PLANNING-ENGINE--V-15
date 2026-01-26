@@ -244,39 +244,23 @@ const MonthlyChart = ({
 }
 
 const RiskBadge = ({ level }: { level: RiskLevel }) => {
-  const styles: Record<RiskLevel, React.CSSProperties> = {
-    danger: {
-      backgroundColor: '#fdecea',
-      color: '#b42318',
-    },
-    warning: {
-      backgroundColor: '#fff3cd',
-      color: '#9a6a00',
-    },
-    ok: {
-      backgroundColor: '#e6f9ee',
-      color: '#1c7c44',
-    },
-  }
-
-  const labels: Record<RiskLevel, string> = {
-    danger: 'RIESGO',
-    warning: 'ATENCIÓN',
-    ok: 'OK',
+  const colors: Record<RiskLevel, string> = {
+    danger: '#ef4444', // red-500
+    warning: '#f59e0b', // amber-500
+    ok: '#10b981',      // emerald-500
   }
 
   return (
-    <span
+    <div
       style={{
-        ...styles[level],
-        padding: '4px 10px',
-        borderRadius: '99px',
-        fontSize: '12px',
-        fontWeight: 600,
+        width: '12px',
+        height: '12px',
+        borderRadius: '50%',
+        backgroundColor: colors[level],
+        margin: '0 auto', // Centrado
       }}
-    >
-      {labels[level]}
-    </span>
+      title={level === 'danger' ? 'Riesgo' : level === 'warning' ? 'Atención' : 'OK'} // Tooltip nativo
+    />
   )
 }
 
@@ -524,7 +508,7 @@ export function MonthlySummaryView() {
         />
         <InfoCard
           icon={AlertTriangle}
-          label="En Riesgo (≥10 pts)"
+          label="Agentes con ≥10 pts"
           value={metrics.atRisk}
           color="#dc2626"
         />

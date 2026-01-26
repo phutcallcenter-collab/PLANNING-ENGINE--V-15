@@ -1,4 +1,4 @@
-import { WeeklyPlan, SwapEvent, Incident, ISODate, ShiftType, DayInfo, Representative, EffectiveSchedulePeriod } from '@/domain/types'
+import { WeeklyPlan, SwapEvent, Incident, ISODate, ShiftType, DayInfo, Representative, SpecialSchedule } from '@/domain/types'
 import { resolveEffectiveDuty, EffectiveDutyResult } from '@/domain/swaps/resolveEffectiveDuty'
 import { resolvePunitiveResponsibility } from '@/domain/incidents/resolvePunitiveResponsibility'
 
@@ -17,6 +17,7 @@ export interface DailyLogEntry {
     shift: ShiftType
     logStatus: LogStatus // Semantic status for the log
     isResponsible: boolean // If they miss this, do they get punished?
+    badge?: 'CUBIERTO' | 'CUBRIENDO' | 'AUSENCIA' | 'VACACIONES' | 'LICENCIA' // ✅ NEW: Visual badge
     details?: string
 }
 
@@ -32,14 +33,17 @@ export function getEffectiveDailyLogData(
     date: ISODate,
     allCalendarDays: DayInfo[],
     representatives: Representative[],
-    effectivePeriods: EffectiveSchedulePeriod[] = []
+    specialSchedules: SpecialSchedule[] = []
 ): DailyLogEntry[] {
     const result: DailyLogEntry[] = []
 
     for (const agent of weeklyPlan.agents) {
+        // ✅ Get day data to access badge
+        const dayData = agent.days[date]
+
         for (const shift of ['DAY', 'NIGHT'] as ShiftType[]) {
-            const duty = resolveEffectiveDuty(weeklyPlan, swaps, incidents, date, shift, agent.representativeId, allCalendarDays, representatives, effectivePeriods)
-            const isResponsible = resolvePunitiveResponsibility(weeklyPlan, swaps, incidents, date, shift, agent.representativeId, allCalendarDays, representatives, effectivePeriods)
+            const duty = resolveEffectiveDuty(weeklyPlan, swaps, incidents, date, shift, agent.representativeId, allCalendarDays, representatives, specialSchedules)
+            const isResponsible = resolvePunitiveResponsibility(weeklyPlan, swaps, incidents, date, shift, agent.representativeId, allCalendarDays, representatives, specialSchedules)
 
             let logStatus: LogStatus = 'OFF'
 
@@ -69,6 +73,8 @@ export function getEffectiveDailyLogData(
                     if (duty.reason === 'AUSENCIA') {
                         logStatus = 'ABSENT'
                     } else if (duty.reason && ['VACACIONES', 'LICENCIA'].includes(duty.reason)) {
+                        // TODO: Refine Semantics. Consider splitting 'ABSENT' into 'ABSENT_JUSTIFIED' vs 'ABSENT_UNJUSTIFIED'.
+                        // Currently "Vacaciones" = "Absent" works for accounting but is visually coarse.
                         logStatus = 'ABSENT'  // Justified absences are still absences
                     } else {
                         logStatus = 'OFF'
@@ -81,6 +87,7 @@ export function getEffectiveDailyLogData(
                 shift,
                 logStatus,
                 isResponsible,
+                badge: dayData?.badge, // ✅ NEW: Read badge from plan
                 // Prioritize explicit details (e.g. JUSTIFICADA) over the generic reason
                 details: duty.details || duty.reason
             })

@@ -31,21 +31,21 @@ export function AuditRow({ event }: { event: AuditEvent }) {
         })}
       </td>
       <td style={{ ...cellStyle, fontWeight: 500 }}>
-        {event.actor.name}
-        {event.actor.role && (
+        {event.actor}
+        {event.repId && (
           <div style={{ fontSize: 11, color: '#6b7280' }}>
-            {event.actor.role}
+            Rep: {event.repId}
           </div>
         )}
       </td>
       <td style={cellStyle}>
-        <AuditActionBadge action={event.action} />
+        <AuditActionBadge action={event.type} />
       </td>
       <td style={cellStyle}>
-        <div style={{ fontWeight: 500 }}>{event.target.entity}</div>
-        {event.target.label && (
+        <div style={{ fontWeight: 500 }}>{event.type}</div>
+        {event.repId && (
           <div style={{ fontSize: 12, color: '#6b7280' }}>
-            {event.target.label}
+            {event.repId}
           </div>
         )}
       </td>

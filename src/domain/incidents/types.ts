@@ -29,6 +29,7 @@ export type IncidentType =
   | 'VACACIONES' // (counts working days)
   // Internal scheduling adjustments
   | 'OVERRIDE' // Not for user logging
+  | 'SWAP'     // Peer-to-peer exchange
 
 /**
  * The unified interface for all recorded events, both scheduling and punitive.
@@ -51,6 +52,34 @@ export interface Incident {
   previousAssignment?: ShiftAssignment
   // Additional details (e.g., 'JUSTIFICADA' for absences)
   details?: string
+
+  /**
+   * 🎯 SLOT RESPONSIBILITY TRACKING
+   * 
+   * These fields track the responsibility chain for absences.
+   * 
+   * source: How this incident was assigned
+   *   - 'BASE': Normal assignment (clicked rep is responsible)
+   *   - 'COVERAGE': Assigned due to coverage failure
+   *   - 'SWAP': Assigned due to swap
+   * 
+   * slotOwnerId: The original owner of the slot (when source !== 'BASE')
+   *   - Present when an absence is assigned to someone other than the slot owner
+   *   - Example: Emely fails to cover Luz → slotOwnerId = Luz, representativeId = Emely
+   */
+  source?: 'BASE' | 'COVERAGE' | 'SWAP' | 'OVERRIDE'
+  slotOwnerId?: RepresentativeId
+
+  // Metadata for advanced ops (e.g. swap target)
+  metadata?: Record<string, any>
+
+  /**
+   * 🆔 DISCIPLINARY IDENTITY
+   * Unique key identifying the specific disciplinary slot.
+   * Format: "BASE" or "COVERAGE:SlotOwnerId"
+   * Used to distinguish multiple absences on the same day.
+   */
+  disciplinaryKey?: string
 }
 
 /**
@@ -67,4 +96,6 @@ export interface IncidentInput {
   assignment?: ShiftAssignment
   previousAssignment?: ShiftAssignment
   details?: string
+  source?: 'BASE' | 'COVERAGE' | 'SWAP' | 'OVERRIDE'
+  slotOwnerId?: RepresentativeId
 }

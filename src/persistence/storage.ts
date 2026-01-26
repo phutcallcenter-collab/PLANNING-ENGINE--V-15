@@ -14,7 +14,7 @@ export async function loadState(): Promise<PlanningBaseState | null> {
   state.specialSchedules ??= []
   state.coverageRules ??= []
   state.representatives ??= []
-  state.effectivePeriods ??= []
+
 
   return state
 }

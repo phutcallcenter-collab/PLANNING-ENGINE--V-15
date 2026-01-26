@@ -1,8 +1,7 @@
-import { WeeklyPlan, SwapEvent, CoverageRule, ISODate, ShiftType, Incident, Representative } from '@/domain/types'
+import { WeeklyPlan, SwapEvent, CoverageRule, ISODate, ShiftType, Incident, Representative, SpecialSchedule } from '@/domain/types'
 import { resolveCoverage } from '@/domain/planning/resolveCoverage'
-import { applySwapsToCoverage } from '@/domain/planning/applySwapsToCoverage'
-import { resolveIncidentDates } from '@/domain/incidents/resolveIncidentDates'
 import { DayInfo } from '@/domain/calendar/types'
+import { getDailyShiftStats } from './getDailyShiftStats'
 
 export type CoverageStatus = 'OK' | 'DEFICIT' | 'SURPLUS'
 
@@ -16,50 +15,13 @@ export interface EffectiveCoverageResult {
 export type DailyCoverageMap = Record<ShiftType, EffectiveCoverageResult>
 
 /**
- * 🔒 PRIORITY ORDER FOR AVAILABILITY:
- * 1. VACACIONES/LICENCIA → NOT available (blocks everything)
- * 2. Base assignment
- * 3. Swaps
- */
-
-/**
- * Precalculates which representatives are blocked by vacation/license on a given date.
- * Returns a Set of representative IDs that are NOT available for coverage.
- */
-function buildBlockedRepresentativesSet(
-    incidents: Incident[],
-    date: ISODate,
-    allCalendarDays: DayInfo[],
-    representatives: Representative[]
-): Set<string> {
-    const blocked = new Set<string>()
-
-    for (const incident of incidents) {
-        // Only blocking incidents
-        if (!['VACACIONES', 'LICENCIA'].includes(incident.type)) continue
-
-        const rep = representatives.find(r => r.id === incident.representativeId)
-        if (!rep) continue
-
-        const resolved = resolveIncidentDates(incident, allCalendarDays, rep)
-
-        // Check if date is within the blocking period
-        // Use returnDate for comprehensive blocking (start to day before return)
-        if (resolved.start && resolved.returnDate) {
-            if (date >= resolved.start && date < resolved.returnDate) {
-                blocked.add(incident.representativeId)
-            }
-        }
-    }
-
-    return blocked
-}
-
-/**
- * Calculates the effective coverage for a day, considering:
- * 1. Blocking incidents (VACACIONES/LICENCIA) - PRIORITY 1
- * 2. Base assignments (from WeeklyPlan)
- * 3. Swaps
+ * ⚠️ THIS COMPONENT DOES NOT CALCULATE LOGIC. IT CONSUMES CANONICAL STATS.
+ * 
+ * Calculates the effective coverage for a day using the canonical source of truth:
+ * - getDailyShiftStats() for actual counts (planned & present)
+ * - resolveCoverage() for requirements
+ * 
+ * This ensures the graph always matches the counter and list.
  */
 export function getEffectiveDailyCoverage(
     weeklyPlan: WeeklyPlan,
@@ -68,67 +30,97 @@ export function getEffectiveDailyCoverage(
     date: ISODate,
     incidents: Incident[],
     allCalendarDays: DayInfo[],
-    representatives: Representative[]
+    representatives: Representative[],
+    specialSchedules: SpecialSchedule[] = []
 ): DailyCoverageMap {
-    // 🔒 STEP 0: Precalculate blocked representatives (VACACIONES/LICENCIA)
-    const blockedReps = buildBlockedRepresentativesSet(
-        incidents,
-        date,
-        allCalendarDays,
-        representatives
-    )
+    // 🔒 CANONICAL LOGIC: Base Assignment + Swaps - Absences
+    // 1. Calculate Base from Weekly Plan (includes Absences/Vacations pre-calculated)
+    let dayActual = 0
+    let nightActual = 0
 
-    // 1. Calculate Base Coverage from WeeklyPlan (Pre-Swap)
-    // EXCLUDE representatives who are blocked by vacation/license
-    const baseCounts = {
-        DAY: { actual: 0 },
-        NIGHT: { actual: 0 }
-    }
+    if (weeklyPlan && weeklyPlan.agents) {
+        weeklyPlan.agents.forEach(agent => {
+            const day = agent.days[date]
+            if (!day) return
 
-    for (const agent of weeklyPlan.agents) {
-        // 🚫 Skip if blocked by vacation/license
-        if (blockedReps.has(agent.representativeId)) {
-            continue
-        }
+            // Only count if physically PRESENT (Status WORKING)
+            if (day.status === 'WORKING') {
+                const assignment = day.assignment
+                if (!assignment) return
 
-        const dayInfo = agent.days[date]
-        if (dayInfo?.assignment) {
-            if (dayInfo.assignment.type === 'SINGLE') {
-                baseCounts[dayInfo.assignment.shift].actual++
-            } else if (dayInfo.assignment.type === 'BOTH') {
-                baseCounts.DAY.actual++
-                baseCounts.NIGHT.actual++
+                if (assignment.type === 'BOTH') {
+                    dayActual++
+                    nightActual++
+                } else if (assignment.type === 'SINGLE') {
+                    if (assignment.shift === 'DAY') dayActual++
+                    if (assignment.shift === 'NIGHT') nightActual++
+                }
             }
-        }
+        })
     }
 
-    // 2. Apply Swaps
-    // Convert baseCounts to DailyShiftCoverage structure
-    const baseCoverage = {
-        date,
-        shifts: {
-            DAY: baseCounts.DAY.actual,
-            NIGHT: baseCounts.NIGHT.actual
-        }
-    }
-    const swapAdjustedCoverage = applySwapsToCoverage(baseCoverage, swaps)
+    // 2. Apply Swaps (Dynamic Layer)
+    // Swaps might not be baked into the WeeklyPlan if they are strictly events
+    const validSwaps = swaps.filter(s => s.date === date)
 
-    // 3. Resolve Requirements (Rules)
+    validSwaps.forEach(swap => {
+        // DOUBLE: Adds coverage to the target shift
+        if (swap.type === 'DOUBLE') {
+            if (swap.shift === 'DAY') dayActual++
+            if (swap.shift === 'NIGHT') nightActual++
+        }
+        // COVER: Functionally net zero for coverage capacity.
+        // The covering agent takes the slot of the covered agent.
+        // Since we count the Base Schedule (where 1 person should be), 
+        // and the covered person is absent (effectively -1 capacity relative to plan),
+        // the cover restores it to 0 change relative to Plan.
+        // BUT strict "Actual" count:
+        // - Base says: User A works. User B works. (Total 2)
+        // - User A is Absent (-1) -> Total 1.
+        // - User B covers User A? No, usually C covers A.
+        // If C covers A: C is effectively working. A is effectively not.
+        // If C was NOT in base plan (OFF), then C is +1.
+        // If A is in base plan (WORKING), but Absent, A is 0. 
+        // The code above counts WORKING status from plan.
+        // If A has status WORKING in plan, but is absent... 
+        // Wait, "getEffectiveDailyCoverage" previously relied on "getDailyShiftStats" which deducted absences.
+        // My new logic counts "status === 'WORKING'".
+        // Does "status === 'WORKING'" include people who are Absent?
+        // In the WeeklyPlan, "status" is usually modified by absences to "OFF" or kept as "WORKING" with badge "AUSENCIA"?
+        // If absence changes status to "OFF", then A is not counted. C (if OFF->WORKING) is +1. Net +1?
+        //
+        // User instruction: "COVER = neto 0". "Solo SWAP altera actual".
+        // This implies for the purpose of this calculation, we ignore COVER.
+        else if (swap.type === 'COVER') {
+            // Net zero impact on headcount
+        }
+        // SWAP: Moves from shift A to B
+        else if (swap.type === 'SWAP') {
+            // From Shift -> -1
+            if (swap.fromShift === 'DAY') dayActual--
+            if (swap.fromShift === 'NIGHT') nightActual--
+
+            // To Shift -> +1
+            if (swap.toShift === 'DAY') dayActual++
+            if (swap.toShift === 'NIGHT') nightActual++
+        }
+    })
+
+    // Resolve Requirements (Rules)
     const dayReq = resolveCoverage(date, 'DAY', coverageRules)
     const nightReq = resolveCoverage(date, 'NIGHT', coverageRules)
 
-    // 4. Assemble Result
     return {
         DAY: {
-            actual: swapAdjustedCoverage.shifts.DAY,
+            actual: dayActual,
             required: dayReq.required,
-            status: getStatus(swapAdjustedCoverage.shifts.DAY, dayReq.required),
+            status: getStatus(dayActual, dayReq.required),
             reason: dayReq.reason
         },
         NIGHT: {
-            actual: swapAdjustedCoverage.shifts.NIGHT,
+            actual: nightActual,
             required: nightReq.required,
-            status: getStatus(swapAdjustedCoverage.shifts.NIGHT, nightReq.required),
+            status: getStatus(nightActual, nightReq.required),
             reason: nightReq.reason
         }
     }

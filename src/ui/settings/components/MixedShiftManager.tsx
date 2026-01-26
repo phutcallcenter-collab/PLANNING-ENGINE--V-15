@@ -2,9 +2,9 @@
 
 import React, { useState } from 'react'
 import { useAppStore } from '@/store/useAppStore'
-import { ShiftType, WeeklyPattern, DailyDuty } from '@/domain/types'
-import { Calendar, AlertCircle, Check, X } from 'lucide-react'
-import { format, addDays, startOfWeek, parseISO } from 'date-fns'
+import { ShiftType, WeeklyPattern, DailyDuty, SpecialSchedule } from '@/domain/types'
+import { Calendar, AlertCircle, Check, X, Info, Moon, Sun, Ban, Shuffle, LayoutTemplate, RotateCcw } from 'lucide-react'
+import { format, addDays, startOfWeek } from 'date-fns'
 import { es } from 'date-fns/locale'
 
 interface MixedShiftManagerProps {
@@ -14,7 +14,10 @@ interface MixedShiftManagerProps {
 }
 
 export function MixedShiftManager({ repId, repName, onClose }: MixedShiftManagerProps) {
-    const { representatives, addEffectivePeriod } = useAppStore()
+    const { representatives, addSpecialSchedule } = useAppStore(s => ({
+        representatives: s.representatives,
+        addSpecialSchedule: s.addSpecialSchedule
+    }))
     const representative = representatives.find(r => r.id === repId)
 
     if (!representative) {
@@ -89,16 +92,17 @@ export function MixedShiftManager({ repId, repName, onClose }: MixedShiftManager
         }
 
         // Create the atomic period
-        const result = addEffectivePeriod({
-            representativeId: repId,
-            startDate,
-            endDate,
+        const result = addSpecialSchedule({
+            scope: 'INDIVIDUAL',
+            targetId: repId,
+            from: startDate,
+            to: endDate,
             weeklyPattern,
-            reason: note || 'Ajuste de horario mixto',
+            note: note || 'Ajuste de horario mixto',
         })
 
         if (!result.success) {
-            alert(result.error || 'Error al guardar el período')
+            alert(result.message || 'Error al guardar el período')
             return
         }
 

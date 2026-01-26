@@ -30,8 +30,10 @@ import {
 import { CalendarDayModal } from './CalendarDayModal'
 import { SwapModal } from './SwapModal'
 import { CoverageRulesPanel } from '../coverage/CoverageRulesPanel'
+import { CoverageDetailModal } from '@/components/coverage/CoverageDetailModal' // ✅ NEW
 import { motion, AnimatePresence } from 'framer-motion'
 import { useAppStore } from '@/store/useAppStore'
+import { useCoverageStore } from '@/store/useCoverageStore' // ✅ NEW
 import { useWeeklyPlan } from '../../hooks/useWeeklyPlan'
 
 import { useWeekNavigator } from '@/hooks/useWeekNavigator'
@@ -49,32 +51,7 @@ import { HelpPanel } from '../components/HelpPanel'
 import { resolveIncidentDates } from '@/domain/incidents/resolveIncidentDates'
 import { PromptDialog } from '../components/PromptDialog'
 
-// ⚠️ CANONICAL RULE: Identity vs. Operation
-// This function is the single source of truth for deciding if a representative
-// "belongs" to a shift within a given week. It ONLY consults the base plan.
-// It must NOT consider overrides, availability, or any other operational data.
-// This function determines if a representative should be visible in the current shift view.
-// It includes them if:
-// 1. Their BASE shift matches the current view (Identity).
-// 2. They have an assignment in this shift this week (Operation/Cross-coverage).
-function belongsToShiftThisWeek(
-  agentPlan: WeeklyPresence,
-  weekDays: DayInfo[],
-  shift: ShiftType,
-  baseShift: ShiftType // Added baseShift parameter
-): boolean {
-  // 1. Identity Check: If their base shift matches, they always belong.
-  if (baseShift === shift) return true
-
-  // 2. Operation Check: If they have a specific assignment for this shift (e.g. covering).
-  return weekDays.some(day => {
-    const assignment = agentPlan.days[day.date]?.assignment
-    if (!assignment) return false
-    if (assignment.type === 'BOTH') return true
-    if (assignment.type === 'SINGLE' && assignment.shift === shift) return true
-    return false
-  })
-}
+import { belongsToShiftThisWeek } from './belongsToShiftThisWeek'
 
 export function PlanningSection({ onNavigateToSettings }: { onNavigateToSettings: () => void }) {
   const {
@@ -91,7 +68,7 @@ export function PlanningSection({ onNavigateToSettings }: { onNavigateToSettings
     showMixedShiftConfirmModal,
     allCalendarDaysForRelevantMonths,
     pushUndo,
-    effectivePeriods,
+    specialSchedules,
   } = useAppStore(s => ({
     representatives: s.representatives ?? [],
     coverageRules: s.coverageRules,
@@ -106,7 +83,7 @@ export function PlanningSection({ onNavigateToSettings }: { onNavigateToSettings
     swaps: s.swaps,
     allCalendarDaysForRelevantMonths: s.allCalendarDaysForRelevantMonths,
     pushUndo: s.pushUndo,
-    effectivePeriods: s.effectivePeriods ?? [],
+    specialSchedules: s.specialSchedules,
   }))
 
   const activeRepresentatives = useMemo(
@@ -139,6 +116,12 @@ export function PlanningSection({ onNavigateToSettings }: { onNavigateToSettings
     shift: ShiftType | null
     existingSwap: SwapEvent | null
   }>({ isOpen: false, repId: null, date: null, shift: null, existingSwap: null })
+
+  // ✅ NEW: Coverage detail modal state
+  const [coverageDetailState, setCoverageDetailState] = useState<{
+    isOpen: boolean
+    coverageId: string | null
+  }>({ isOpen: false, coverageId: null })
 
   const { showConfirm } = useAppStore(s => ({
     showConfirm: s.showConfirm,
@@ -322,6 +305,44 @@ export function PlanningSection({ onNavigateToSettings }: { onNavigateToSettings
     e: React.MouseEvent
   ) => {
     e.preventDefault();
+
+    // ✅ NEW: Check if this cell has a coverage badge
+    const agentPlan = weeklyPlan?.agents.find(a => a.representativeId === repId)
+    const dayData = agentPlan?.days[date]
+    const badge = dayData?.badge
+
+    if (badge === 'CUBIERTO' || badge === 'CUBRIENDO') {
+      // Find the coverage ID for this cell
+      const { getActiveCoverages } = useCoverageStore.getState()
+      const activeCoverages = getActiveCoverages()
+
+      const coverage = activeCoverages.find(c => {
+        if (c.date !== date || c.shift !== activeShift) return false
+
+        // If badge is CUBIERTO, this person is being covered
+        if (badge === 'CUBIERTO') {
+          return c.coveredRepId === repId
+        }
+
+        // If badge is CUBRIENDO, this person is covering
+        if (badge === 'CUBRIENDO') {
+          return c.coveringRepId === repId
+        }
+
+        return false
+      })
+
+      if (coverage) {
+        // Show coverage detail modal instead of swap modal
+        setCoverageDetailState({
+          isOpen: true,
+          coverageId: coverage.id
+        })
+        return
+      }
+    }
+
+    // Normal flow: check for existing swap and show swap modal
     const existingSwap = swaps.find(swap => {
       if (swap.date !== date) return false;
       if (swap.type === 'COVER') {
@@ -353,7 +374,7 @@ export function PlanningSection({ onNavigateToSettings }: { onNavigateToSettings
       incidents,
       allCalendarDaysForRelevantMonths,
       representatives,
-      effectivePeriods
+      specialSchedules
     )
   }, [
     weeklyPlan,
@@ -361,7 +382,7 @@ export function PlanningSection({ onNavigateToSettings }: { onNavigateToSettings
     incidents,
     allCalendarDaysForRelevantMonths,
     representatives,
-    effectivePeriods,
+    specialSchedules,
   ])
 
   const agentsToRender = useMemo(() => {
@@ -379,10 +400,11 @@ export function PlanningSection({ onNavigateToSettings }: { onNavigateToSettings
         agentPlan,
         weekDays,
         activeShift,
-        rep.baseShift
+        rep,
+        specialSchedules
       )
     })
-  }, [weeklyPlan, weekDays, activeShift, activeRepresentatives])
+  }, [weeklyPlan, weekDays, activeShift, activeRepresentatives, specialSchedules])
 
   const coverageData = useMemo(() => {
     if (!weeklyPlan) return {}
@@ -396,12 +418,13 @@ export function PlanningSection({ onNavigateToSettings }: { onNavigateToSettings
         day.date,
         incidents,
         allCalendarDaysForRelevantMonths,
-        representatives
+        representatives,
+        specialSchedules
       )
       data[day.date] = result[activeShift]
     })
     return data
-  }, [weeklyPlan, swaps, coverageRules, weekDays, activeShift])
+  }, [weeklyPlan, swaps, coverageRules, weekDays, activeShift, incidents, specialSchedules])
 
   const hasAnyCoverageRule = useMemo(() => {
     return Object.values(coverageData).some(d => d.required > 0)
@@ -697,6 +720,19 @@ export function PlanningSection({ onNavigateToSettings }: { onNavigateToSettings
               existingSwap: null,
             })
           }
+        />
+      )}
+
+      {/* ✅ NEW: Coverage Detail Modal */}
+      {coverageDetailState.isOpen && coverageDetailState.coverageId && (
+        <CoverageDetailModal
+          mode="VIEW"
+          coverageId={coverageDetailState.coverageId}
+          onClose={() => setCoverageDetailState({ isOpen: false, coverageId: null })}
+          onCancel={() => {
+            // Refresh after cancellation
+            setCoverageDetailState({ isOpen: false, coverageId: null })
+          }}
         />
       )}
 

@@ -20,37 +20,17 @@ const valueStyle: React.CSSProperties = {
 }
 
 export function AuditDetail({ event }: { event: AuditEvent }) {
-  const { change, context } = event
+  // AuditEvent now uses 'payload' instead of 'change' and 'context'
+  // Payload is unknown, so we need to safely access it
+  const payload = event.payload as any
 
-  if (change) {
-    // Stringify objects for better display
-    const fromStr = typeof change.from === 'object' && change.from !== null ? JSON.stringify(change.from) : String(change.from);
-    const toStr = typeof change.to === 'object' && change.to !== null ? JSON.stringify(change.to) : String(change.to);
-
+  // Display payload as JSON if it exists
+  if (payload && typeof payload === 'object') {
     return (
-      <div style={itemStyle}>
-        <span style={{ color: '#6b7280' }}>{change.field}:</span>
-        <span style={{ ...valueStyle, background: '#fee2e2' }}>
-          {fromStr}
-        </span>
-        <ArrowRight size={12} />
-        <span style={{ ...valueStyle, background: '#dcfce7' }}>
-          {toStr}
-        </span>
+      <div style={{ fontSize: '13px', color: '#374151', fontFamily: 'monospace', background: '#f9fafb', padding: '8px', borderRadius: '4px', overflow: 'auto' }}>
+        {JSON.stringify(payload, null, 2)}
       </div>
     )
-  }
-
-  if (context?.reason) {
-    return (
-      <span style={{ fontStyle: 'normal', color: '#374151', fontSize: '14px' }}>
-        {context.reason}
-      </span>
-    )
-  }
-
-  if (context?.date) {
-    return `Fecha afectada: ${context.date}`
   }
 
   return <span>—</span>

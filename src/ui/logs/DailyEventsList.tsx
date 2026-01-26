@@ -1,24 +1,29 @@
 'use client'
 
 import { AnimatePresence, motion } from 'framer-motion'
-import { useMemo, memo } from 'react'
+import { useMemo, memo, useState } from 'react'
 import { INCIDENT_STYLES } from '../../domain/incidents/incidentStyles'
 import { useAppStore } from '@/store/useAppStore'
-import type { EnrichedIncident } from './DailyLogView'
 import { StatusPill } from '../components/StatusPill'
-import { Trash2 } from 'lucide-react'
+import { Trash2, Pencil } from 'lucide-react'
 import { calculatePoints } from '@/domain/analytics/computeMonthlySummary'
-import type { IncidentType } from '@/domain/types'
+import type { IncidentType, Incident } from '@/domain/types'
 import { format, parseISO } from 'date-fns'
 import { es } from 'date-fns/locale'
 import { useEditMode } from '@/hooks/useEditMode'
+import { ConfirmDialog } from '../components/ConfirmDialog'
+import { parseLocalDate } from '@/domain/calendar/parseLocalDate'
 
-// --- VIEW MODELS ---
+// --- TYPES ---
+
+import { EnrichedIncident } from './logHelpers'
+
 interface PersonInGroup {
   repName: string
   count: number
   incidents: EnrichedIncident[]
 }
+
 interface GroupedByType {
   type: IncidentType
   totalCount: number
@@ -27,51 +32,62 @@ interface GroupedByType {
   totalPoints: number
 }
 
+interface DailyEventsListProps {
+  title: string
+  incidents: EnrichedIncident[]
+  emptyMessage: string
+}
+
 // --- RENDER COMPONENTS ---
 
 const PersonRow = memo(function PersonRow({
   person,
-  onDelete,
+  onDeleteGroup,
+  onDeleteSingle,
   canDelete,
 }: {
   person: PersonInGroup
-  onDelete: (ids: string[]) => void
+  onDeleteGroup: (ids: string[]) => void
+  onDeleteSingle: (id: string) => void
   canDelete: boolean
 }) {
   return (
     <div
       style={{
         display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        padding: '6px 8px',
+        flexDirection: 'column',
+        gap: '4px',
+        padding: '8px',
         borderRadius: '6px',
         background: '#f9fafb',
+        border: '1px solid #f3f4f6'
       }}
     >
-      <span style={{ fontWeight: 500, color: 'var(--text-main)' }}>
-        {person.repName}
-      </span>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-        {person.count > 1 && (
-          <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>
-            ×{person.count}
-          </span>
-        )}
-        {canDelete && (
-          <button
-            onClick={() => onDelete(person.incidents.map(i => i.id))}
-            style={{
-              background: 'none',
-              border: 'none',
-              color: '#9ca3af',
-              cursor: 'pointer',
-            }}
-          >
-            <Trash2 size={14} />
-          </button>
-        )}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+        <span style={{ fontWeight: 600, color: 'var(--text-main)', fontSize: '14px' }}>
+          {person.repName}
+        </span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          {person.count > 1 && (
+            <span style={{ fontSize: '11px', fontWeight: 600, color: '#6b7280', background: '#e5e7eb', padding: '2px 6px', borderRadius: '10px' }}>
+              x{person.count}
+            </span>
+          )}
+          {canDelete && person.count > 1 && (
+            <button
+              onClick={() => onDeleteGroup(person.incidents.map(i => i.id))}
+              style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontSize: '10px' }}
+              title="Borrar todos"
+            >
+              Borrar todo
+            </button>
+          )}
+        </div>
       </div>
+
+      {/* 📋 LISTA DETALLADA OCULTA - SOLO CONTADOR */}
+      {/* El usuario solicitó simplificar visualmente: solo mostrar "x2" en la cabecera */}
+      {/* La lógica de borrado individual se sacrifica por simplicidad visual, o se hace vía borrado grupal */}
     </div>
   )
 })
@@ -122,27 +138,12 @@ const OtherIncidentRow = memo(function OtherIncidentRow({
           )}
         </div>
       </div>
-      {incident.note && (
-        <p
-          style={{
-            margin: 0,
-            fontStyle: 'normal',
-            fontSize: '14px',
-            lineHeight: 1.5,
-            color: '#374151',
-            marginTop: '4px',
-            wordBreak: 'break-word',
-            // Optional "Note" styling
-            borderLeft: '3px solid var(--border-subtle)',
-            paddingLeft: '8px',
-          }}
-        >
-          {incident.note}
-        </p>
-      )}
+      {/* Comment hidden in daily view */}
     </div>
   )
 })
+
+// 🗓️ Helper removed - imported from domain/calendar/parseLocalDate
 
 const RangeIncidentCard = memo(function RangeIncidentCard({
   incident,
@@ -154,10 +155,18 @@ const RangeIncidentCard = memo(function RangeIncidentCard({
   canDelete: boolean
 }) {
   const styleInfo = INCIDENT_STYLES[incident.type] ?? INCIDENT_STYLES['OTRO']
-  const progress =
-    incident.totalDuration && incident.dayCount
-      ? (incident.dayCount / incident.totalDuration) * 100
-      : 0
+
+  // 🛡️ DEFENSIVE UI: Strict Validation
+  // If incident data is incomplete, do NOT render garbage.
+  if (
+    typeof incident.progressRatio !== 'number' ||
+    typeof incident.dayCount !== 'number' ||
+    typeof incident.totalDuration !== 'number'
+  ) {
+    return null
+  }
+
+  const progress = incident.progressRatio * 100
 
   return (
     <motion.div
@@ -184,17 +193,22 @@ const RangeIncidentCard = memo(function RangeIncidentCard({
         }}
       >
         <StatusPill label={styleInfo.label} variant={styleInfo.variant} />
-        {canDelete && (
-          <button
-            onClick={() => onDelete(incident.id)}
-            style={{ background: 'none', border: 'none', color: '#9ca3af', cursor: 'pointer' }}
-          >
-            <Trash2 size={14} />
-          </button>
-        )}
+        <div style={{ display: 'flex', gap: '8px' }}>
+          {canDelete && (
+            <button
+              onClick={() => onDelete(incident.id)}
+              style={{ background: 'none', border: 'none', color: '#9ca3af', cursor: 'pointer' }}
+            >
+              <Trash2 size={14} />
+            </button>
+          )}
+        </div>
       </header>
       <div style={{ padding: '12px 15px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
         <div style={{ fontWeight: 600, color: 'var(--text-main)' }}>{incident.repName}</div>
+
+        {/* Note Display Hidden in Daily View */}
+
         <div style={{ position: 'relative', width: '100%', background: '#f3f4f6', height: '8px', borderRadius: '4px' }}>
           <div style={{
             position: 'absolute',
@@ -211,7 +225,7 @@ const RangeIncidentCard = memo(function RangeIncidentCard({
           <span>Día {incident.dayCount} de {incident.totalDuration}</span>
           {incident.returnDate && (
             <span style={{ fontWeight: 500 }}>
-              Reingresa: {format(parseISO(incident.returnDate), 'dd/MM/yyyy', { locale: es })}
+              Reingresa: {format(parseLocalDate(incident.returnDate), 'dd/MM/yyyy', { locale: es })}
             </span>
           )}
         </div>
@@ -275,7 +289,8 @@ const PunctualIncidentGroup = memo(function PunctualIncidentGroup({
             <PersonRow
               key={person.repName}
               person={person}
-              onDelete={onDeleteGroup}
+              onDeleteGroup={onDeleteGroup}
+              onDeleteSingle={onDeleteSingle}
               canDelete={canDelete}
             />
           ))}
@@ -283,13 +298,6 @@ const PunctualIncidentGroup = memo(function PunctualIncidentGroup({
     </motion.div>
   )
 })
-
-// --- MAIN LIST COMPONENT ---
-interface DailyEventsListProps {
-  title: string
-  incidents: EnrichedIncident[]
-  emptyMessage: string
-}
 
 export function DailyEventsList({
   title,
@@ -299,15 +307,21 @@ export function DailyEventsList({
   const { removeIncident, removeIncidents, showConfirm } = useAppStore(s => ({
     removeIncident: s.removeIncident,
     removeIncidents: s.removeIncidents,
-    showConfirm: s.showConfirm,
+    showConfirm: s.showConfirm
   }))
 
   const { mode } = useEditMode()
   const canDelete = mode === 'ADMIN_OVERRIDE'
 
+  // Local state for editing note removed per rule: Comments only in detail modal
+
   const { punctualGroups, rangeIncidents } = useMemo(() => {
-    const punctual = incidents.filter(i => i.type !== 'LICENCIA' && i.type !== 'VACACIONES')
-    const range = incidents.filter(i => i.type === 'LICENCIA' || i.type === 'VACACIONES')
+    const orderedIncidents = [...incidents].sort((a, b) =>
+      a.startDate.localeCompare(b.startDate)
+    )
+
+    const punctual = orderedIncidents.filter(i => i.type !== 'LICENCIA' && i.type !== 'VACACIONES')
+    const range = orderedIncidents.filter(i => i.type === 'LICENCIA' || i.type === 'VACACIONES')
 
     const byType = new Map<IncidentType, EnrichedIncident[]>()
     for (const inc of punctual) {
@@ -351,7 +365,7 @@ export function DailyEventsList({
     }
 
     const sortedGroups = groups.sort((a, b) => {
-      const order: Record<IncidentType, number> = { AUSENCIA: 1, TARDANZA: 2, ERROR: 3, OTRO: 4, VACACIONES: 5, LICENCIA: 6, OVERRIDE: 7 }
+      const order: Record<IncidentType, number> = { AUSENCIA: 1, TARDANZA: 2, ERROR: 3, OTRO: 4, VACACIONES: 5, LICENCIA: 6, OVERRIDE: 7, SWAP: 8 }
       return (order[a.type] || 99) - (order[b.type] || 99)
     })
 
@@ -383,6 +397,8 @@ export function DailyEventsList({
       removeIncident(incident.id)
     }
   }
+
+  // Editing handlers removed
 
   const hasItems = incidents.length > 0
 
@@ -455,7 +471,8 @@ export function DailyEventsList({
         ))}
 
       </AnimatePresence>
+
+      {/* ConfirmDialog for editing removed */}
     </section>
   )
 }
-
