@@ -16,11 +16,9 @@ interface SortableRepCardProps {
     onAddSchedule: (repId: string | null) => void // Updated signature to allow clearing
     addingScheduleFor: string | null
     advancedEditMode: boolean
-    managingMixedFor: string | null
-    onManageMixed: (repId: string | null) => void
 }
 
-export function SortableRepCard({ rep, onEdit, onAddSchedule, addingScheduleFor, advancedEditMode, managingMixedFor, onManageMixed }: SortableRepCardProps) {
+export function SortableRepCard({ rep, onEdit, onAddSchedule, addingScheduleFor, advancedEditMode }: SortableRepCardProps) {
     const deactivateRepresentative = useAppStore(s => s.deactivateRepresentative)
     const { mode } = useEditMode()
     const [editingSchedule, setEditingSchedule] = useState<SpecialSchedule | null>(null)
@@ -147,4 +145,3 @@ export function SortableRepCard({ rep, onEdit, onAddSchedule, addingScheduleFor,
         </div>
     )
 }
-

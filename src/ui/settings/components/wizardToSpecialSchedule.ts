@@ -5,8 +5,45 @@
  * One clean output. Zero magic. Zero ambiguity.
  */
 
-import { ShiftAssignment, SpecialSchedule } from '@/domain/types'
+import { ShiftAssignment, SpecialSchedule, DailyScheduleState } from '@/domain/types'
 import { WizardState } from './wizardTypes'
+
+/**
+ * Helper function to convert daysOfWeek array and assignment to weeklyPattern
+ */
+function createWeeklyPattern(
+    selectedDays: number[],
+    assignment: ShiftAssignment
+): SpecialSchedule['weeklyPattern'] {
+    const pattern: SpecialSchedule['weeklyPattern'] = {
+        0: 'OFF',
+        1: 'OFF',
+        2: 'OFF',
+        3: 'OFF',
+        4: 'OFF',
+        5: 'OFF',
+        6: 'OFF',
+    };
+
+    let dayState: DailyScheduleState;
+    
+    if (assignment.type === 'NONE') {
+        dayState = 'OFF';
+    } else if (assignment.type === 'BOTH') {
+        dayState = 'MIXTO';
+    } else if (assignment.type === 'SINGLE') {
+        dayState = assignment.shift;
+    } else {
+        dayState = 'OFF';
+    }
+
+    // Set the selected days to the determined state
+    selectedDays.forEach(day => {
+        pattern[day as 0 | 1 | 2 | 3 | 4 | 5 | 6] = dayState;
+    });
+
+    return pattern;
+}
 
 export function wizardToSpecialSchedule(
     state: WizardState,
@@ -39,13 +76,14 @@ export function wizardToSpecialSchedule(
         )
 
         if (daysToDisable.length > 0) {
+            const disablePattern = createWeeklyPattern(daysToDisable, { type: 'NONE' });
             schedules.push({
-                representativeId,
-                startDate: state.startDate,
-                endDate: state.endDate,
-                daysOfWeek: daysToDisable,
-                assignment: { type: 'NONE' },
-                reason: 'Reemplazo de días mixtos base',
+                scope: 'INDIVIDUAL',
+                targetId: representativeId,
+                from: state.startDate,
+                to: state.endDate,
+                weeklyPattern: disablePattern,
+                note: 'Reemplazo de días mixtos base',
             })
         }
     }
@@ -71,13 +109,14 @@ export function wizardToSpecialSchedule(
     }
 
     // Main schedule (what user selected)
+    const mainPattern = createWeeklyPattern(state.days, assignment);
     schedules.push({
-        representativeId,
-        startDate: state.startDate,
-        endDate: state.endDate,
-        daysOfWeek: state.days,
-        assignment,
-        reason: state.note || undefined,
+        scope: 'INDIVIDUAL',
+        targetId: representativeId,
+        from: state.startDate,
+        to: state.endDate,
+        weeklyPattern: mainPattern,
+        note: state.note || undefined,
     })
 
     return schedules

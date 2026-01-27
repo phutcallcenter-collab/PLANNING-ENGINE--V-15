@@ -1,4 +1,4 @@
-# Planning Engine — v1.0 (OPERATIVO ESTABLE)
+npm# Planning Engine — v1.0 (OPERATIVO ESTABLE)
 
 **Estado**: 🟢 OPERATIVO ESTABLE | **Stack**: Next.js 14 + TypeScript + Zustand + IndexedDB  
 **Última actualización**: 2026-01-18 | **Fase**: 7 (CONTRATO VISUAL CERRADO)

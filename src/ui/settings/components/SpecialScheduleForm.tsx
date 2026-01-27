@@ -61,13 +61,25 @@ export function SpecialScheduleForm({ repId, onSave }: { repId: string, onSave: 
             alert('Por favor complete las fechas y días de la semana.');
             return;
         }
+        
+        // Convert assignment and daysOfWeek to weeklyPattern
+        const weeklyPattern: SpecialSchedule['weeklyPattern'] = {
+            0: daysOfWeek.includes(0) ? (assignment.type === 'SINGLE' ? assignment.shift : assignment.type === 'BOTH' ? 'MIXTO' : 'OFF') : 'OFF',
+            1: daysOfWeek.includes(1) ? (assignment.type === 'SINGLE' ? assignment.shift : assignment.type === 'BOTH' ? 'MIXTO' : 'OFF') : 'OFF',
+            2: daysOfWeek.includes(2) ? (assignment.type === 'SINGLE' ? assignment.shift : assignment.type === 'BOTH' ? 'MIXTO' : 'OFF') : 'OFF',
+            3: daysOfWeek.includes(3) ? (assignment.type === 'SINGLE' ? assignment.shift : assignment.type === 'BOTH' ? 'MIXTO' : 'OFF') : 'OFF',
+            4: daysOfWeek.includes(4) ? (assignment.type === 'SINGLE' ? assignment.shift : assignment.type === 'BOTH' ? 'MIXTO' : 'OFF') : 'OFF',
+            5: daysOfWeek.includes(5) ? (assignment.type === 'SINGLE' ? assignment.shift : assignment.type === 'BOTH' ? 'MIXTO' : 'OFF') : 'OFF',
+            6: daysOfWeek.includes(6) ? (assignment.type === 'SINGLE' ? assignment.shift : assignment.type === 'BOTH' ? 'MIXTO' : 'OFF') : 'OFF',
+        };
+        
         const newSchedule: Omit<SpecialSchedule, 'id'> = {
-            representativeId: repId,
-            startDate,
-            endDate,
-            daysOfWeek,
-            assignment,
-            reason: reason || undefined
+            scope: 'INDIVIDUAL',
+            targetId: repId,
+            from: startDate,
+            to: endDate,
+            weeklyPattern,
+            note: reason || undefined
         };
         addSpecialSchedule(newSchedule);
         onSave(); // Closes the form
