@@ -1,0 +1,245 @@
+.container {
+    padding: 24px;
+    background: var(--bg-panel);
+    border-radius: 8px;
+    position: relative;
+}
+
+.backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 40;
+    cursor: default;
+}
+
+.header {
+    margin-bottom: 20px;
+    display: flex;
+    justify-content: space-between;
+}
+
+.headerInfo {
+    display: flex;
+    flex-direction: column;
+}
+
+.title {
+    margin: 0;
+    font-size: 18px;
+    font-weight: 600;
+}
+
+.subtitle {
+    margin: 4px 0 0 0;
+    font-size: 14px;
+    color: var(--text-muted);
+}
+
+.weekGrid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 8px;
+    margin-bottom: 24px;
+}
+
+.dayCard {
+    position: relative;
+    z-index: 1;
+}
+
+.dayCard.active {
+    z-index: 50;
+}
+
+.dayButton {
+    width: 100%;
+    padding: 12px 8px;
+    border: 2px solid;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.15s;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    position: relative;
+    min-height: 80px;
+}
+
+/* Dynamic states using data attributes */
+.dayButton[data-state="OFF"] {
+    border-color: #e2e8f0;
+    background: #f8fafc;
+    color: #64748b;
+}
+
+.dayButton[data-state="DAY"] {
+    border-color: #fbbf24;
+    background: #fef3c7;
+    color: #78350f;
+}
+
+.dayButton[data-state="NIGHT"] {
+    border-color: #60a5fa;
+    background: #dbeafe;
+    color: #1e3a8a;
+}
+
+.dayButton[data-state="MIXTO"] {
+    border-color: #c084fc;
+    background: #f3e8ff;
+    color: #581c87;
+}
+
+.dayButton[data-state="BASE_REF"] {
+    border-color: #d1d5db;
+    background: #f9fafb;
+    color: #6b7280;
+}
+
+.dayCard.active .dayButton {
+    box-shadow: 0 0 0 4px rgba(0, 0, 0, 0.05);
+}
+
+.dayButton[data-invalid="true"] {
+    border-color: #f97316 !important;
+    background: #fed7aa !important;
+}
+
+.warningIcon {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    color: #c2410c;
+}
+
+.dayAbbrev {
+    font-size: 12px;
+    font-weight: 600;
+    margin-bottom: 6px;
+}
+
+.dayLabel {
+    font-size: 10px;
+    font-weight: 700;
+    margin-top: 6px;
+}
+
+.menu {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    margin-top: 4px;
+    background: white;
+    border: 1px solid var(--border-strong);
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    z-index: 100;
+    overflow: hidden;
+}
+
+.menuSection {
+    padding: 0 0 4px 0;
+}
+
+.menuButton {
+    width: 100%;
+    padding: 10px 12px;
+    border: none;
+    background: white;
+    cursor: pointer;
+    text-align: left;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    transition: background 0.1s;
+}
+
+.menuButton:hover {
+    background: #f3f4f6;
+}
+
+.menuButtonActive {
+    font-weight: 600;
+}
+
+.menuDivider {
+    height: 1px;
+    background: var(--border-subtle);
+    margin: 4px 0;
+}
+
+.dateGrid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin-bottom: 16px;
+}
+
+.dateGroup {
+    display: flex;
+    flex-direction: column;
+}
+
+.dateLabel {
+    display: block;
+    font-size: 12px;
+    font-weight: 600;
+    margin-bottom: 4px;
+}
+
+.dateInput {
+    padding: 8px;
+    border: 1px solid var(--border-strong);
+    border-radius: 6px;
+    font-size: 14px;
+}
+
+.noteGroup {
+    margin-bottom: 24px;
+}
+
+.noteLabel {
+    display: block;
+    font-size: 12px;
+    font-weight: 600;
+    margin-bottom: 4px;
+}
+
+.noteInput {
+    width: 100%;
+    padding: 8px;
+    border: 1px solid var(--border-strong);
+    border-radius: 6px;
+    font-size: 14px;
+}
+
+.actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+    border-top: 1px solid var(--border-subtle);
+    padding-top: 16px;
+}
+
+.cancelButton {
+    padding: 8px 16px;
+    border: 1px solid var(--border-strong);
+    background: white;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 14px;
+}
+
+.saveButton {
+    padding: 8px 16px;
+    background: #111827;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: 600;
+    font-size: 14px;
+}

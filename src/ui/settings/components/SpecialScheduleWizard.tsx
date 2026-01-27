@@ -13,6 +13,7 @@ import { canUseMixto } from '@/application/scheduling/scheduleCapabilities'
 import { Calendar, Check, X, Info, Moon, Sun, Ban, Shuffle, LayoutTemplate, RotateCcw, AlertTriangle } from 'lucide-react'
 import { format, addDays, startOfWeek } from 'date-fns'
 import { es } from 'date-fns/locale'
+import styles from './SpecialScheduleWizard.module.css'
 
 export function SpecialScheduleWizard({
     repId,
@@ -147,111 +148,60 @@ export function SpecialScheduleWizard({
     }
 
     return (
-        <div style={{
-            background: 'var(--bg-panel)',
-            padding: '24px',
-            borderRadius: '12px',
-            border: '1px solid var(--border-subtle)',
-            margin: '16px 0',
-            boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
-            position: 'relative' // Context for backdrop
-        }}>
+        <div className={styles.container}>
             {/* Backdrop for click away */}
             {activeDayMenu !== null && (
                 <div
-                    style={{ position: 'fixed', inset: 0, zIndex: 40, cursor: 'default' }}
+                    className={styles.backdrop}
                     onClick={() => setActiveDayMenu(null)}
                 />
             )}
 
-            <div style={{ marginBottom: '20px', display: 'flex', justifyContent: 'space-between' }}>
-                <div>
-                    <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 600 }}>Constructo de Semana</h3>
-                    <p style={{ margin: '4px 0 0 0', fontSize: '14px', color: 'var(--text-muted)' }}>
+            <div className={styles.header}>
+                <div className={styles.headerInfo}>
+                    <h3 className={styles.title}>Constructo de Semana</h3>
+                    <p className={styles.subtitle}>
                         Define explícitamente el patrón para {repName} en este período.
                     </p>
                 </div>
             </div>
 
             {/* Pattern Grid */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '8px', marginBottom: '24px' }}>
+            <div className={styles.weekGrid}>
                 {dayStates.map((state, index) => {
                     // Check logic consistency
                     const isInvalidMixto = state === 'MIXTO' && !isMixedProfile
                     const style = getStyle(state, isInvalidMixto)
                     const isActive = activeDayMenu === index
                     return (
-                        <div key={index} style={{ position: 'relative', zIndex: isActive ? 50 : 1 }}>
+                        <div key={index} className={`${styles.dayCard} ${isActive ? styles.active : ''}`}>
                             <button
                                 onClick={() => handleDayClick(index)}
-                                style={{
-                                    width: '100%',
-                                    padding: '12px 4px',
-                                    borderRadius: '8px',
-                                    border: `2px solid ${style.border}`,
-                                    background: style.bg,
-                                    color: style.text,
-                                    cursor: 'pointer',
-                                    minHeight: '80px',
-                                    display: 'flex',
-                                    flexDirection: 'column',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    transition: 'all 0.1s ease',
-                                    boxShadow: isActive ? '0 0 0 4px rgba(0,0,0,0.05)' : 'none',
-                                    position: 'relative'
-                                }}
+                                className={styles.dayButton}
+                                data-state={state}
+                                data-invalid={isInvalidMixto}
+                                aria-label={`Configurar ${dayNames[index]}`}
                             >
                                 {isInvalidMixto && (
-                                    <div style={{ position: 'absolute', top: 4, right: 4, color: '#c2410c' }}>
+                                    <div className={styles.warningIcon}>
                                         <AlertTriangle size={12} />
                                     </div>
                                 )}
-                                <div style={{ fontSize: '12px', fontWeight: 600, marginBottom: '6px' }}>{dayAbbrev[index]}</div>
+                                <div className={styles.dayAbbrev}>{dayAbbrev[index]}</div>
                                 {renderIcon(state)}
-                                <div style={{ fontSize: '10px', fontWeight: 700, marginTop: '6px' }}>{style.label}</div>
+                                <div className={styles.dayLabel}>{style.label}</div>
                             </button>
 
                             {/* Dropdown Menu */}
                             {isActive && (
-                                <div style={{
-                                    position: 'absolute',
-                                    top: 'calc(100% + 8px)',
-                                    left: '50%',
-                                    transform: 'translateX(-50%)',
-                                    width: '180px',
-                                    background: 'var(--bg-surface)',
-                                    border: '1px solid var(--border-subtle)',
-                                    borderRadius: '8px',
-                                    boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)',
-                                    overflow: 'hidden',
-                                    display: 'flex',
-                                    flexDirection: 'column',
-                                    padding: '4px'
-                                }}>
+                                <div className={styles.menu}>
                                     {/* Explicit Options */}
-                                    <div style={{ padding: '0 0 4px 0' }}>
+                                    <div className={styles.menuSection}>
                                         {explicitOptions.map(opt => (
                                             <button
                                                 key={opt.value}
                                                 onClick={() => selectState(index, opt.value)}
-                                                style={{
-                                                    width: '100%',
-                                                    padding: '8px 12px',
-                                                    textAlign: 'left',
-                                                    background: 'transparent',
-                                                    border: 'none',
-                                                    borderRadius: '4px',
-                                                    cursor: 'pointer',
-                                                    fontSize: '13px',
-                                                    display: 'flex',
-                                                    alignItems: 'center',
-                                                    gap: '8px',
-                                                    color: 'var(--text-main)',
-                                                    fontWeight: state === opt.value ? 600 : 400
-                                                }}
-                                                onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-muted)'}
-                                                onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                                                className={`${styles.menuButton} ${state === opt.value ? styles.menuButtonActive : ''}`}
                                             >
                                                 {renderIcon(opt.value)}
                                                 {opt.label}
@@ -260,27 +210,12 @@ export function SpecialScheduleWizard({
                                     </div>
 
                                     {/* Divider */}
-                                    <div style={{ height: '1px', background: 'var(--border-subtle)', margin: '4px 0' }} />
+                                    <div className={styles.menuDivider} />
 
                                     {/* Restore Option */}
                                     <button
                                         onClick={() => selectState(index, 'BASE_REF')}
-                                        style={{
-                                            width: '100%',
-                                            padding: '8px 12px',
-                                            textAlign: 'left',
-                                            background: 'transparent',
-                                            border: 'none',
-                                            borderRadius: '4px',
-                                            cursor: 'pointer',
-                                            fontSize: '13px',
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            gap: '8px',
-                                            color: 'var(--text-muted)'
-                                        }}
-                                        onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-muted)'}
-                                        onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                                        className={styles.menuButton}
                                     >
                                         <RotateCcw size={14} />
                                         Restaurar Original
@@ -293,32 +228,48 @@ export function SpecialScheduleWizard({
             </div>
 
             {/* Dates & Note */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
-                <div>
-                    <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, marginBottom: '4px' }}>Desde</label>
-                    <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)}
-                        style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid var(--border-strong)' }} />
+            <div className={styles.dateGrid}>
+                <div className={styles.dateGroup}>
+                    <label htmlFor="startDate" className={styles.dateLabel}>Desde</label>
+                    <input 
+                        id="startDate"
+                        type="date" 
+                        value={startDate} 
+                        onChange={e => setStartDate(e.target.value)}
+                        className={styles.dateInput}
+                        aria-label="Fecha de inicio del horario especial"
+                    />
                 </div>
-                <div>
-                    <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, marginBottom: '4px' }}>Hasta</label>
-                    <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)}
-                        style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid var(--border-strong)' }} />
+                <div className={styles.dateGroup}>
+                    <label htmlFor="endDate" className={styles.dateLabel}>Hasta</label>
+                    <input 
+                        id="endDate"
+                        type="date" 
+                        value={endDate} 
+                        onChange={e => setEndDate(e.target.value)}
+                        className={styles.dateInput}
+                        aria-label="Fecha de fin del horario especial"
+                    />
                 </div>
             </div>
 
-            <div style={{ marginBottom: '24px' }}>
-                <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, marginBottom: '4px' }}>Motivo / Nota</label>
-                <input type="text" value={note} onChange={e => setNote(e.target.value)} placeholder="Ej: Acuerdo de estudios"
-                    style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid var(--border-strong)' }} />
+            <div className={styles.noteGroup}>
+                <label htmlFor="note" className={styles.noteLabel}>Motivo / Nota</label>
+                <input 
+                    id="note"
+                    type="text" 
+                    value={note} 
+                    onChange={e => setNote(e.target.value)} 
+                    placeholder="Ej: Acuerdo de estudios"
+                    className={styles.noteInput}
+                />
             </div>
 
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', borderTop: '1px solid var(--border-subtle)', paddingTop: '16px' }}>
-                <button onClick={onSave} style={{
-                    padding: '8px 16px', borderRadius: '8px', border: '1px solid var(--border-strong)', background: 'transparent', cursor: 'pointer'
-                }}>Cancelar</button>
-                <button onClick={handleSave} style={{
-                    padding: '8px 24px', borderRadius: '8px', border: 'none', background: 'var(--accent)', color: 'white', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px'
-                }}>
+            <div className={styles.actions}>
+                <button onClick={onSave} className={styles.cancelButton}>
+                    Cancelar
+                </button>
+                <button onClick={handleSave} className={styles.saveButton}>
                     <Check size={16} />
                     {initialSchedule ? 'Guardar Cambios' : 'Crear Regla'}
                 </button>

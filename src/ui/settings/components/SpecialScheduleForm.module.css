@@ -1,0 +1,101 @@
+.daysSelector {
+    display: flex;
+    gap: 4px;
+}
+
+.dayButton {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    border: 1px solid;
+    cursor: pointer;
+    font-weight: 600;
+    font-size: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.dayButton:not(.selected) {
+    background: #f1f5f9;
+    border-color: #e2e8f0;
+    color: #64748b;
+}
+
+.dayButton.selected {
+    background: #eef2ff;
+    border-color: #c7d2fe;
+    color: #4338ca;
+}
+
+.form {
+    background: #f9fafb;
+    padding: 24px;
+    border-radius: 8px;
+}
+
+.formTitle {
+    margin: 0;
+    font-size: 14px;
+    color: var(--text-main);
+    font-weight: 600;
+}
+
+.formGrid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+}
+
+.formGroup {
+    display: flex;
+    flex-direction: column;
+}
+
+.label {
+    display: block;
+    font-size: 13px;
+    font-weight: 500;
+    margin-bottom: 6px;
+}
+
+.input {
+    width: 100%;
+    padding: 8px;
+    border: 1px solid var(--border-strong);
+    border-radius: 6px;
+    font-size: 14px;
+}
+
+.select {
+    width: 100%;
+    padding: 8px;
+    border: 1px solid var(--border-strong);
+    border-radius: 6px;
+    background: white;
+    font-size: 14px;
+}
+
+.actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+}
+
+.cancelButton {
+    padding: 8px 12px;
+    border: 1px solid var(--border-strong);
+    border-radius: 6px;
+    background: var(--bg-panel);
+    cursor: pointer;
+}
+
+.submitButton {
+    padding: 8px 16px;
+    background: #111827;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: 600;
+}
