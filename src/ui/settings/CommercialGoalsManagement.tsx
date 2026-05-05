@@ -10,7 +10,9 @@ import type {
   CommercialGoalSegment,
   ShiftType,
 } from '@/domain/types'
+import { generateMonthDays } from '@/domain/calendar/state'
 import { useAppStore } from '@/store/useAppStore'
+import { buildRepresentativePerformanceReport } from '@/ui/reports/analysis-beta/services/representative-performance.service'
 
 const SHIFT_META: Record<
   ShiftType,
@@ -43,9 +45,22 @@ function formatGoalValue(value: number) {
 }
 
 export function CommercialGoalsManagement() {
-  const { commercialGoals, upsertCommercialGoal } = useAppStore(state => ({
+  const {
+    commercialGoals,
+    upsertCommercialGoal,
+    representatives,
+    incidents,
+    calendar,
+    specialSchedules,
+    planningAnchorDate,
+  } = useAppStore(state => ({
     commercialGoals: state.commercialGoals ?? [],
     upsertCommercialGoal: state.upsertCommercialGoal,
+    representatives: state.representatives ?? [],
+    incidents: state.incidents ?? [],
+    calendar: state.calendar,
+    specialSchedules: state.specialSchedules ?? [],
+    planningAnchorDate: state.planningAnchorDate,
   }))
   const [draftValues, setDraftValues] = useState<Record<string, string>>({})
 
@@ -68,6 +83,58 @@ export function CommercialGoalsManagement() {
   }, [commercialGoals])
 
   const grandTotal = totalsByShift.DAY + totalsByShift.NIGHT
+  const goalMonthKey = planningAnchorDate.slice(0, 7)
+  const goalMonthDates = useMemo(() => {
+    const [year, month] = goalMonthKey.split('-').map(Number)
+    return generateMonthDays(year, month, calendar).map(day => day.date)
+  }, [calendar, goalMonthKey])
+  const realGoalReport = useMemo(
+    () =>
+      buildRepresentativePerformanceReport({
+        representatives,
+        commercialGoals,
+        incidents,
+        calendar,
+        specialSchedules,
+        currentPeriod: {
+          kind: 'MONTH',
+          anchorDate: `${goalMonthKey}-01`,
+          label: goalMonthKey,
+          from: `${goalMonthKey}-01`,
+          to: goalMonthDates[goalMonthDates.length - 1] ?? `${goalMonthKey}-01`,
+          loadedDays: goalMonthDates.length,
+          expectedDays: goalMonthDates.length,
+          loadedDates: goalMonthDates,
+          isComplete: true,
+        },
+        currentTransactions: [],
+        currentTransactionDates: goalMonthDates,
+        manualRepresentativeLinks: [],
+      }),
+    [
+      calendar,
+      commercialGoals,
+      goalMonthDates,
+      goalMonthKey,
+      incidents,
+      representatives,
+      specialSchedules,
+    ]
+  )
+  const realTotalsByShift = useMemo(
+    () => ({
+      DAY: realGoalReport.shifts.DAY.groups.reduce(
+        (total, group) => total + group.summary.target,
+        0
+      ),
+      NIGHT: realGoalReport.shifts.NIGHT.groups.reduce(
+        (total, group) => total + group.summary.target,
+        0
+      ),
+    }),
+    [realGoalReport]
+  )
+  const realGrandTotal = realGoalReport.globalSummary.target
 
   const handleDraftChange = (id: string, value: string) => {
     setDraftValues(current => ({
@@ -141,9 +208,10 @@ export function CommercialGoalsManagement() {
               maxWidth: '66ch',
             }}
           >
-            Esta matriz define la meta mensual maestra por turno y segmento. El
-            tablero comparativo la prorratea automáticamente cuando miras cortes
-            diarios o semanales, así que aquí solo decides la base del mes.
+            Esta matriz guarda la meta mensual por representante para cada turno y
+            segmento. El total real del bloque se calcula automáticamente con la
+            planificación efectiva del mes y el total global sale de sumar todos
+            los bloques reales.
           </p>
         </div>
 
@@ -156,36 +224,36 @@ export function CommercialGoalsManagement() {
         >
           {([
             {
-              label: 'Meta total mensual',
-              value: formatGoalValue(grandTotal),
-              note: 'Suma de las seis celdas activas en la matriz.',
+              label: 'Meta global real',
+              value: formatGoalValue(realGrandTotal),
+              note: `Resultado real para ${goalMonthKey} según roster planificado.`,
               icon: Trophy,
               accent: '#15803d',
               background: 'rgba(240, 253, 244, 0.98)',
               border: 'rgba(22, 163, 74, 0.18)',
             },
             {
-              label: 'Turno día',
-              value: formatGoalValue(totalsByShift.DAY),
-              note: 'Base mensual acumulada del turno día.',
+              label: 'Turno día real',
+              value: formatGoalValue(realTotalsByShift.DAY),
+              note: 'Suma real de todos los bloques del turno día.',
               icon: Sun,
               accent: '#2563eb',
               background: 'rgba(239, 246, 255, 0.98)',
               border: 'rgba(37, 99, 235, 0.18)',
             },
             {
-              label: 'Turno noche',
-              value: formatGoalValue(totalsByShift.NIGHT),
-              note: 'Base mensual acumulada del turno noche.',
+              label: 'Turno noche real',
+              value: formatGoalValue(realTotalsByShift.NIGHT),
+              note: 'Suma real de todos los bloques del turno noche.',
               icon: Moon,
               accent: '#7c3aed',
               background: 'rgba(245, 243, 255, 0.98)',
               border: 'rgba(124, 58, 237, 0.18)',
             },
             {
-              label: 'Segmentos activos',
-              value: `${COMMERCIAL_GOAL_SEGMENTS.length} por turno`,
-              note: 'Part Time, Full Time y Mixto quedan cubiertos en ambos turnos.',
+              label: 'Base por representante',
+              value: formatGoalValue(grandTotal),
+              note: 'Suma simple de las seis metas guardadas en la matriz.',
               icon: Target,
               accent: '#b45309',
               background: 'rgba(255, 251, 235, 0.98)',
@@ -332,7 +400,8 @@ export function CommercialGoalsManagement() {
                         marginTop: '4px',
                       }}
                     >
-                      Meta total: {formatGoalValue(totalsByShift[shift])}
+                      Base guardada: {formatGoalValue(totalsByShift[shift])} · Real:{' '}
+                      {formatGoalValue(realTotalsByShift[shift])}
                     </div>
                   </div>
                 </div>
@@ -348,6 +417,9 @@ export function CommercialGoalsManagement() {
                 {COMMERCIAL_GOAL_SEGMENTS.map(segment => {
                   const id = createCommercialGoalId(shift, segment)
                   const goalValue = draftValues[id] ?? '0'
+                  const realBlockTarget =
+                    realGoalReport.shifts[shift].groups.find(group => group.segment === segment)
+                      ?.summary.target ?? 0
 
                   return (
                     <label
@@ -387,7 +459,18 @@ export function CommercialGoalsManagement() {
                               color: 'var(--text-muted)',
                             }}
                           >
-                            Meta mensual del bloque {SEGMENT_LABELS[segment].toLowerCase()} para el {meta.label.toLowerCase()}.
+                            Meta mensual por representante del bloque {SEGMENT_LABELS[segment].toLowerCase()} para el {meta.label.toLowerCase()}.
+                          </div>
+                          <div
+                            style={{
+                              marginTop: '6px',
+                              fontSize: '11px',
+                              lineHeight: 1.5,
+                              color: meta.accent,
+                              fontWeight: 700,
+                            }}
+                          >
+                            Total real del bloque: {formatGoalValue(realBlockTarget)}
                           </div>
                         </div>
                         <span

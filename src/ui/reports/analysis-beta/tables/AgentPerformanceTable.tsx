@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import {
   Table,
   TableHeader,
@@ -20,37 +20,21 @@ import {
   Receipt,
   DollarSign,
   ShoppingCart,
-  Link2,
 } from 'lucide-react';
 import { useDashboardStore } from '@/ui/reports/analysis-beta/store/dashboard.store';
-import { aggregateByAgent } from '@/ui/reports/analysis-beta/services/kpi.service';
-import { AgentKPIs } from '@/ui/reports/analysis-beta/types/dashboard.types';
 import { cn } from '@/ui/reports/analysis-beta/lib/utils';
 import { useAppStore } from '@/store/useAppStore';
 import {
-  buildRepresentativeLinkMap,
-  summarizeRepresentativeCoverage,
-} from '@/ui/reports/analysis-beta/services/representative-link.service';
+  buildRepresentativePerformanceReport,
+} from '@/ui/reports/analysis-beta/services/representative-performance.service';
+import type {
+  RepresentativePerformanceReconciliationReason,
+  RepresentativePerformanceRow,
+} from '@/ui/reports/analysis-beta/types/dashboard.types';
 import { MANUAL_REPRESENTATIVE_LINKS } from '@/ui/reports/analysis-beta/config/manualRepresentativeLinks';
-import { Button } from '@/ui/reports/analysis-beta/ui/button';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/ui/reports/analysis-beta/ui/dialog';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/ui/reports/analysis-beta/ui/select';
 
 type SortConfig = {
-  key: keyof AgentKPIs;
+  key: keyof RepresentativePerformanceRow;
   direction: 'asc' | 'desc';
 } | null;
 
@@ -58,64 +42,110 @@ type AgentPerformanceTableProps = {
   title?: string;
   subtitle?: string;
   searchPlaceholder?: string;
-  filter?: 'all' | 'agents' | 'platforms';
   embedded?: boolean;
 };
 
+const RECONCILIATION_REASON_LABELS: Record<
+  RepresentativePerformanceReconciliationReason,
+  string
+> = {
+  manual_omit: 'Omitidos manualmente',
+  unlinked_agent: 'Sin vínculo',
+  missing_agent: 'Sin agente identificado',
+};
+
+function getMonthEnd(monthKey: string) {
+  const [year, month] = monthKey.split('-').map(Number);
+  return new Date(Date.UTC(year, month, 0)).toISOString().slice(0, 10);
+}
+
 export default function AgentPerformanceTable({
   title = 'Representantes del día',
-  subtitle = 'Transacciones y ventas válidas por representante',
+  subtitle = 'Fuente oficial: análisis de llamadas / Call Center',
   searchPlaceholder = 'Buscar representante...',
-  filter = 'agents',
   embedded = false,
 }: AgentPerformanceTableProps) {
-  const transactions = useDashboardStore((state) => state.transactions);
+  const transactions = useDashboardStore((state) => state.rawTransactions);
   const dataDate = useDashboardStore((state) => state.dataDate);
   const manualRepresentativeLinks = useDashboardStore(
     (state) => state.manualRepresentativeLinks
   );
-  const upsertManualRepresentativeLink = useDashboardStore(
-    (state) => state.upsertManualRepresentativeLink
-  );
-  const representatives = useAppStore((state) => state.representatives);
+  const {
+    representatives,
+    commercialGoals,
+    incidents,
+    calendar,
+    specialSchedules,
+  } = useAppStore((state) => ({
+    representatives: state.representatives,
+    commercialGoals: state.commercialGoals,
+    incidents: state.incidents,
+    calendar: state.calendar,
+    specialSchedules: state.specialSchedules,
+  }));
   const [searchTerm, setSearchTerm] = useState('');
-  const [linkingAgentName, setLinkingAgentName] = useState<string | null>(null);
-  const [selectedRepresentativeName, setSelectedRepresentativeName] = useState('');
-  const [sortConfig, setSortConfig] = useState<SortConfig>({ key: 'ventas', direction: 'desc' });
+  const [sortConfig, setSortConfig] = useState<SortConfig>({
+    key: 'ventas',
+    direction: 'desc',
+  });
   const formatCount = (value: number) => value.toLocaleString('en-US');
   const formatCurrency = (value: number) =>
     `RD$ ${value.toLocaleString('en-US', {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
     })}`;
-  const formatDisplayName = (value: string) =>
-    value.toLowerCase().replace(/\b\w/g, (char) => char.toUpperCase());
-  const activeRepresentatives = useMemo(
+
+  const performanceReport = useMemo(() => {
+    if (!dataDate) {
+      return null;
+    }
+
+    const dailyTransactions = transactions.filter((transaction) => transaction.fecha === dataDate);
+
+    return buildRepresentativePerformanceReport({
+      representatives,
+      commercialGoals,
+      incidents,
+      calendar,
+      specialSchedules,
+      currentPeriod: {
+        kind: 'DAY',
+        anchorDate: dataDate,
+        label: dataDate,
+        from: dataDate,
+        to: dataDate,
+        loadedDays: 1,
+        expectedDays: 1,
+        loadedDates: [dataDate],
+        isComplete: true,
+      },
+      currentTransactions: dailyTransactions,
+      currentTransactionDates: [dataDate],
+      manualRepresentativeLinks: [
+        ...MANUAL_REPRESENTATIVE_LINKS,
+        ...manualRepresentativeLinks,
+      ],
+    });
+  }, [
+    calendar,
+    commercialGoals,
+    dataDate,
+    incidents,
+    manualRepresentativeLinks,
+    representatives,
+    specialSchedules,
+    transactions,
+  ]);
+
+  const agentData = useMemo(
     () =>
-      representatives
-        .filter((rep) => rep.isActive)
-        .sort((left, right) => left.name.localeCompare(right.name, 'es')),
-    [representatives]
+      (performanceReport?.byRepresentative ?? []).filter(
+        (row) => row.transacciones > 0 || row.cancelledTransactions > 0
+      ),
+    [performanceReport]
   );
 
-  const agentData = useMemo(() => {
-    const filtered = dataDate
-      ? transactions.filter((tx) => tx.fecha === dataDate)
-      : [];
-    const aggregated = aggregateByAgent(filtered);
-
-    if (filter === 'agents') {
-      return aggregated.filter((item) => item.tipo === 'agente');
-    }
-
-    if (filter === 'platforms') {
-      return aggregated.filter((item) => item.tipo === 'plataforma');
-    }
-
-    return aggregated;
-  }, [transactions, dataDate, filter]);
-
-  const handleSort = (key: keyof AgentKPIs) => {
+  const handleSort = (key: keyof RepresentativePerformanceRow) => {
     let direction: 'asc' | 'desc' = 'desc';
     if (sortConfig && sortConfig.key === key && sortConfig.direction === 'desc') {
       direction = 'asc';
@@ -154,69 +184,141 @@ export default function AgentPerformanceTable({
     return result;
   }, [agentData, searchTerm, sortConfig]);
 
-  const representativeLinks = useMemo(
-    () =>
-      buildRepresentativeLinkMap(agentData, representatives, [
-        ...MANUAL_REPRESENTATIVE_LINKS,
-        ...manualRepresentativeLinks,
-      ]),
-    [agentData, representatives, manualRepresentativeLinks]
-  );
-  const coverageSummary = useMemo(
-    () => summarizeRepresentativeCoverage(agentData, representativeLinks),
-    [agentData, representativeLinks]
-  );
-
-  const SortIcon = ({ columnKey }: { columnKey: keyof AgentKPIs }) => {
-    if (sortConfig?.key !== columnKey) return <ArrowUpDown size={12} className="ml-1 opacity-50" />;
-    return sortConfig.direction === 'asc'
-      ? <ArrowUp size={12} className="ml-1 text-red-600" />
-      : <ArrowDown size={12} className="ml-1 text-red-600" />;
-  };
-
-  if (agentData.length === 0) return null;
-
-  const handleLinkRepresentative = () => {
-    if (!linkingAgentName || !selectedRepresentativeName) {
-      return;
+  const reconciliationSummary = useMemo(() => {
+    if (!performanceReport) {
+      return [];
     }
 
-    upsertManualRepresentativeLink({
-      agentName: linkingAgentName,
-      representativeName: selectedRepresentativeName,
-    });
-    setLinkingAgentName(null);
-    setSelectedRepresentativeName('');
+    return Object.entries(
+      performanceReport.reconciliation.items.reduce<
+        Record<RepresentativePerformanceReconciliationReason, number>
+      >(
+        (accumulator, item) => {
+          accumulator[item.reason] += item.validTransactions;
+          return accumulator;
+        },
+        {
+          manual_omit: 0,
+          unlinked_agent: 0,
+          missing_agent: 0,
+        }
+      )
+    )
+      .filter(([, total]) => total > 0)
+      .map(([reason, total]) => ({
+        reason: reason as RepresentativePerformanceReconciliationReason,
+        total,
+      }));
+  }, [performanceReport]);
+
+  const SortIcon = ({ columnKey }: { columnKey: keyof RepresentativePerformanceRow }) => {
+    if (sortConfig?.key !== columnKey) {
+      return <ArrowUpDown size={12} className="ml-1 opacity-50" />;
+    }
+
+    return sortConfig.direction === 'asc' ? (
+      <ArrowUp size={12} className="ml-1 text-red-600" />
+    ) : (
+      <ArrowDown size={12} className="ml-1 text-red-600" />
+    );
   };
+
+  if (!performanceReport || agentData.length === 0) return null;
 
   const table = (
     <Card className="overflow-hidden rounded-2xl border-slate-200 shadow-sm">
       <CardHeader className="border-b border-slate-200 bg-slate-50 p-4">
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-          <div className="space-y-1">
-            <CardTitle className="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-slate-900">
-              <Users size={14} className={filter === 'platforms' ? 'text-amber-600' : 'text-red-600'} />
-              {title}
-            </CardTitle>
-            <p className="text-sm text-slate-500">
-              {subtitle}
-              {filter === 'agents' && coverageSummary.totalAgents > 0 ? (
-                <span className="ml-2 inline-flex rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-black uppercase tracking-[0.12em] text-slate-600">
-                  {coverageSummary.linkedAgents}/{coverageSummary.totalAgents} vinculados
-                </span>
-              ) : null}
-            </p>
+        <div className="flex flex-col gap-4">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+            <div className="space-y-1">
+              <CardTitle className="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-slate-900">
+                <Users size={14} className="text-red-600" />
+                {title}
+              </CardTitle>
+              <p className="text-sm text-slate-500">{subtitle}</p>
+            </div>
+
+            <div className="relative w-full md:w-72">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+              <Input
+                placeholder={searchPlaceholder}
+                className="rounded-xl border-slate-200 bg-white pl-9 text-xs font-bold focus-visible:ring-red-600"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+              />
+            </div>
           </div>
 
-          <div className="relative w-full md:w-72">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-            <Input
-              placeholder={searchPlaceholder}
-              className="rounded-xl border-slate-200 bg-white pl-9 text-xs font-bold focus-visible:ring-red-600"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-            />
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+            <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
+              <div className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">
+                Representantes oficiales
+              </div>
+              <div className="mt-1 text-xl font-black text-slate-900">
+                {performanceReport.byRepresentative.length.toLocaleString('en-US')}
+              </div>
+              <div className="mt-1 text-xs text-slate-500">
+                Solo filas vinculadas al roster oficial.
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
+              <div className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">
+                Transacciones oficiales
+              </div>
+              <div className="mt-1 text-xl font-black text-slate-900">
+                {performanceReport.reconciliation.officialValidTransactions.toLocaleString('en-US')}
+              </div>
+              <div className="mt-1 text-xs text-slate-500">
+                Cuadra con la tabla y con el ranking.
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-amber-200 bg-amber-50/70 px-4 py-3">
+              <div className="text-[10px] font-black uppercase tracking-[0.16em] text-amber-700">
+                Pendientes de conciliación
+              </div>
+              <div className="mt-1 text-xl font-black text-amber-900">
+                {performanceReport.reconciliation.excludedValidTransactions.toLocaleString('en-US')}
+              </div>
+              <div className="mt-1 text-xs text-amber-800">
+                No desaparecen: quedan separados de lo oficial.
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
+              <div className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">
+                Meta real del día
+              </div>
+              <div className="mt-1 text-xl font-black text-slate-900">
+                {performanceReport.globalSummary.target.toLocaleString('en-US', {
+                  minimumFractionDigits: 1,
+                  maximumFractionDigits: 1,
+                })}
+              </div>
+              <div className="mt-1 text-xs text-slate-500">
+                Prorrateada por cobertura real.
+              </div>
+            </div>
           </div>
+
+          {reconciliationSummary.length > 0 ? (
+            <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3">
+              <div className="text-[10px] font-black uppercase tracking-[0.16em] text-amber-700">
+                Banda de conciliación
+              </div>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {reconciliationSummary.map((item) => (
+                  <span
+                    key={item.reason}
+                    className="inline-flex rounded-full border border-amber-200 bg-white px-3 py-1 text-[10px] font-black uppercase tracking-[0.12em] text-amber-800"
+                  >
+                    {RECONCILIATION_REASON_LABELS[item.reason]}: {item.total.toLocaleString('en-US')}
+                  </span>
+                ))}
+              </div>
+            </div>
+          ) : null}
         </div>
       </CardHeader>
       <CardContent className="p-0">
@@ -226,7 +328,7 @@ export default function AgentPerformanceTable({
               <TableRow className="border-b border-slate-200 hover:bg-transparent">
                 <TableHead className="cursor-pointer py-4 transition-colors hover:text-red-600" onClick={() => handleSort('agente')}>
                   <div className="flex items-center text-[10px] font-black uppercase tracking-widest">
-                    {filter === 'platforms' ? 'Plataforma' : 'Representante'} <SortIcon columnKey="agente" />
+                    Representante <SortIcon columnKey="agente" />
                   </div>
                 </TableHead>
                 <TableHead className="cursor-pointer py-4 text-center transition-colors hover:text-red-600" onClick={() => handleSort('transacciones')}>
@@ -250,7 +352,7 @@ export default function AgentPerformanceTable({
               {filteredAndSortedData.length > 0 ? (
                 filteredAndSortedData.map((agent, idx) => (
                   <TableRow
-                    key={`${agent.tipo}-${agent.codigo || agent.agente}`}
+                    key={agent.representativeId}
                     className={cn(
                       idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/30',
                       'transition-colors hover:bg-slate-100'
@@ -258,76 +360,16 @@ export default function AgentPerformanceTable({
                   >
                     <TableCell className="py-3">
                       <div className="flex items-center gap-3">
-                        <div
-                          className={cn(
-                            'flex h-8 w-8 items-center justify-center rounded-full text-[10px] font-black uppercase',
-                            agent.tipo === 'plataforma'
-                              ? 'bg-amber-100 text-amber-700'
-                              : agent.tipo === 'sin_registro'
-                                ? 'bg-slate-200 text-slate-600'
-                                : 'bg-red-100 text-red-600'
-                          )}
-                        >
+                        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-red-100 text-[10px] font-black uppercase text-red-600">
                           {agent.agente.substring(0, 2)}
                         </div>
                         <div className="min-w-0">
-                          <span
-                            className={cn(
-                              'block truncate text-xs font-black',
-                              agent.tipo === 'plataforma'
-                                ? 'text-amber-800'
-                                : agent.tipo === 'sin_registro'
-                                  ? 'text-slate-500'
-                                  : 'text-slate-900'
-                            )}
-                          >
-                            {agent.tipo === 'agente' ? (
-                              <span style={{ textTransform: 'capitalize' }}>
-                                {formatDisplayName(agent.agente)}
-                              </span>
-                            ) : (
-                              agent.agente
-                            )}
+                          <span className="block truncate text-xs font-black text-slate-900">
+                            {agent.agente}
                           </span>
-                          {agent.tipo === 'agente' ? (
-                            (() => {
-                              const link = representativeLinks.get(agent.agente);
-                              if (!link) {
-                                return (
-                                  <div className="mt-1 flex items-center gap-2">
-                                    <span className="inline-flex rounded-full bg-amber-100 px-2 py-0.5 text-[9px] font-black uppercase tracking-[0.1em] text-amber-700">
-                                      Sin vínculo
-                                    </span>
-                                    <Button
-                                      type="button"
-                                      size="sm"
-                                      variant="ghost"
-                                      className="h-6 rounded-lg px-2 text-[9px] font-black uppercase tracking-[0.08em] text-slate-600 hover:bg-slate-100 hover:text-slate-900"
-                                      onClick={() => setLinkingAgentName(agent.agente)}
-                                    >
-                                      <Link2 className="mr-1 h-3.5 w-3.5" />
-                                      Vincular
-                                    </Button>
-                                  </div>
-                                );
-                              }
-
-                              return (
-                                <span
-                                  className="inline-flex rounded-full bg-emerald-100 px-2 py-0.5 text-[9px] font-black uppercase tracking-[0.1em] text-emerald-700"
-                                  title={
-                                    link.matchType === 'manual_override'
-                                      ? `Vinculado manualmente a ${link.representativeName}`
-                                      : `Coincidencia automática con ${link.representativeName}`
-                                  }
-                                >
-                                  {link.matchType === 'manual_override'
-                                    ? 'Vinculado (manual)'
-                                    : 'Vinculado'}
-                                </span>
-                              );
-                            })()
-                          ) : null}
+                          <span className="mt-1 inline-flex rounded-full bg-slate-100 px-2 py-0.5 text-[9px] font-black uppercase tracking-[0.1em] text-slate-600">
+                            {agent.shifts.join(' / ')} · {agent.segments.join(' / ')}
+                          </span>
                         </div>
                       </div>
                     </TableCell>
@@ -367,76 +409,8 @@ export default function AgentPerformanceTable({
     </Card>
   );
 
-  const linkDialog = (
-    <Dialog
-      open={Boolean(linkingAgentName)}
-      onOpenChange={(open) => {
-        if (!open) {
-          setLinkingAgentName(null);
-          setSelectedRepresentativeName('');
-        }
-      }}
-    >
-      <DialogContent className="max-w-xl">
-        <DialogHeader>
-          <DialogTitle>Vincular representante manualmente</DialogTitle>
-          <DialogDescription>
-            Asocia el agente <strong>{linkingAgentName ?? ''}</strong> con un representante activo
-            del sistema. Este vínculo se aplica de inmediato en la vista actual.
-          </DialogDescription>
-        </DialogHeader>
-
-        <div className="space-y-2">
-          <p className="text-xs font-black uppercase tracking-[0.12em] text-slate-500">
-            Representante del sistema
-          </p>
-          <Select
-            value={selectedRepresentativeName}
-            onValueChange={setSelectedRepresentativeName}
-          >
-            <SelectTrigger className="w-full">
-              <SelectValue placeholder="Selecciona representante..." />
-            </SelectTrigger>
-            <SelectContent>
-              {activeRepresentatives.map((representative) => (
-                <SelectItem key={representative.id} value={representative.name}>
-                  {representative.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-
-        <DialogFooter>
-          <Button
-            type="button"
-            variant="ghost"
-            onClick={() => {
-              setLinkingAgentName(null);
-              setSelectedRepresentativeName('');
-            }}
-          >
-            Cancelar
-          </Button>
-          <Button
-            type="button"
-            onClick={handleLinkRepresentative}
-            disabled={!selectedRepresentativeName}
-          >
-            Guardar vínculo
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-
   if (embedded) {
-    return (
-      <>
-        {table}
-        {linkDialog}
-      </>
-    );
+    return table;
   }
 
   return (
@@ -448,7 +422,6 @@ export default function AgentPerformanceTable({
         </h2>
       </div>
       {table}
-      {linkDialog}
     </div>
   );
 }

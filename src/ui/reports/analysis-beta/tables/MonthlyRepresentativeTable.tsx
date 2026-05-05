@@ -26,13 +26,17 @@ import {
   Star,
 } from 'lucide-react';
 import { useDashboardStore } from '@/ui/reports/analysis-beta/store/dashboard.store';
-import { buildMonthlyRepresentativeSnapshot } from '@/ui/reports/analysis-beta/services/kpi.service';
-import type { AgentKPIs } from '@/ui/reports/analysis-beta/types/dashboard.types';
+import type { RepresentativePerformanceRow } from '@/ui/reports/analysis-beta/types/dashboard.types';
 import { cn } from '@/ui/reports/analysis-beta/lib/utils';
 import { useToast } from '@/ui/reports/analysis-beta/hooks/use-toast';
+import { useAppStore } from '@/store/useAppStore';
+import {
+  buildRepresentativePerformanceReport,
+} from '@/ui/reports/analysis-beta/services/representative-performance.service';
+import { MANUAL_REPRESENTATIVE_LINKS } from '@/ui/reports/analysis-beta/config/manualRepresentativeLinks';
 
 type SortConfig = {
-  key: keyof AgentKPIs;
+  key: keyof RepresentativePerformanceRow;
   direction: 'asc' | 'desc';
 } | null;
 
@@ -40,12 +44,38 @@ type MonthlyRepresentativeTableProps = {
   embedded?: boolean;
 };
 
+function getMonthEnd(monthKey: string) {
+  const [year, month] = monthKey.split('-').map(Number);
+  return new Date(Date.UTC(year, month, 0)).toISOString().slice(0, 10);
+}
+
+function getExpectedDays(monthKey: string) {
+  const [year, month] = monthKey.split('-').map(Number);
+  return new Date(Date.UTC(year, month, 0)).getUTCDate();
+}
+
 export default function MonthlyRepresentativeTable({
   embedded = false,
 }: MonthlyRepresentativeTableProps) {
-  const transactions = useDashboardStore((state) => state.transactions);
+  const transactions = useDashboardStore((state) => state.rawTransactions);
   const selectedMonthKey = useDashboardStore((state) => state.selectedMonthKey);
   const monthlySnapshots = useDashboardStore((state) => state.monthlySnapshots);
+  const manualRepresentativeLinks = useDashboardStore(
+    (state) => state.manualRepresentativeLinks
+  );
+  const {
+    representatives,
+    commercialGoals,
+    incidents,
+    calendar,
+    specialSchedules,
+  } = useAppStore((state) => ({
+    representatives: state.representatives,
+    commercialGoals: state.commercialGoals,
+    incidents: state.incidents,
+    calendar: state.calendar,
+    specialSchedules: state.specialSchedules,
+  }));
   const { toast } = useToast();
   const [searchTerm, setSearchTerm] = useState('');
   const [sortConfig, setSortConfig] = useState<SortConfig>({
@@ -58,30 +88,76 @@ export default function MonthlyRepresentativeTable({
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
     })}`;
-  const formatDisplayName = (value: string) =>
-    value.toLowerCase().replace(/\b\w/g, (char) => char.toUpperCase());
 
   const monthlySnapshot = useMemo(
-    () => {
-      const syncedSnapshot = selectedMonthKey
-        ? monthlySnapshots[selectedMonthKey]
-        : null;
-
-      if (syncedSnapshot && syncedSnapshot.representatives.length > 0) {
-        return {
-          monthLabel: syncedSnapshot.monthLabel,
-          loadedDays: syncedSnapshot.loadedDays,
-          expectedDays: syncedSnapshot.expectedDays,
-          rows: syncedSnapshot.representatives,
-        };
-      }
-
-      return buildMonthlyRepresentativeSnapshot(transactions, selectedMonthKey);
-    },
-    [monthlySnapshots, selectedMonthKey, transactions]
+    () => (selectedMonthKey ? monthlySnapshots[selectedMonthKey] ?? null : null),
+    [monthlySnapshots, selectedMonthKey]
   );
 
-  const handleSort = (key: keyof AgentKPIs) => {
+  const performanceReport = useMemo(() => {
+    if (!selectedMonthKey) {
+      return null;
+    }
+
+    const monthTransactions = transactions.filter((transaction) =>
+      transaction.fecha.startsWith(`${selectedMonthKey}-`)
+    );
+    const loadedDates = [
+      ...new Set(
+        (monthlySnapshot?.loadedDates ?? monthTransactions.map((transaction) => transaction.fecha))
+          .filter((date) => date.startsWith(`${selectedMonthKey}-`))
+      ),
+    ].sort();
+
+    if (loadedDates.length === 0 || monthTransactions.length === 0) {
+      return null;
+    }
+
+    return buildRepresentativePerformanceReport({
+      representatives,
+      commercialGoals,
+      incidents,
+      calendar,
+      specialSchedules,
+      currentPeriod: {
+        kind: 'MONTH',
+        anchorDate: `${selectedMonthKey}-01`,
+        label: monthlySnapshot?.monthLabel ?? selectedMonthKey,
+        from: `${selectedMonthKey}-01`,
+        to: getMonthEnd(selectedMonthKey),
+        loadedDays: loadedDates.length,
+        expectedDays: getExpectedDays(selectedMonthKey),
+        loadedDates,
+        isComplete: loadedDates.length === getExpectedDays(selectedMonthKey),
+      },
+      currentTransactions: monthTransactions,
+      currentTransactionDates: loadedDates,
+      manualRepresentativeLinks: [
+        ...MANUAL_REPRESENTATIVE_LINKS,
+        ...manualRepresentativeLinks,
+      ],
+    });
+  }, [
+    calendar,
+    commercialGoals,
+    incidents,
+    manualRepresentativeLinks,
+    monthlySnapshot,
+    representatives,
+    selectedMonthKey,
+    specialSchedules,
+    transactions,
+  ]);
+
+  const baseRows = useMemo(() => {
+    if (performanceReport) {
+      return performanceReport.byRepresentative.filter((row) => row.transacciones > 0);
+    }
+
+    return [];
+  }, [performanceReport]);
+
+  const handleSort = (key: keyof RepresentativePerformanceRow) => {
     let direction: 'asc' | 'desc' = 'desc';
     if (sortConfig && sortConfig.key === key && sortConfig.direction === 'desc') {
       direction = 'asc';
@@ -90,7 +166,6 @@ export default function MonthlyRepresentativeTable({
   };
 
   const filteredAndSortedData = useMemo(() => {
-    const baseRows = monthlySnapshot?.rows ?? [];
     let result = [...baseRows];
 
     if (searchTerm) {
@@ -119,20 +194,21 @@ export default function MonthlyRepresentativeTable({
     }
 
     return result;
-  }, [monthlySnapshot, searchTerm, sortConfig]);
+  }, [baseRows, searchTerm, sortConfig]);
+
   const featuredRepresentative = useMemo(() => {
-    if (!monthlySnapshot || monthlySnapshot.rows.length === 0) {
+    if (baseRows.length === 0) {
       return null;
     }
 
-    return [...monthlySnapshot.rows].sort((left, right) =>
+    return [...baseRows].sort((left, right) =>
       right.ventas === left.ventas
         ? right.transacciones - left.transacciones
         : right.ventas - left.ventas
     )[0];
-  }, [monthlySnapshot]);
+  }, [baseRows]);
 
-  const SortIcon = ({ columnKey }: { columnKey: keyof AgentKPIs }) => {
+  const SortIcon = ({ columnKey }: { columnKey: keyof RepresentativePerformanceRow }) => {
     if (sortConfig?.key !== columnKey) {
       return <ArrowUpDown size={12} className="ml-1 opacity-50" />;
     }
@@ -144,12 +220,12 @@ export default function MonthlyRepresentativeTable({
     );
   };
 
-  if (!monthlySnapshot || monthlySnapshot.rows.length === 0) {
+  if (!selectedMonthKey || baseRows.length === 0) {
     return null;
   }
 
   const handleCopyForExcel = async () => {
-    const rows = filteredAndSortedData.length > 0 ? filteredAndSortedData : monthlySnapshot.rows;
+    const rows = filteredAndSortedData.length > 0 ? filteredAndSortedData : baseRows;
     const header = ['Representante', 'Transacciones', 'Ventas', 'Ticket Promedio'];
     const lines = rows.map((agent) => [
       agent.agente,
@@ -163,7 +239,7 @@ export default function MonthlyRepresentativeTable({
       await navigator.clipboard.writeText(text);
       toast({
         title: 'Tabla copiada',
-        description: 'Ya puedes pegar la tabla mensual directamente en Excel.',
+        description: 'Ya puedes pegar la tabla mensual oficial directamente en Excel.',
       });
     } catch {
       toast({
@@ -186,10 +262,14 @@ export default function MonthlyRepresentativeTable({
             <div className="flex flex-wrap items-center gap-2 text-[10px] font-black uppercase tracking-[0.16em] text-slate-500">
               <span className="inline-flex items-center gap-1 rounded-full bg-white px-2.5 py-1 shadow-sm">
                 <CalendarRange className="h-3.5 w-3.5 text-slate-400" />
-                {monthlySnapshot.monthLabel}
+                {monthlySnapshot?.monthLabel ?? selectedMonthKey}
               </span>
               <span className="inline-flex items-center gap-1 rounded-full bg-red-50 px-2.5 py-1 text-red-700">
-                {monthlySnapshot.loadedDays}/{monthlySnapshot.expectedDays} dias cargados
+                {(monthlySnapshot?.loadedDays ?? performanceReport?.byAssignment.length ?? 0)}/
+                {monthlySnapshot?.expectedDays ?? getExpectedDays(selectedMonthKey)} dias cargados
+              </span>
+              <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2.5 py-1 text-amber-700">
+                {performanceReport?.reconciliation.excludedValidTransactions.toLocaleString('en-US') ?? '0'} fuera de lo oficial
               </span>
             </div>
           </div>
@@ -227,9 +307,7 @@ export default function MonthlyRepresentativeTable({
                     Representante destacado
                   </span>
                   <h3 className="text-lg font-black text-slate-900">
-                    <span style={{ textTransform: 'capitalize' }}>
-                      {formatDisplayName(featuredRepresentative.agente)}
-                    </span>
+                    {featuredRepresentative.agente}
                   </h3>
                   <p className="text-sm text-slate-600">
                     {featuredRepresentative.transacciones.toLocaleString('en-US')} transacciones ·{' '}
@@ -286,7 +364,7 @@ export default function MonthlyRepresentativeTable({
               {filteredAndSortedData.length > 0 ? (
                 filteredAndSortedData.map((agent, idx) => (
                   <TableRow
-                    key={agent.codigo || agent.agente}
+                    key={agent.representativeId}
                     className={cn(
                       idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/30',
                       'transition-colors hover:bg-slate-100'
@@ -297,11 +375,14 @@ export default function MonthlyRepresentativeTable({
                         <div className="flex h-8 w-8 items-center justify-center rounded-full bg-red-100 text-[10px] font-black uppercase text-red-600">
                           {agent.agente.substring(0, 2)}
                         </div>
-                        <span className="block truncate text-xs font-black text-slate-900">
-                          <span style={{ textTransform: 'capitalize' }}>
-                            {formatDisplayName(agent.agente)}
+                        <div className="min-w-0">
+                          <span className="block truncate text-xs font-black text-slate-900">
+                            {agent.agente}
                           </span>
-                        </span>
+                          <span className="mt-1 inline-flex rounded-full bg-slate-100 px-2 py-0.5 text-[9px] font-black uppercase tracking-[0.1em] text-slate-600">
+                            {agent.shifts.join(' / ')} · {agent.segments.join(' / ')}
+                          </span>
+                        </div>
                       </div>
                     </TableCell>
                     <TableCell className="py-3 text-center">

@@ -12,13 +12,13 @@ function buildPeriod(
 ): OperationalCompetitiveResolvedPeriod {
   return {
     kind: 'DAY',
-    anchorDate: '2026-04-10',
-    label: '2026-04-10',
-    from: '2026-04-10',
-    to: '2026-04-10',
+    anchorDate: '2026-04-09',
+    label: '2026-04-09',
+    from: '2026-04-09',
+    to: '2026-04-09',
     loadedDays: 1,
     expectedDays: 30,
-    loadedDates: ['2026-04-10'],
+    loadedDates: ['2026-04-09'],
     isComplete: true,
     ...overrides,
   }
@@ -100,25 +100,25 @@ describe('buildOperationalCompetitiveReport', () => {
       id: 'inc-night',
       representativeId: 'rep-night-full',
       type: 'ERROR',
-      startDate: '2026-04-10',
+      startDate: '2026-04-09',
       duration: 1,
-      createdAt: '2026-04-10T10:00:00.000Z',
+      createdAt: '2026-04-09T10:00:00.000Z',
     },
     {
       id: 'inc-night-absence',
       representativeId: 'rep-night-full',
       type: 'AUSENCIA',
-      startDate: '2026-04-10',
+      startDate: '2026-04-09',
       duration: 1,
-      createdAt: '2026-04-10T11:00:00.000Z',
+      createdAt: '2026-04-09T11:00:00.000Z',
     },
     {
       id: 'inc-night-late',
       representativeId: 'rep-night-full',
       type: 'TARDANZA',
-      startDate: '2026-04-10',
+      startDate: '2026-04-09',
       duration: 1,
-      createdAt: '2026-04-10T12:00:00.000Z',
+      createdAt: '2026-04-09T12:00:00.000Z',
     },
   ]
 
@@ -131,7 +131,7 @@ describe('buildOperationalCompetitiveReport', () => {
         canalReal: 'CC',
         plataforma: 'Call center',
         plataformaCode: 'CC',
-        fecha: '2026-04-10',
+        fecha: '2026-04-09',
         hora: '10:10:00',
         estatus: 'N',
         valor: 100,
@@ -143,7 +143,7 @@ describe('buildOperationalCompetitiveReport', () => {
         canalReal: 'CC',
         plataforma: 'Call center',
         plataformaCode: 'CC',
-        fecha: '2026-04-10',
+        fecha: '2026-04-09',
         hora: '10:30:00',
         estatus: 'X',
         valor: 100,
@@ -155,7 +155,7 @@ describe('buildOperationalCompetitiveReport', () => {
         canalReal: 'CC',
         plataforma: 'Call center',
         plataformaCode: 'CC',
-        fecha: '2026-04-10',
+        fecha: '2026-04-09',
         hora: '17:10:00',
         estatus: 'N',
         valor: 110,
@@ -167,7 +167,7 @@ describe('buildOperationalCompetitiveReport', () => {
         canalReal: 'CC',
         plataforma: 'Call center',
         plataformaCode: 'CC',
-        fecha: '2026-04-10',
+        fecha: '2026-04-09',
         hora: '18:15:00',
         estatus: 'N',
         valor: 90,
@@ -179,7 +179,7 @@ describe('buildOperationalCompetitiveReport', () => {
         canalReal: 'CC',
         plataforma: 'Call center',
         plataformaCode: 'CC',
-        fecha: '2026-04-10',
+        fecha: '2026-04-09',
         hora: '11:00:00',
         estatus: 'N',
         valor: 70,
@@ -191,7 +191,7 @@ describe('buildOperationalCompetitiveReport', () => {
         canalReal: 'CC',
         plataforma: 'Call center',
         plataformaCode: 'CC',
-        fecha: '2026-04-10',
+        fecha: '2026-04-09',
         hora: '19:20:00',
         estatus: 'N',
         valor: 70,
@@ -215,11 +215,11 @@ describe('buildOperationalCompetitiveReport', () => {
       cancelledTransactions: 1,
     })
 
-    expect(report.tables.DAY.segments[1].rows[0]).toMatchObject({
-      representativeId: 'rep-mix',
-      validTransactions: 0,
-      segment: 'FULL_TIME',
-    })
+    expect(
+      report.tables.DAY.segments.every(segment =>
+        segment.rows.every(row => row.representativeId !== 'rep-mix')
+      )
+    ).toBe(true)
 
     expect(report.tables.NIGHT.segments[0].rows[0]).toMatchObject({
       representativeId: 'rep-zero',

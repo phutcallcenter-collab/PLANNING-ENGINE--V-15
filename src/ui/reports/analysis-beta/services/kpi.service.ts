@@ -151,8 +151,12 @@ function periodo30(hhmmss: string): string {
 }
 
 const OFFICIAL_SYSTEM_AGENT_SALES_DISCOUNT_RATE = 0.18696279;
-const OFFICIAL_SYSTEM_AGENT_SALES_FACTOR =
+export const OFFICIAL_SYSTEM_AGENT_SALES_FACTOR =
   1 - OFFICIAL_SYSTEM_AGENT_SALES_DISCOUNT_RATE;
+
+export function adjustOfficialSystemAgentSales(value: number): number {
+  return value * OFFICIAL_SYSTEM_AGENT_SALES_FACTOR;
+}
 
 export function aggregateByAgent(
   transactions: Transaction[]
@@ -205,7 +209,7 @@ export function aggregateByAgent(
   return Array.from(agg.values()).map((data) => {
     const adjustedSales =
       data.tipo === 'agente'
-        ? data.ventas * OFFICIAL_SYSTEM_AGENT_SALES_FACTOR
+        ? adjustOfficialSystemAgentSales(data.ventas)
         : data.ventas;
 
     return {

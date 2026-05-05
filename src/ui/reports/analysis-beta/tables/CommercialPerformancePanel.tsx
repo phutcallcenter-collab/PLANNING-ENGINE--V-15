@@ -6,9 +6,10 @@ import { useAppStore } from '@/store/useAppStore';
 import { useDashboardStore } from '@/ui/reports/analysis-beta/store/dashboard.store';
 import { Button } from '@/ui/reports/analysis-beta/ui/button';
 import { cn } from '@/ui/reports/analysis-beta/lib/utils';
-import { aggregateByAgent } from '@/ui/reports/analysis-beta/services/kpi.service';
 import { MANUAL_REPRESENTATIVE_LINKS } from '@/ui/reports/analysis-beta/config/manualRepresentativeLinks';
-import { buildRepresentativeLinkMap } from '@/ui/reports/analysis-beta/services/representative-link.service';
+import {
+  buildRepresentativePerformanceReport,
+} from '@/ui/reports/analysis-beta/services/representative-performance.service';
 import {
   Dialog,
   DialogContent,
@@ -26,6 +27,10 @@ import {
 } from '@/ui/reports/analysis-beta/ui/select';
 import AgentPerformanceTable from './AgentPerformanceTable';
 import MonthlyRepresentativeTable from './MonthlyRepresentativeTable';
+import {
+  OMIT_REPRESENTATIVE_LINK,
+  normalizeRepresentativeLinkName,
+} from '@/ui/reports/analysis-beta/services/representative-link.service';
 
 const tabs = [
   {
@@ -52,9 +57,21 @@ export default function CommercialPerformancePanel() {
   const removeManualRepresentativeLink = useDashboardStore(
     (state) => state.removeManualRepresentativeLink
   );
-  const transactions = useDashboardStore((state) => state.transactions);
+  const transactions = useDashboardStore((state) => state.rawTransactions);
   const dataDate = useDashboardStore((state) => state.dataDate);
-  const representatives = useAppStore((state) => state.representatives);
+  const {
+    representatives,
+    commercialGoals,
+    incidents,
+    calendar,
+    specialSchedules,
+  } = useAppStore((state) => ({
+    representatives: state.representatives,
+    commercialGoals: state.commercialGoals,
+    incidents: state.incidents,
+    calendar: state.calendar,
+    specialSchedules: state.specialSchedules,
+  }));
   const [isLinkManagerOpen, setIsLinkManagerOpen] = useState(false);
   const [selectedAgentName, setSelectedAgentName] = useState('');
   const [selectedRepresentativeName, setSelectedRepresentativeName] = useState('');
@@ -67,29 +84,56 @@ export default function CommercialPerformancePanel() {
     [representatives]
   );
 
-  const dayAgentRows = useMemo(() => {
-    if (!dataDate) return [];
-    return aggregateByAgent(transactions.filter((tx) => tx.fecha === dataDate)).filter(
-      (row) => row.tipo === 'agente'
-    );
-  }, [transactions, dataDate]);
+  const dayPerformanceReport = useMemo(() => {
+    if (!dataDate) {
+      return null;
+    }
 
-  const resolvedLinks = useMemo(
-    () =>
-      buildRepresentativeLinkMap(dayAgentRows, representatives, [
+    return buildRepresentativePerformanceReport({
+      representatives,
+      commercialGoals,
+      incidents,
+      calendar,
+      specialSchedules,
+      currentPeriod: {
+        kind: 'DAY',
+        anchorDate: dataDate,
+        label: dataDate,
+        from: dataDate,
+        to: dataDate,
+        loadedDays: 1,
+        expectedDays: 1,
+        loadedDates: [dataDate],
+        isComplete: true,
+      },
+      currentTransactions: transactions.filter((transaction) => transaction.fecha === dataDate),
+      currentTransactionDates: [dataDate],
+      manualRepresentativeLinks: [
         ...MANUAL_REPRESENTATIVE_LINKS,
         ...manualRepresentativeLinks,
-      ]),
-    [dayAgentRows, representatives, manualRepresentativeLinks]
-  );
+      ],
+    });
+  }, [
+    calendar,
+    commercialGoals,
+    dataDate,
+    incidents,
+    manualRepresentativeLinks,
+    representatives,
+    specialSchedules,
+    transactions,
+  ]);
 
   const unresolvedAgentNames = useMemo(
     () =>
-      dayAgentRows
-        .filter((row) => !resolvedLinks.has(row.agente))
-        .map((row) => row.agente)
-        .sort((left, right) => left.localeCompare(right, 'es')),
-    [dayAgentRows, resolvedLinks]
+      [
+        ...new Set(
+          (dayPerformanceReport?.reconciliation.items ?? [])
+            .filter((item) => item.reason === 'unlinked_agent' && item.agentName)
+            .map((item) => item.agentName as string)
+        ),
+      ].sort((left, right) => left.localeCompare(right, 'es')),
+    [dayPerformanceReport]
   );
 
   const handleSaveLink = () => {
@@ -101,6 +145,24 @@ export default function CommercialPerformancePanel() {
     setSelectedAgentName('');
     setSelectedRepresentativeName('');
   };
+
+  const linkedAgentNames = useMemo(
+    () =>
+      new Set(
+        manualRepresentativeLinks.map((link) =>
+          normalizeRepresentativeLinkName(link.agentName)
+        )
+      ),
+    [manualRepresentativeLinks]
+  );
+
+  const pendingAgentPills = useMemo(
+    () =>
+      unresolvedAgentNames.filter(
+        (agentName) => !linkedAgentNames.has(normalizeRepresentativeLinkName(agentName))
+      ),
+    [linkedAgentNames, unresolvedAgentNames]
+  );
 
   return (
     <section className="space-y-4">
@@ -127,7 +189,8 @@ export default function CommercialPerformancePanel() {
               </button>
             </div>
             <p className="text-sm text-slate-500">
-              Revisa transacciones por representante en el día activo o en el acumulado del mes.
+              Todo lo transaccional sale del análisis de llamadas; el ranking y estas
+              tablas ya leen la misma fuente oficial.
             </p>
           </div>
 
@@ -153,13 +216,42 @@ export default function CommercialPerformancePanel() {
           </div>
         </div>
 
+        {dayPerformanceReport?.reconciliation.excludedValidTransactions ? (
+          <div className="mt-5 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-4">
+            <div className="text-[10px] font-black uppercase tracking-[0.16em] text-amber-700">
+              Banda de conciliación
+            </div>
+            <p className="mt-2 text-sm text-amber-900">
+              {dayPerformanceReport.reconciliation.excludedValidTransactions.toLocaleString('en-US')} transacciones
+              siguen fuera de lo oficial por enlace pendiente, omisión manual o falta
+              de agente. No se mezclan con la tabla final.
+            </p>
+            {pendingAgentPills.length > 0 ? (
+              <div className="mt-3 flex flex-wrap gap-2">
+                {pendingAgentPills.map((name) => (
+                  <button
+                    key={name}
+                    type="button"
+                    onClick={() => {
+                      setSelectedAgentName(name);
+                      setIsLinkManagerOpen(true);
+                    }}
+                    className="rounded-full border border-amber-200 bg-white px-3 py-1 text-[10px] font-black uppercase tracking-[0.12em] text-amber-800 transition hover:border-amber-300 hover:bg-amber-100"
+                  >
+                    {name}
+                  </button>
+                ))}
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+
         <div className="mt-5">
           {commercialView === 'day' ? (
             <AgentPerformanceTable
               embedded
-              filter="agents"
               title="Representantes del día"
-              subtitle="Solo representantes humanos del día seleccionado."
+              subtitle="Tabla oficial conciliada contra Call Center."
               searchPlaceholder="Buscar representante..."
             />
           ) : null}
@@ -173,8 +265,8 @@ export default function CommercialPerformancePanel() {
           <DialogHeader>
             <DialogTitle>Enlaces de representantes</DialogTitle>
             <DialogDescription>
-              Gestiona los enlaces manuales para resolver nombres del reporte que no se
-              vinculan automáticamente.
+              Gestiona aquí mismo los nombres del reporte que no se vinculan
+              automáticamente o que deben quedar fuera del ranking oficial.
             </DialogDescription>
           </DialogHeader>
 
@@ -184,7 +276,7 @@ export default function CommercialPerformancePanel() {
                 <SelectValue placeholder="Selecciona agente del reporte" />
               </SelectTrigger>
               <SelectContent>
-                {unresolvedAgentNames.map((agentName) => (
+                {pendingAgentPills.map((agentName) => (
                   <SelectItem key={agentName} value={agentName}>
                     {agentName}
                   </SelectItem>
@@ -197,6 +289,9 @@ export default function CommercialPerformancePanel() {
                 <SelectValue placeholder="Selecciona representante del sistema" />
               </SelectTrigger>
               <SelectContent>
+                <SelectItem value={OMIT_REPRESENTATIVE_LINK}>
+                  Omitir de lo oficial (supervisión / apoyo)
+                </SelectItem>
                 {activeRepresentatives.map((representative) => (
                   <SelectItem key={representative.id} value={representative.name}>
                     {representative.name}
@@ -219,7 +314,11 @@ export default function CommercialPerformancePanel() {
                 {manualRepresentativeLinks.map((link) => (
                   <tr key={link.agentName} className="border-t border-slate-100">
                     <td className="px-3 py-2">{link.agentName}</td>
-                    <td className="px-3 py-2">{link.representativeName}</td>
+                    <td className="px-3 py-2">
+                      {link.representativeName === OMIT_REPRESENTATIVE_LINK
+                        ? 'Omitido de lo oficial'
+                        : link.representativeName}
+                    </td>
                     <td className="px-3 py-2 text-right">
                       <button
                         type="button"

@@ -1,24 +1,28 @@
-'use client'
+'use client';
 
-import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
-import { AlertTriangle, ArrowRight, CalendarRange, Download, Link2, Printer, Trash2 } from 'lucide-react'
-import { useAppStore } from '@/store/useAppStore'
-import { useDashboardStore } from '@/ui/reports/analysis-beta/store/dashboard.store'
+import { useEffect, useMemo, useRef, useState } from 'react';
+import {
+  AlertTriangle,
+  ArrowRight,
+  Download,
+  Link2,
+  Printer,
+  Trash2,
+} from 'lucide-react';
+import { useAppStore } from '@/store/useAppStore';
+import { useDashboardStore } from '@/ui/reports/analysis-beta/store/dashboard.store';
 import {
   buildComparisonPeriodSummary,
   buildComparisonSelectionOptions,
   resolveComparisonRange,
-} from '@/ui/reports/analysis-beta/services/comparison.service'
-import {
-  loadCachedDailySources,
-} from '@/ui/reports/analysis-beta/services/report-source-cache.service'
-import { buildOperationalCompetitiveReport } from '@/application/reports/buildOperationalCompetitiveReport'
+} from '@/ui/reports/analysis-beta/services/comparison.service';
+import { loadCachedDailySources } from '@/ui/reports/analysis-beta/services/report-source-cache.service';
 import type {
   OperationalCompetitiveComparisonPreset,
   OperationalCompetitivePeriodKind,
   OperationalCompetitiveResolvedPeriod,
-} from '@/domain/reports/operationalTypes'
-import { OperationalCompetitiveShiftLeaderboard } from './OperationalCompetitiveShiftLeaderboard'
+} from '@/domain/reports/operationalTypes';
+import { OperationalCompetitiveShiftLeaderboard } from './OperationalCompetitiveShiftLeaderboard';
 import {
   Dialog,
   DialogContent,
@@ -26,98 +30,97 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@/ui/reports/analysis-beta/ui/dialog'
+} from '@/ui/reports/analysis-beta/ui/dialog';
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@/ui/reports/analysis-beta/ui/select'
-import type { Transaction } from '@/ui/reports/analysis-beta/types/dashboard.types'
-import { downloadElementAsImage } from '@/ui/lib/downloadElementAsImage'
+} from '@/ui/reports/analysis-beta/ui/select';
+import type { Transaction } from '@/ui/reports/analysis-beta/types/dashboard.types';
+import { downloadElementAsImage } from '@/ui/lib/downloadElementAsImage';
+import {
+  buildRepresentativePerformanceReport,
+} from '@/ui/reports/analysis-beta/services/representative-performance.service';
+import {
+  normalizeRepresentativeLinkName,
+  OMIT_REPRESENTATIVE_LINK,
+} from '@/ui/reports/analysis-beta/services/representative-link.service';
 
-type ComparisonMode = 'full_day' | 'week' | 'month'
+type ComparisonMode = 'full_day' | 'week' | 'month';
 
 function getComparisonMode(kind: OperationalCompetitivePeriodKind): ComparisonMode {
   if (kind === 'WEEK') {
-    return 'week'
+    return 'week';
   }
 
   if (kind === 'MONTH') {
-    return 'month'
+    return 'month';
   }
 
-  return 'full_day'
+  return 'full_day';
 }
 
 function getComparisonPreset(
   kind: OperationalCompetitivePeriodKind
 ): OperationalCompetitiveComparisonPreset {
   if (kind === 'WEEK') {
-    return 'WEEK_PREVIOUS'
+    return 'WEEK_PREVIOUS';
   }
 
   if (kind === 'MONTH') {
-    return 'MONTH_PREVIOUS'
+    return 'MONTH_PREVIOUS';
   }
 
-  return 'DAY_PREVIOUS'
+  return 'DAY_PREVIOUS';
 }
 
 function shiftUtcDate(dateStr: string, days: number) {
-  const [year, month, day] = dateStr.split('-').map(Number)
-  const date = new Date(Date.UTC(year, (month || 1) - 1, day || 1))
-  date.setUTCDate(date.getUTCDate() + days)
-  return date.toISOString().slice(0, 10)
+  const [year, month, day] = dateStr.split('-').map(Number);
+  const date = new Date(Date.UTC(year, (month || 1) - 1, day || 1));
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
 }
 
 function shiftUtcMonth(dateStr: string, months: number) {
-  const [year, month, day] = dateStr.split('-').map(Number)
-  const date = new Date(Date.UTC(year, (month || 1) - 1, day || 1))
-  date.setUTCMonth(date.getUTCMonth() + months)
-  return date.toISOString().slice(0, 10)
-}
-
-function normalizeLinkName(value: string) {
-  return value
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/[^a-z0-9]/g, '')
+  const [year, month, day] = dateStr.split('-').map(Number);
+  const date = new Date(Date.UTC(year, (month || 1) - 1, day || 1));
+  date.setUTCMonth(date.getUTCMonth() + months);
+  return date.toISOString().slice(0, 10);
 }
 
 function groupTransactionsByDate(transactions: Transaction[]) {
   return transactions.reduce<Map<string, Transaction[]>>((accumulator, transaction) => {
-    const current = accumulator.get(transaction.fecha) ?? []
-    current.push(transaction)
-    accumulator.set(transaction.fecha, current)
-    return accumulator
-  }, new Map())
+    const current = accumulator.get(transaction.fecha) ?? [];
+    current.push(transaction);
+    accumulator.set(transaction.fecha, current);
+    return accumulator;
+  }, new Map());
 }
 
 function mergeTransactionsForDates(params: {
-  dates: string[]
+  dates: string[];
   sourcesByDate: Map<
     string,
     {
-      rawTransactions: Transaction[]
+      rawTransactions: Transaction[];
     }
-  >
-  fallbackTransactionsByDate: Map<string, Transaction[]>
+  >;
+  fallbackTransactionsByDate: Map<string, Transaction[]>;
 }) {
-  const transactionsById = new Map<string, Transaction>()
+  const transactionsById = new Map<string, Transaction>();
 
-  params.dates.forEach(date => {
-    const cachedTransactions = params.sourcesByDate.get(date)?.rawTransactions ?? []
-    const fallbackTransactions = params.fallbackTransactionsByDate.get(date) ?? []
+  params.dates.forEach((date) => {
+    const cachedTransactions = params.sourcesByDate.get(date)?.rawTransactions ?? [];
+    const fallbackTransactions = params.fallbackTransactionsByDate.get(date) ?? [];
 
-    ;[...cachedTransactions, ...fallbackTransactions].forEach(transaction => {
-      transactionsById.set(transaction.id, transaction)
-    })
-  })
+    [...cachedTransactions, ...fallbackTransactions].forEach((transaction) => {
+      transactionsById.set(transaction.id, transaction);
+    });
+  });
 
-  return [...transactionsById.values()]
+  return [...transactionsById.values()];
 }
 
 function resolveTransactionCoverageDates(
@@ -126,8 +129,8 @@ function resolveTransactionCoverageDates(
     string,
     | {
         coverage?: {
-          transactionsLoaded?: boolean
-        }
+          transactionsLoaded?: boolean;
+        };
       }
     | undefined
   >
@@ -135,37 +138,32 @@ function resolveTransactionCoverageDates(
   return dates.reduce(
     (accumulator, date) => {
       if (dailyHistory[date]?.coverage?.transactionsLoaded) {
-        accumulator.readyDates.push(date)
+        accumulator.readyDates.push(date);
       } else {
-        accumulator.missingDates.push(date)
+        accumulator.missingDates.push(date);
       }
 
-      return accumulator
+      return accumulator;
     },
     {
       readyDates: [] as string[],
       missingDates: [] as string[],
     }
-  )
-}
-
-function formatShortDateLabel(date: string) {
-  const [year, month, day] = date.split('-')
-  return `${day}/${month}/${year?.slice(2)}`
+  );
 }
 
 function buildResolvedPeriod(params: {
-  anchorDate: string
-  kind: OperationalCompetitivePeriodKind
-  availableDates: string[]
+  anchorDate: string;
+  kind: OperationalCompetitivePeriodKind;
+  availableDates: string[];
 }): OperationalCompetitiveResolvedPeriod {
-  const periodMode = getComparisonMode(params.kind)
+  const periodMode = getComparisonMode(params.kind);
   const summary = buildComparisonPeriodSummary({
     anchorDate: params.anchorDate,
     periodMode,
     loadedDates: params.availableDates,
-  })
-  const range = resolveComparisonRange(params.anchorDate, periodMode)
+  });
+  const range = resolveComparisonRange(params.anchorDate, periodMode);
 
   return {
     kind: params.kind,
@@ -176,972 +174,255 @@ function buildResolvedPeriod(params: {
     loadedDays: summary.loadedDays,
     expectedDays: summary.expectedDays,
     loadedDates: params.availableDates.filter(
-      date => date >= range.start && date <= range.end
+      (date) => date >= range.start && date <= range.end
     ),
     isComplete: summary.isComplete,
-  }
-}
-
-const panelShellStyle: CSSProperties = {
-  borderRadius: '28px',
-  overflow: 'hidden',
-  border: '1px solid rgba(185, 28, 28, 0.16)',
-  background: '#ffffff',
-  boxShadow: '0 28px 56px rgba(15, 23, 42, 0.08)',
-}
-
-const headerBadgeStyle: CSSProperties = {
-  display: 'inline-flex',
-  alignItems: 'center',
-  width: 'fit-content',
-  padding: '7px 11px',
-  borderRadius: '999px',
-  border: '1px solid rgba(255,255,255,0.2)',
-  background: 'rgba(255,255,255,0.12)',
-  color: 'white',
-  fontSize: '11px',
-  fontWeight: 800,
-  letterSpacing: '0.1em',
-  textTransform: 'uppercase',
-}
-
-const statusChipStyle: CSSProperties = {
-  display: 'inline-flex',
-  alignItems: 'center',
-  gap: '8px',
-  padding: '9px 12px',
-  borderRadius: '999px',
-  background: 'rgba(255,255,255,0.96)',
-  border: '1px solid rgba(226, 232, 240, 0.98)',
-  color: '#334155',
-  fontSize: '12px',
-  fontWeight: 700,
-}
-
-const legendChipStyle: CSSProperties = {
-  padding: '9px 11px',
-  borderRadius: '999px',
-  border: '1px solid rgba(226, 232, 240, 0.98)',
-  background: 'rgba(255,255,255,0.94)',
-  fontSize: '12px',
-  fontWeight: 700,
-  color: '#334155',
+  };
 }
 
 type OperationalCompetitivePanelProps = {
-  onOpenCallCenter: () => void
-}
-const OMIT_REPRESENTATIVE_LINK = '__OMITIR__'
+  onOpenCallCenter: () => void;
+};
 
-export function OperationalCompetitivePanel({
-  onOpenCallCenter,
-}: OperationalCompetitivePanelProps) {
-  const { representatives, commercialGoals, incidents } = useAppStore(state => ({
-    representatives: state.representatives ?? [],
-    commercialGoals: state.commercialGoals ?? [],
-    incidents: state.incidents ?? [],
-  }))
-  const availableDates = useDashboardStore(state => state.availableDates)
-  const dailyHistory = useDashboardStore(state => state.dailyHistory)
-  const rawTransactions = useDashboardStore(state => state.rawTransactions)
-  const manualRepresentativeLinks = useDashboardStore(
-    state => state.manualRepresentativeLinks
-  )
-  const upsertManualRepresentativeLink = useDashboardStore(
-    state => state.upsertManualRepresentativeLink
-  )
-  const removeManualRepresentativeLink = useDashboardStore(
-    state => state.removeManualRepresentativeLink
-  )
-  const hasHydrated = useDashboardStore(state => state._hasHydrated)
+type SurfaceProps = {
+  performanceReport: ReturnType<typeof buildRepresentativePerformanceReport>;
+  currentPeriod: OperationalCompetitiveResolvedPeriod;
+  comparisonEnabled: boolean;
+  comparisonLabel: string;
+  comparisonPeriod: OperationalCompetitiveResolvedPeriod | null;
+  periodKind: OperationalCompetitivePeriodKind;
+  currentTransactionCoverage: { readyDates: string[]; missingDates: string[] };
+  onManageLinks: () => void;
+};
 
-  const transactionAvailableDates = useMemo(() => {
-    return [...new Set(rawTransactions.map(transaction => transaction.fecha))].sort()
-  }, [rawTransactions])
-
-  const latestCompleteDate = useMemo(() => {
-    return [...availableDates]
-      .sort()
-      .reverse()
-      .find(date => dailyHistory[date]?.coverage.isComplete) ??
-      transactionAvailableDates.at(-1) ??
-      null
-  }, [availableDates, dailyHistory, transactionAvailableDates])
-  const [periodKind, setPeriodKind] = useState<OperationalCompetitivePeriodKind>('DAY')
-  const [selectedAnchorDate, setSelectedAnchorDate] = useState<string | null>(null)
-  const [comparisonEnabled, setComparisonEnabled] = useState(true)
-  const [isLinkManagerOpen, setIsLinkManagerOpen] = useState(false)
-  const [isExportingImage, setIsExportingImage] = useState(false)
-  const [selectedAgentName, setSelectedAgentName] = useState('')
-  const [selectedRepresentativeName, setSelectedRepresentativeName] = useState('')
-  const exportImageRef = useRef<HTMLDivElement | null>(null)
-  const [sourceData, setSourceData] = useState<{
-    isLoading: boolean
-    currentTransactions: Transaction[]
-    comparisonTransactions: Transaction[]
-  }>({
-    isLoading: false,
-    currentTransactions: [],
-    comparisonTransactions: [],
-  })
-  const fallbackTransactionsByDate = useMemo(
-    () => groupTransactionsByDate(rawTransactions),
-    [rawTransactions]
-  )
-
-  const periodOptions = useMemo(() => {
-    if (transactionAvailableDates.length === 0) {
-      return []
-    }
-
-    return buildComparisonSelectionOptions({
-      availableDates: transactionAvailableDates,
-      periodMode: getComparisonMode(periodKind),
-    })
-  }, [periodKind, transactionAvailableDates])
-
-  useEffect(() => {
-    if (periodOptions.length === 0) {
-      setSelectedAnchorDate(null)
-      return
-    }
-
-    const fallbackAnchorDate =
-      periodKind === 'DAY'
-        ? latestCompleteDate ?? periodOptions[0]?.value ?? null
-        : periodOptions[0]?.value ?? null
-
-    if (!selectedAnchorDate) {
-      setSelectedAnchorDate(fallbackAnchorDate)
-      return
-    }
-
-    const periodMode = getComparisonMode(periodKind)
-    const selectedRange = resolveComparisonRange(selectedAnchorDate, periodMode)
-    const matchingOption = periodOptions.find(
-      option =>
-        option.summary.start === selectedRange.start &&
-        option.summary.end === selectedRange.end
-    )
-
-    if (!matchingOption) {
-      setSelectedAnchorDate(fallbackAnchorDate)
-      return
-    }
-
-    if (matchingOption.value !== selectedAnchorDate) {
-      setSelectedAnchorDate(matchingOption.value)
-    }
-  }, [latestCompleteDate, periodKind, periodOptions, selectedAnchorDate])
-
-  const currentPeriod = useMemo(() => {
-    if (!selectedAnchorDate) {
-      return null
-    }
-
-    return buildResolvedPeriod({
-      anchorDate: selectedAnchorDate,
-      kind: periodKind,
-      availableDates: transactionAvailableDates,
-    })
-  }, [periodKind, selectedAnchorDate, transactionAvailableDates])
-
-  const comparisonPeriod = useMemo(() => {
-    if (!comparisonEnabled || !selectedAnchorDate) {
-      return null
-    }
-
-    const comparisonAnchorDate =
-      periodKind === 'MONTH'
-        ? shiftUtcMonth(selectedAnchorDate, -1)
-        : shiftUtcDate(selectedAnchorDate, periodKind === 'WEEK' ? -7 : -1)
-
-    return buildResolvedPeriod({
-      anchorDate: comparisonAnchorDate,
-      kind: periodKind,
-      availableDates: transactionAvailableDates,
-    })
-  }, [comparisonEnabled, periodKind, selectedAnchorDate, transactionAvailableDates])
-
-  useEffect(() => {
-    let cancelled = false
-
-    if (!currentPeriod) {
-      setSourceData({
-        isLoading: false,
-        currentTransactions: [],
-        comparisonTransactions: [],
-      })
-      return
-    }
-
-    const currentDates = currentPeriod.loadedDates
-    const comparisonDates = comparisonPeriod?.loadedDates ?? []
-    const datesToLoad = [...new Set([...currentDates, ...comparisonDates])].sort()
-
-    if (datesToLoad.length === 0) {
-      setSourceData({
-        isLoading: false,
-        currentTransactions: [],
-        comparisonTransactions: [],
-      })
-      return
-    }
-
-    setSourceData(current => ({
-      ...current,
-      isLoading: true,
-    }))
-
-    void (async () => {
-      const sources = await loadCachedDailySources(datesToLoad)
-      if (cancelled) {
-        return
-      }
-
-      const sourcesByDate = new Map(sources.map(source => [source.date, source]))
-
-      setSourceData({
-        isLoading: false,
-        currentTransactions: mergeTransactionsForDates({
-          dates: currentDates,
-          sourcesByDate,
-          fallbackTransactionsByDate,
-        }),
-        comparisonTransactions: mergeTransactionsForDates({
-          dates: comparisonDates,
-          sourcesByDate,
-          fallbackTransactionsByDate,
-        }),
-      })
-    })()
-
-    return () => {
-      cancelled = true
-    }
-  }, [comparisonPeriod, currentPeriod, fallbackTransactionsByDate])
-
-  const currentTransactionCoverage = useMemo(() => {
-    if (!currentPeriod) {
-      return { readyDates: [], missingDates: [] }
-    }
-
-    return resolveTransactionCoverageDates(currentPeriod.loadedDates, dailyHistory)
-  }, [currentPeriod, dailyHistory])
-
-  const comparisonTransactionCoverage = useMemo(() => {
-    if (!comparisonPeriod) {
-      return { readyDates: [], missingDates: [] }
-    }
-
-    return resolveTransactionCoverageDates(comparisonPeriod.loadedDates, dailyHistory)
-  }, [comparisonPeriod, dailyHistory])
-
-  const competitiveReport = useMemo(() => {
-    if (!currentPeriod) {
-      return null
-    }
-
-    return buildOperationalCompetitiveReport({
-      representatives,
-      commercialGoals,
-      incidents,
-      currentPeriod,
-      currentTransactionDates: currentTransactionCoverage.readyDates,
-      comparisonPreset: comparisonEnabled ? getComparisonPreset(periodKind) : 'NONE',
-      comparisonPeriod: comparisonEnabled ? comparisonPeriod : null,
-      comparisonTransactionDates: comparisonTransactionCoverage.readyDates,
-      currentTransactions: sourceData.currentTransactions,
-      comparisonTransactions: sourceData.comparisonTransactions,
-      manualRepresentativeLinks,
-    })
-  }, [
-    commercialGoals,
-    comparisonEnabled,
-    comparisonPeriod,
-    currentPeriod,
-    incidents,
-    manualRepresentativeLinks,
-    periodKind,
-    representatives,
-    currentTransactionCoverage.readyDates,
-    comparisonTransactionCoverage.readyDates,
-    sourceData.comparisonTransactions,
-    sourceData.currentTransactions,
-  ])
-
-  const activeRepresentatives = useMemo(
-    () =>
-      representatives
-        .filter(representative => representative.isActive)
-        .sort((left, right) => left.name.localeCompare(right.name, 'es')),
-    [representatives]
-  )
-
-  const unresolvedAgentNames = useMemo(
-    () => {
-      const pendingNames = competitiveReport?.pendingAgentNames ?? []
-      const linkedAgentNames = new Set(
-        manualRepresentativeLinks.map(link => normalizeLinkName(link.agentName))
-      )
-
-      return pendingNames.filter(
-        agentName => !linkedAgentNames.has(normalizeLinkName(agentName))
-      )
-    },
-    [competitiveReport, manualRepresentativeLinks]
-  )
-  const pendingShiftSections = useMemo(() => {
-    if (!competitiveReport) {
-      return []
-    }
-
-    const linkedAgentNames = new Set(
-      manualRepresentativeLinks.map(link => normalizeLinkName(link.agentName))
-    )
-
-    return (['DAY', 'NIGHT'] as const)
-      .map(shift => {
-        const table = competitiveReport.tables[shift]
-        const names = table.pendingAgentNames.filter(
-          name => !linkedAgentNames.has(normalizeLinkName(name))
-        )
-
-        return {
-          shift: table.label,
-          names,
-          missingAgentRegistrations: table.missingAgentRegistrations,
-        }
-      })
-      .filter(section => section.names.length > 0 || section.missingAgentRegistrations > 0)
-  }, [competitiveReport, manualRepresentativeLinks])
-
-  const hasCurrentTransactionCoverage = currentTransactionCoverage.readyDates.length > 0
-  const hasCurrentTransactionGaps = currentTransactionCoverage.missingDates.length > 0
-  const hasComparisonTransactionGaps =
-    comparisonEnabled && comparisonTransactionCoverage.missingDates.length > 0
-  const comparisonLabel =
-    periodKind === 'DAY'
-      ? 'ayer'
-      : periodKind === 'WEEK'
-        ? 'la semana pasada'
-        : 'el mes pasado'
-
-  const handleSaveManualLink = () => {
-    if (!selectedAgentName || !selectedRepresentativeName) {
-      return
-    }
-
-    upsertManualRepresentativeLink({
-      agentName: selectedAgentName,
-      representativeName: selectedRepresentativeName,
-    })
-    setSelectedAgentName('')
-    setSelectedRepresentativeName('')
-  }
-
-  const handleDownloadImage = async () => {
-    if (!exportImageRef.current || !currentPeriod) {
-      return
-    }
-
-    setIsExportingImage(true)
-
-    try {
-      await downloadElementAsImage({
-        element: exportImageRef.current,
-        fileName: `Reporte_Operativo_Turnos_${currentPeriod.from}_${currentPeriod.to}.png`,
-      })
-    } catch (error) {
-      console.error(error)
-      window.alert('No se pudo generar la imagen para compartir. Intenta de nuevo.')
-    } finally {
-      setIsExportingImage(false)
-    }
-  }
-
-  if (!hasHydrated) {
-    return (
-      <section style={{ ...panelShellStyle, padding: '24px' }}>
-        <div className="app-shell-loading">Preparando historial de Call Center...</div>
-      </section>
-    )
-  }
-
-  if (transactionAvailableDates.length === 0) {
-    return (
-      <section
-        style={{
-          ...panelShellStyle,
-          padding: '0',
-          display: 'flex',
-          flexDirection: 'column',
-        }}
-      >
-        <div
-          style={{
-            padding: '22px 24px',
-            background: 'linear-gradient(180deg, #e11d24 0%, #991b1b 100%)',
-            color: 'white',
-            display: 'grid',
-            gap: '12px',
-          }}
-        >
-          <div style={headerBadgeStyle}>Resumen operativo</div>
-          <h2 style={{ margin: 0, fontSize: '1.42rem', fontWeight: 800 }}>
-            Falta cargar historial de Call Center
-          </h2>
-          <p
-            style={{
-              margin: 0,
-              fontSize: '13px',
-              lineHeight: 1.7,
-              maxWidth: '68ch',
-              color: 'rgba(255,255,255,0.9)',
-            }}
-          >
-            En cuanto haya jornadas cargadas desde Call Center, este módulo arma
-            automáticamente las tablas por turno para compartir resultados diarios,
-            semanales o mensuales.
-          </p>
-        </div>
-
-        <div
-          style={{
-            padding: '20px 24px 24px',
-            background: 'linear-gradient(180deg, rgba(255,245,245,0.96) 0%, rgba(255,255,255,1) 100%)',
-          }}
-        >
-          <button
-            type="button"
-            onClick={onOpenCallCenter}
-            style={{
-              width: 'fit-content',
-              padding: '11px 14px',
-              borderRadius: '14px',
-              border: '1px solid rgba(185, 28, 28, 0.22)',
-              background: 'rgba(255,255,255,0.96)',
-              color: '#b91c1c',
-              fontWeight: 800,
-              cursor: 'pointer',
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '8px',
-            }}
-          >
-            Abrir Call Center
-            <ArrowRight size={16} />
-          </button>
-        </div>
-      </section>
-    )
-  }
+function OperationalCompetitiveSurface({
+  performanceReport,
+  currentPeriod,
+  comparisonEnabled,
+  comparisonLabel,
+  comparisonPeriod,
+  periodKind,
+  currentTransactionCoverage,
+  onManageLinks,
+}: SurfaceProps) {
+  const pendingUnlinkedAgents = performanceReport.reconciliation.items.filter(
+    (item) => item.reason === 'unlinked_agent' && item.agentName
+  );
+  const excludedTransactionCount = performanceReport.reconciliation.excludedValidTransactions;
 
   return (
     <div
       style={{
-        display: 'flex',
-        flexDirection: 'column',
-        gap: '20px',
+        display: 'grid',
+        gap: '22px',
       }}
     >
-      <section style={panelShellStyle}>
+      <section
+        className="report-print-avoid-break"
+        style={{
+          borderRadius: '34px',
+          background:
+            'radial-gradient(circle at top right, rgba(245,158,11,0.18), transparent 30%), #23211f',
+          color: '#fafaf9',
+          padding: '28px',
+          border: '1px solid rgba(255,255,255,0.08)',
+          boxShadow: '0 36px 80px rgba(0,0,0,0.2)',
+          display: 'grid',
+          gap: '22px',
+        }}
+      >
         <div
           style={{
-            padding: '22px 24px',
-            background: 'linear-gradient(180deg, #ef1117 0%, #a61117 100%)',
-            color: 'white',
             display: 'flex',
             justifyContent: 'space-between',
-            gap: '18px',
-            alignItems: 'flex-start',
+            gap: '20px',
             flexWrap: 'wrap',
+            alignItems: 'flex-start',
           }}
         >
-          <div style={{ maxWidth: '72ch', display: 'grid', gap: '12px' }}>
-            <div style={headerBadgeStyle}>Resumen operativo</div>
-            <div>
-              <h2
-                style={{
-                  margin: 0,
-                  fontSize: '1.52rem',
-                  fontWeight: 800,
-                  letterSpacing: '-0.03em',
-                }}
-              >
-                Tabla de resultados por turno
-              </h2>
-              <p
-                style={{
-                  margin: '10px 0 0',
-                  fontSize: '13px',
-                  lineHeight: 1.7,
-                  color: 'rgba(255,255,255,0.9)',
-                  maxWidth: '66ch',
-                }}
-              >
-                Ordena a los representantes por transacciones y cumplimiento de
-                meta. Errores, ausencias y tardanzas se muestran aparte como
-                seguimiento interno.
-              </p>
+          <div style={{ display: 'grid', gap: '8px', maxWidth: '780px' }}>
+            <div
+              style={{
+                fontSize: '0.82rem',
+                fontWeight: 800,
+                letterSpacing: '0.08em',
+                textTransform: 'uppercase',
+                color: 'rgba(245,245,244,0.62)',
+              }}
+            >
+              Ranking operativo
             </div>
+            <h2
+              style={{
+                margin: 0,
+                fontSize: '2.4rem',
+                fontWeight: 800,
+                letterSpacing: '-0.05em',
+              }}
+            >
+              Transacciones · cumplimiento · control interno
+            </h2>
+            <p
+              style={{
+                margin: 0,
+                color: 'rgba(245,245,244,0.75)',
+                lineHeight: 1.7,
+                fontSize: '0.98rem',
+              }}
+            >
+              Fuente de verdad única: análisis de llamadas / Call Center. La vista de{' '}
+              {periodKind === 'DAY' ? 'día' : periodKind === 'WEEK' ? 'semana' : 'mes'} usa
+              las mismas filas oficiales que la tabla comercial.
+            </p>
           </div>
 
           <div
             style={{
               display: 'grid',
               gap: '10px',
-              minWidth: '300px',
-              maxWidth: '360px',
-              padding: '14px',
-              borderRadius: '20px',
-              border: '1px solid rgba(255,255,255,0.18)',
-              background: 'rgba(255,255,255,0.12)',
-              backdropFilter: 'blur(8px)',
+              minWidth: '260px',
             }}
           >
             <div
               style={{
-                display: 'inline-flex',
-                gap: '8px',
-                flexWrap: 'wrap',
-                padding: '6px',
-                borderRadius: '16px',
-                border: '1px solid rgba(255,255,255,0.18)',
-                background: 'rgba(127,29,29,0.14)',
-                width: 'fit-content',
+                borderRadius: '22px',
+                border: '1px solid rgba(255,255,255,0.08)',
+                background: 'rgba(255,255,255,0.04)',
+                padding: '16px 18px',
               }}
             >
-              {([
-                { id: 'DAY', label: 'Diario' },
-                { id: 'WEEK', label: 'Semanal' },
-                { id: 'MONTH', label: 'Mensual' },
-              ] as const).map(option => (
-                <button
-                  key={option.id}
-                  type="button"
-                  onClick={() => setPeriodKind(option.id)}
-                  style={{
-                    padding: '8px 12px',
-                    borderRadius: '12px',
-                    border: '1px solid transparent',
-                    background:
-                      periodKind === option.id
-                        ? 'rgba(255,255,255,0.96)'
-                        : 'transparent',
-                    color: periodKind === option.id ? '#991b1b' : 'rgba(255,255,255,0.84)',
-                    fontWeight: 800,
-                    fontSize: '12px',
-                    cursor: 'pointer',
-                    boxShadow:
-                      periodKind === option.id
-                        ? '0 10px 18px rgba(127,29,29,0.2)'
-                        : 'none',
-                  }}
-                >
-                  {option.label}
-                </button>
-              ))}
-            </div>
-
-            <div
-              style={{
-                display: 'grid',
-                gridTemplateColumns: 'minmax(0, 1fr)',
-                gap: '10px',
-              }}
-            >
-              <select
-                value={selectedAnchorDate ?? ''}
-                onChange={event =>
-                  setSelectedAnchorDate(event.target.value || null)
-                }
-                style={{
-                  padding: '11px 12px',
-                  borderRadius: '14px',
-                  border: '1px solid rgba(255,255,255,0.22)',
-                  background: 'rgba(255,255,255,0.95)',
-                  fontSize: '13px',
-                  color: '#111827',
-                  fontWeight: 700,
-                }}
-              >
-                {periodOptions.map(option => (
-                  <option
-                    key={`${option.summary.start}:${option.summary.end}`}
-                    value={option.value}
-                  >
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-
-              <button
-                type="button"
-                onClick={() => setComparisonEnabled(current => !current)}
-                style={{
-                  padding: '11px 12px',
-                  borderRadius: '14px',
-                  border: comparisonEnabled
-                    ? '1px solid rgba(255,255,255,0.24)'
-                    : '1px solid rgba(255,255,255,0.16)',
-                  background: comparisonEnabled
-                    ? 'rgba(127,29,29,0.26)'
-                    : 'rgba(255,255,255,0.16)',
-                  color: 'white',
-                  fontSize: '12px',
-                  fontWeight: 800,
-                  cursor: 'pointer',
-                  whiteSpace: 'nowrap',
-                }}
-                >
-                  {comparisonEnabled
-                  ? `Comparado con ${
-                      periodKind === 'DAY'
-                        ? 'día anterior'
-                        : periodKind === 'WEEK'
-                          ? 'semana anterior'
-                          : 'mes anterior'
-                    }`
-                  : 'Sin comparación'}
-              </button>
-
-              <button
-                type="button"
-                onClick={() => void handleDownloadImage()}
-                disabled={isExportingImage || !competitiveReport || !hasCurrentTransactionCoverage}
-                style={{
-                  padding: '11px 12px',
-                  borderRadius: '14px',
-                  border: '1px solid rgba(255,255,255,0.22)',
-                  background: 'rgba(255,255,255,0.95)',
-                  color: '#991b1b',
-                  fontSize: '12px',
-                  fontWeight: 800,
-                  cursor:
-                    isExportingImage || !competitiveReport || !hasCurrentTransactionCoverage
-                      ? 'not-allowed'
-                      : 'pointer',
-                  whiteSpace: 'nowrap',
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '8px',
-                  opacity:
-                    isExportingImage || !competitiveReport || !hasCurrentTransactionCoverage
-                      ? 0.72
-                      : 1,
-                }}
-              >
-                <Download size={14} />
-                {isExportingImage ? 'Generando imagen...' : 'Descargar imagen'}
-              </button>
-
-              <button
-                type="button"
-                onClick={() => window.print()}
-                disabled={!competitiveReport || !hasCurrentTransactionCoverage}
-                style={{
-                  padding: '11px 12px',
-                  borderRadius: '14px',
-                  border: '1px solid rgba(255,255,255,0.22)',
-                  background: 'rgba(255,255,255,0.95)',
-                  color: '#0f172a',
-                  fontSize: '12px',
-                  fontWeight: 800,
-                  cursor:
-                    !competitiveReport || !hasCurrentTransactionCoverage
-                      ? 'not-allowed'
-                      : 'pointer',
-                  whiteSpace: 'nowrap',
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '8px',
-                  opacity: !competitiveReport || !hasCurrentTransactionCoverage ? 0.72 : 1,
-                }}
-              >
-                <Printer size={14} />
-                Imprimir / PDF
-              </button>
-            </div>
-          </div>
-        </div>
-
-        <div
-          style={{
-            padding: '16px 20px 20px',
-            display: 'grid',
-            gap: '12px',
-            background: 'linear-gradient(180deg, rgba(255,245,245,0.96) 0%, rgba(255,255,255,1) 100%)',
-          }}
-        >
-          {currentPeriod ? (
-            <div
-              style={{
-                display: 'flex',
-                gap: '10px',
-                flexWrap: 'wrap',
-              }}
-            >
-            <span style={statusChipStyle}>
-              <CalendarRange size={14} />
-              {currentPeriod.label}
-            </span>
-            <span style={statusChipStyle}>
-              {currentPeriod.loadedDays}/{currentPeriod.expectedDays} dia(s) cargados
-            </span>
-            <span style={statusChipStyle}>
-              Transacciones listas: {currentTransactionCoverage.readyDates.length}/
-              {currentPeriod.loadedDates.length} dia(s)
-            </span>
-            <span style={statusChipStyle}>
-              {currentPeriod.isComplete ? 'Periodo completo' : 'Periodo parcial'}
-            </span>
-            {comparisonEnabled && comparisonPeriod ? (
-              <>
-                <span style={statusChipStyle}>
-                  Comparado con: {comparisonPeriod.label}
-                </span>
-                <span style={statusChipStyle}>
-                  Transacciones listas: {comparisonTransactionCoverage.readyDates.length}/
-                  {comparisonPeriod.loadedDates.length} dia(s)
-                </span>
-              </>
-            ) : (
-              <span style={statusChipStyle}>Sin comparacion</span>
-            )}
-          </div>
-        ) : null}
-
-          <div
-            style={{
-              display: 'flex',
-              gap: '10px',
-              flexWrap: 'wrap',
-            }}
-          >
-            <span style={{ ...legendChipStyle, color: '#166534' }}>
-              Arriba quedan quienes más transacciones lograron
-            </span>
-            <span style={{ ...legendChipStyle, color: '#0f172a' }}>
-              Luego pesa el porcentaje cumplido
-            </span>
-            <span style={{ ...legendChipStyle, color: '#b91c1c' }}>
-              Anuladas e incidencias quedan como control interno
-            </span>
-            <span style={legendChipStyle}>
-              Lista para compartir
-            </span>
-          </div>
-        </div>
-      </section>
-
-      {currentPeriod && (hasCurrentTransactionGaps || hasComparisonTransactionGaps) ? (
-        <section
-          style={{
-            borderRadius: '22px',
-            border: '1px solid rgba(245, 158, 11, 0.26)',
-            background:
-              'linear-gradient(180deg, rgba(255,247,237,0.98) 0%, rgba(255,255,255,0.98) 100%)',
-            boxShadow: '0 18px 36px rgba(245, 158, 11, 0.08)',
-            padding: '18px',
-            display: 'grid',
-            gap: '12px',
-          }}
-        >
-          <div style={{ display: 'flex', gap: '10px', alignItems: 'flex-start' }}>
-            <div
-              style={{
-                width: '38px',
-                height: '38px',
-                borderRadius: '12px',
-                background: 'rgba(255,255,255,0.92)',
-                display: 'grid',
-                placeItems: 'center',
-                color: '#d97706',
-                border: '1px solid rgba(245, 158, 11, 0.18)',
-                flexShrink: 0,
-              }}
-            >
-              <AlertTriangle size={18} />
-            </div>
-            <div>
               <div
                 style={{
-                  fontSize: '12px',
+                  fontSize: '0.78rem',
                   fontWeight: 800,
                   letterSpacing: '0.08em',
                   textTransform: 'uppercase',
-                  color: '#b45309',
-                  marginBottom: '6px',
+                  color: 'rgba(245,245,244,0.52)',
                 }}
               >
-                Dias con datos faltantes
+                Período
               </div>
-              <p
-                style={{
-                  margin: 0,
-                  fontSize: '13px',
-                  lineHeight: 1.65,
-                  color: '#92400e',
-                  maxWidth: '82ch',
-                }}
-              >
-                La tabla usa solo los dias donde si existe base de transacciones.
-                Si faltan archivos en parte del periodo, la meta y los cambios se
-                calculan solo con esos dias disponibles para no castigar el
-                porcentaje.
-              </p>
+              <div style={{ marginTop: '6px', fontSize: '1.25rem', fontWeight: 800 }}>
+                {currentPeriod.label}
+              </div>
+              <div style={{ marginTop: '6px', color: 'rgba(245,245,244,0.72)', fontSize: '0.92rem' }}>
+                {comparisonEnabled && comparisonPeriod
+                  ? `Comparado con ${comparisonPeriod.label}.`
+                  : 'Sin comparación previa.'}
+              </div>
             </div>
           </div>
+        </div>
 
-          <div
-            style={{
-              display: 'grid',
-              gap: '10px',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))',
-            }}
-          >
-            {hasCurrentTransactionGaps ? (
-              <div
-                style={{
-                  padding: '12px 13px',
-                  borderRadius: '14px',
-                  background: 'rgba(255,255,255,0.92)',
-                  border: '1px solid rgba(245, 158, 11, 0.16)',
-                  display: 'grid',
-                  gap: '8px',
-                }}
-              >
-                <div style={{ fontSize: '12px', fontWeight: 800, color: '#92400e' }}>
-                  Periodo actual: faltan {currentTransactionCoverage.missingDates.length}{' '}
-                  dia(s) con transacciones
-                </div>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
-                  {currentTransactionCoverage.missingDates.slice(0, 6).map(date => (
-                    <span
-                      key={`current-gap:${date}`}
-                      style={{
-                        padding: '6px 9px',
-                        borderRadius: '999px',
-                        background: 'rgba(255,247,237,0.98)',
-                        border: '1px solid rgba(245, 158, 11, 0.18)',
-                        color: '#9a3412',
-                        fontSize: '11px',
-                        fontWeight: 700,
-                      }}
-                    >
-                      {formatShortDateLabel(date)}
-                    </span>
-                  ))}
-                  {currentTransactionCoverage.missingDates.length > 6 ? (
-                    <span
-                      style={{
-                        padding: '6px 9px',
-                        borderRadius: '999px',
-                        background: 'rgba(255,255,255,0.96)',
-                        border: '1px solid rgba(245, 158, 11, 0.16)',
-                        color: '#92400e',
-                        fontSize: '11px',
-                        fontWeight: 700,
-                      }}
-                    >
-                      +{currentTransactionCoverage.missingDates.length - 6} más
-                    </span>
-                  ) : null}
-                </div>
-              </div>
-            ) : null}
-
-            {hasComparisonTransactionGaps ? (
-              <div
-                style={{
-                  padding: '12px 13px',
-                  borderRadius: '14px',
-                  background: 'rgba(255,255,255,0.92)',
-                  border: '1px solid rgba(245, 158, 11, 0.16)',
-                  display: 'grid',
-                  gap: '8px',
-                }}
-              >
-                <div style={{ fontSize: '12px', fontWeight: 800, color: '#92400e' }}>
-                  Comparado con: faltan {comparisonTransactionCoverage.missingDates.length}{' '}
-                  dia(s) con transacciones
-                </div>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
-                  {comparisonTransactionCoverage.missingDates.slice(0, 6).map(date => (
-                    <span
-                      key={`comparison-gap:${date}`}
-                      style={{
-                        padding: '6px 9px',
-                        borderRadius: '999px',
-                        background: 'rgba(255,247,237,0.98)',
-                        border: '1px solid rgba(245, 158, 11, 0.18)',
-                        color: '#9a3412',
-                        fontSize: '11px',
-                        fontWeight: 700,
-                      }}
-                    >
-                      {formatShortDateLabel(date)}
-                    </span>
-                  ))}
-                  {comparisonTransactionCoverage.missingDates.length > 6 ? (
-                    <span
-                      style={{
-                        padding: '6px 9px',
-                        borderRadius: '999px',
-                        background: 'rgba(255,255,255,0.96)',
-                        border: '1px solid rgba(245, 158, 11, 0.16)',
-                        color: '#92400e',
-                        fontSize: '11px',
-                        fontWeight: 700,
-                      }}
-                    >
-                      +{comparisonTransactionCoverage.missingDates.length - 6} más
-                    </span>
-                  ) : null}
-                </div>
-              </div>
-            ) : null}
-          </div>
-        </section>
-      ) : null}
-
-      {competitiveReport?.dataQualityWarnings.length ? (
-        <section
+        <div
           style={{
-            borderRadius: '22px',
-            border: '1px solid rgba(245, 158, 11, 0.26)',
-            background: 'linear-gradient(180deg, rgba(255,247,237,0.98) 0%, rgba(255,255,255,0.98) 100%)',
-            boxShadow: '0 18px 36px rgba(245, 158, 11, 0.08)',
-            padding: '18px',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '12px',
+            display: 'grid',
+            gap: '14px',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))',
+          }}
+        >
+          {[
+            {
+              label: 'Representantes activos',
+              value: performanceReport.globalSummary.activeRepresentatives.toLocaleString('en-US'),
+              note: 'oficiales en este período',
+            },
+            {
+              label: 'Transacciones oficiales',
+              value: performanceReport.reconciliation.officialValidTransactions.toLocaleString('en-US'),
+              note: 'mismas filas del análisis',
+            },
+            {
+              label: 'Cumplimiento promedio',
+              value: formatPercent(performanceReport.globalSummary.progressPct),
+              note: 'sobre metas reales del roster',
+            },
+            {
+              label: 'Fuera de conciliación',
+              value: excludedTransactionCount.toLocaleString('en-US'),
+              note: 'separadas de lo oficial',
+            },
+          ].map((card) => (
+            <div
+              key={card.label}
+              style={{
+                borderRadius: '24px',
+                border: '1px solid rgba(255,255,255,0.08)',
+                background: 'rgba(255,255,255,0.04)',
+                padding: '18px',
+              }}
+            >
+              <div
+                style={{
+                  fontSize: '0.82rem',
+                  fontWeight: 700,
+                  color: 'rgba(245,245,244,0.58)',
+                }}
+              >
+                {card.label}
+              </div>
+              <div style={{ marginTop: '10px', fontSize: '2rem', fontWeight: 800 }}>
+                {card.value}
+              </div>
+              <div style={{ marginTop: '6px', color: 'rgba(245,245,244,0.62)', fontSize: '0.86rem' }}>
+                {card.note}
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(420px, 1fr))',
+          gap: '18px',
+        }}
+      >
+        <OperationalCompetitiveShiftLeaderboard
+          comparisonEnabled={comparisonEnabled}
+          comparisonLabel={comparisonLabel}
+          table={performanceReport.shifts.DAY}
+        />
+        <OperationalCompetitiveShiftLeaderboard
+          comparisonEnabled={comparisonEnabled}
+          comparisonLabel={comparisonLabel}
+          table={performanceReport.shifts.NIGHT}
+        />
+      </div>
+
+      {(excludedTransactionCount > 0 || currentTransactionCoverage.missingDates.length > 0) ? (
+        <section
+          className="report-print-avoid-break"
+          style={{
+            borderRadius: '28px',
+            border: '1px solid rgba(245, 158, 11, 0.18)',
+            background: '#fff7ed',
+            padding: '20px 22px',
+            display: 'grid',
+            gap: '14px',
           }}
         >
           <div
             style={{
               display: 'flex',
-              justifyContent: 'space-between',
-              gap: '14px',
+              gap: '12px',
               alignItems: 'flex-start',
+              justifyContent: 'space-between',
               flexWrap: 'wrap',
             }}
           >
-            <div style={{ display: 'flex', gap: '10px', alignItems: 'flex-start' }}>
+            <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
               <div
                 style={{
-                  width: '38px',
-                  height: '38px',
-                  borderRadius: '12px',
-                  background: 'rgba(255,255,255,0.92)',
+                  width: '40px',
+                  height: '40px',
+                  borderRadius: '14px',
+                  background: 'white',
                   display: 'grid',
                   placeItems: 'center',
                   color: '#d97706',
-                  border: '1px solid rgba(245, 158, 11, 0.18)',
-                  flexShrink: 0,
+                  border: '1px solid rgba(245, 158, 11, 0.24)',
                 }}
               >
                 <AlertTriangle size={18} />
@@ -1149,59 +430,40 @@ export function OperationalCompetitivePanel({
               <div>
                 <div
                   style={{
-                    fontSize: '12px',
+                    fontSize: '0.82rem',
                     fontWeight: 800,
                     letterSpacing: '0.08em',
                     textTransform: 'uppercase',
                     color: '#b45309',
-                    marginBottom: '6px',
                   }}
                 >
-                  Calidad de datos
+                  Banda de conciliación
                 </div>
                 <p
                   style={{
-                    margin: 0,
-                    fontSize: '13px',
-                    lineHeight: 1.65,
+                    margin: '6px 0 0',
                     color: '#92400e',
-                    maxWidth: '76ch',
+                    fontSize: '0.95rem',
+                    lineHeight: 1.7,
+                    maxWidth: '72ch',
                   }}
                 >
-                  Hay transacciones sin enlace manual o sin agente identificado. No se
-                  incluyen en la tabla hasta que las relaciones queden claras.
+                  La tabla oficial no mezcla transacciones omitidas, sin enlace o sin agente.
+                  Esas quedan separadas para que el acumulado siempre pueda cuadrar con la fuente
+                  importada.
                 </p>
               </div>
             </div>
 
-            <button
-              type="button"
-              onClick={onOpenCallCenter}
-              style={{
-                padding: '10px 13px',
-                borderRadius: '12px',
-                border: '1px solid rgba(245, 158, 11, 0.24)',
-                background: 'white',
-                color: '#92400e',
-                fontWeight: 800,
-                cursor: 'pointer',
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '8px',
-              }}
-            >
-              Ir a Call Center
-              <ArrowRight size={15} />
-            </button>
-            {unresolvedAgentNames.length > 0 ? (
+            {pendingUnlinkedAgents.length > 0 ? (
               <button
                 type="button"
-                onClick={() => setIsLinkManagerOpen(true)}
+                onClick={onManageLinks}
                 style={{
                   padding: '10px 13px',
-                  borderRadius: '12px',
-                  border: '1px solid rgba(245, 158, 11, 0.24)',
-                  background: 'rgba(146, 64, 14, 0.06)',
+                  borderRadius: '14px',
+                  border: '1px solid rgba(245, 158, 11, 0.22)',
+                  background: 'white',
                   color: '#92400e',
                   fontWeight: 800,
                   cursor: 'pointer',
@@ -1223,71 +485,669 @@ export function OperationalCompetitivePanel({
               gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
             }}
           >
-            {pendingShiftSections.map(section => (
-              <div
-                key={section.shift}
-                style={{
-                  padding: '12px 13px',
-                  borderRadius: '14px',
-                  background: 'rgba(255,255,255,0.92)',
-                  border: '1px solid rgba(245, 158, 11, 0.16)',
-                  display: 'grid',
-                  gap: '10px',
-                }}
-              >
-                <div
+            <div
+              style={{
+                borderRadius: '18px',
+                border: '1px solid rgba(245, 158, 11, 0.16)',
+                background: 'white',
+                padding: '14px 16px',
+              }}
+            >
+              <div className="text-[10px] font-black uppercase tracking-[0.16em] text-amber-700">
+                Transacciones fuera de lo oficial
+              </div>
+              <div className="mt-2 text-2xl font-black text-amber-950">
+                {excludedTransactionCount.toLocaleString('en-US')}
+              </div>
+            </div>
+
+            <div
+              style={{
+                borderRadius: '18px',
+                border: '1px solid rgba(245, 158, 11, 0.16)',
+                background: 'white',
+                padding: '14px 16px',
+              }}
+            >
+              <div className="text-[10px] font-black uppercase tracking-[0.16em] text-amber-700">
+                Fechas sin cobertura transaccional
+              </div>
+              <div className="mt-2 text-2xl font-black text-amber-950">
+                {currentTransactionCoverage.missingDates.length.toLocaleString('en-US')}
+              </div>
+            </div>
+          </div>
+
+          {pendingUnlinkedAgents.length > 0 ? (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+              {pendingUnlinkedAgents.map((item) => (
+                <span
+                  key={item.key}
                   style={{
-                    fontSize: '12px',
-                    lineHeight: 1.55,
+                    padding: '6px 10px',
+                    borderRadius: '999px',
+                    background: 'white',
+                    border: '1px solid rgba(245, 158, 11, 0.18)',
                     color: '#92400e',
+                    fontSize: '0.8rem',
                     fontWeight: 700,
                   }}
                 >
-                  {section.shift}: {section.names.length} agente(s) sin enlace manual.
-                  {section.missingAgentRegistrations > 0
-                    ? ` ${section.missingAgentRegistrations} transaccion(es) llegaron sin agente identificado.`
-                    : ''}
-                </div>
-
-                {section.names.length > 0 ? (
-                  <div
-                    style={{
-                      display: 'flex',
-                      flexWrap: 'wrap',
-                      gap: '8px',
-                    }}
-                  >
-                    {section.names.map(name => (
-                      <span
-                        key={`${section.shift}:${name}`}
-                        style={{
-                          padding: '6px 9px',
-                          borderRadius: '999px',
-                          background: 'rgba(255,247,237,0.98)',
-                          border: '1px solid rgba(245, 158, 11, 0.18)',
-                          color: '#9a3412',
-                          fontSize: '11px',
-                          fontWeight: 700,
-                        }}
-                      >
-                        {name}
-                      </span>
-                    ))}
-                  </div>
-                ) : null}
-              </div>
-            ))}
-          </div>
+                  {item.agentName}
+                </span>
+              ))}
+            </div>
+          ) : null}
         </section>
       ) : null}
+    </div>
+  );
+}
+
+export function OperationalCompetitivePanel({
+  onOpenCallCenter,
+}: OperationalCompetitivePanelProps) {
+  const {
+    representatives,
+    commercialGoals,
+    incidents,
+    calendar,
+    specialSchedules,
+  } = useAppStore((state) => ({
+    representatives: state.representatives ?? [],
+    commercialGoals: state.commercialGoals ?? [],
+    incidents: state.incidents ?? [],
+    calendar: state.calendar,
+    specialSchedules: state.specialSchedules ?? [],
+  }));
+  const availableDates = useDashboardStore((state) => state.availableDates);
+  const dailyHistory = useDashboardStore((state) => state.dailyHistory);
+  const rawTransactions = useDashboardStore((state) => state.rawTransactions);
+  const manualRepresentativeLinks = useDashboardStore(
+    (state) => state.manualRepresentativeLinks
+  );
+  const upsertManualRepresentativeLink = useDashboardStore(
+    (state) => state.upsertManualRepresentativeLink
+  );
+  const removeManualRepresentativeLink = useDashboardStore(
+    (state) => state.removeManualRepresentativeLink
+  );
+  const hasHydrated = useDashboardStore((state) => state._hasHydrated);
+  const [periodKind, setPeriodKind] = useState<OperationalCompetitivePeriodKind>('DAY');
+  const [selectedAnchorDate, setSelectedAnchorDate] = useState<string | null>(null);
+  const [comparisonEnabled, setComparisonEnabled] = useState(true);
+  const [isLinkManagerOpen, setIsLinkManagerOpen] = useState(false);
+  const [isExportingImage, setIsExportingImage] = useState(false);
+  const [selectedAgentName, setSelectedAgentName] = useState('');
+  const [selectedRepresentativeName, setSelectedRepresentativeName] = useState('');
+  const exportImageRef = useRef<HTMLDivElement | null>(null);
+  const [sourceData, setSourceData] = useState<{
+    isLoading: boolean;
+    currentTransactions: Transaction[];
+    comparisonTransactions: Transaction[];
+  }>({
+    isLoading: false,
+    currentTransactions: [],
+    comparisonTransactions: [],
+  });
+
+  const transactionAvailableDates = useMemo(
+    () => [...new Set(rawTransactions.map((transaction) => transaction.fecha))].sort(),
+    [rawTransactions]
+  );
+  const fallbackTransactionsByDate = useMemo(
+    () => groupTransactionsByDate(rawTransactions),
+    [rawTransactions]
+  );
+
+  const latestCompleteDate = useMemo(() => {
+    return [...availableDates]
+      .sort()
+      .reverse()
+      .find((date) => dailyHistory[date]?.coverage.isComplete) ??
+      transactionAvailableDates.at(-1) ??
+      null;
+  }, [availableDates, dailyHistory, transactionAvailableDates]);
+
+  const periodOptions = useMemo(() => {
+    if (transactionAvailableDates.length === 0) {
+      return [];
+    }
+
+    return buildComparisonSelectionOptions({
+      availableDates: transactionAvailableDates,
+      periodMode: getComparisonMode(periodKind),
+    });
+  }, [periodKind, transactionAvailableDates]);
+
+  useEffect(() => {
+    if (periodOptions.length === 0) {
+      setSelectedAnchorDate(null);
+      return;
+    }
+
+    const fallbackAnchorDate =
+      periodKind === 'DAY'
+        ? latestCompleteDate ?? periodOptions[0]?.value ?? null
+        : periodOptions[0]?.value ?? null;
+
+    if (!selectedAnchorDate) {
+      setSelectedAnchorDate(fallbackAnchorDate);
+      return;
+    }
+
+    const periodMode = getComparisonMode(periodKind);
+    const selectedRange = resolveComparisonRange(selectedAnchorDate, periodMode);
+    const matchingOption = periodOptions.find(
+      (option) =>
+        option.summary.start === selectedRange.start &&
+        option.summary.end === selectedRange.end
+    );
+
+    if (!matchingOption) {
+      setSelectedAnchorDate(fallbackAnchorDate);
+      return;
+    }
+
+    if (matchingOption.value !== selectedAnchorDate) {
+      setSelectedAnchorDate(matchingOption.value);
+    }
+  }, [latestCompleteDate, periodKind, periodOptions, selectedAnchorDate]);
+
+  const currentPeriod = useMemo(() => {
+    if (!selectedAnchorDate) {
+      return null;
+    }
+
+    return buildResolvedPeriod({
+      anchorDate: selectedAnchorDate,
+      kind: periodKind,
+      availableDates: transactionAvailableDates,
+    });
+  }, [periodKind, selectedAnchorDate, transactionAvailableDates]);
+
+  const comparisonPeriod = useMemo(() => {
+    if (!comparisonEnabled || !selectedAnchorDate) {
+      return null;
+    }
+
+    const comparisonAnchorDate =
+      periodKind === 'MONTH'
+        ? shiftUtcMonth(selectedAnchorDate, -1)
+        : shiftUtcDate(selectedAnchorDate, periodKind === 'WEEK' ? -7 : -1);
+
+    return buildResolvedPeriod({
+      anchorDate: comparisonAnchorDate,
+      kind: periodKind,
+      availableDates: transactionAvailableDates,
+    });
+  }, [comparisonEnabled, periodKind, selectedAnchorDate, transactionAvailableDates]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    if (!currentPeriod) {
+      setSourceData({
+        isLoading: false,
+        currentTransactions: [],
+        comparisonTransactions: [],
+      });
+      return;
+    }
+
+    const currentDates = currentPeriod.loadedDates;
+    const comparisonDates = comparisonPeriod?.loadedDates ?? [];
+    const datesToLoad = [...new Set([...currentDates, ...comparisonDates])].sort();
+
+    if (datesToLoad.length === 0) {
+      setSourceData({
+        isLoading: false,
+        currentTransactions: [],
+        comparisonTransactions: [],
+      });
+      return;
+    }
+
+    setSourceData((current) => ({
+      ...current,
+      isLoading: true,
+    }));
+
+    void (async () => {
+      const sources = await loadCachedDailySources(datesToLoad);
+
+      if (cancelled) {
+        return;
+      }
+
+      const sourcesByDate = new Map(sources.map((source) => [source.date, source]));
+
+      setSourceData({
+        isLoading: false,
+        currentTransactions: mergeTransactionsForDates({
+          dates: currentDates,
+          sourcesByDate,
+          fallbackTransactionsByDate,
+        }),
+        comparisonTransactions: mergeTransactionsForDates({
+          dates: comparisonDates,
+          sourcesByDate,
+          fallbackTransactionsByDate,
+        }),
+      });
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [comparisonPeriod, currentPeriod, fallbackTransactionsByDate]);
+
+  const currentTransactionCoverage = useMemo(() => {
+    if (!currentPeriod) {
+      return { readyDates: [], missingDates: [] };
+    }
+
+    return resolveTransactionCoverageDates(currentPeriod.loadedDates, dailyHistory);
+  }, [currentPeriod, dailyHistory]);
+
+  const comparisonTransactionCoverage = useMemo(() => {
+    if (!comparisonPeriod) {
+      return { readyDates: [], missingDates: [] };
+    }
+
+    return resolveTransactionCoverageDates(comparisonPeriod.loadedDates, dailyHistory);
+  }, [comparisonPeriod, dailyHistory]);
+
+  const performanceReport = useMemo(() => {
+    if (!currentPeriod) {
+      return null;
+    }
+
+    return buildRepresentativePerformanceReport({
+      representatives,
+      commercialGoals,
+      incidents,
+      calendar,
+      specialSchedules,
+      currentPeriod,
+      currentTransactionDates: currentTransactionCoverage.readyDates,
+      comparisonPreset: comparisonEnabled ? getComparisonPreset(periodKind) : 'NONE',
+      comparisonPeriod: comparisonEnabled ? comparisonPeriod : null,
+      comparisonTransactionDates: comparisonTransactionCoverage.readyDates,
+      currentTransactions: sourceData.currentTransactions,
+      comparisonTransactions: sourceData.comparisonTransactions,
+      manualRepresentativeLinks,
+    });
+  }, [
+    calendar,
+    commercialGoals,
+    comparisonEnabled,
+    comparisonPeriod,
+    comparisonTransactionCoverage.readyDates,
+    currentPeriod,
+    currentTransactionCoverage.readyDates,
+    incidents,
+    manualRepresentativeLinks,
+    periodKind,
+    representatives,
+    sourceData.comparisonTransactions,
+    sourceData.currentTransactions,
+    specialSchedules,
+  ]);
+
+  const activeRepresentatives = useMemo(
+    () =>
+      representatives
+        .filter((representative) => representative.isActive)
+        .sort((left, right) => left.name.localeCompare(right.name, 'es')),
+    [representatives]
+  );
+
+  const unresolvedAgentNames = useMemo(
+    () =>
+      [
+        ...new Set(
+          (performanceReport?.reconciliation.items ?? [])
+            .filter((item) => item.reason === 'unlinked_agent' && item.agentName)
+            .map((item) => item.agentName as string)
+        ),
+      ].sort((left, right) => left.localeCompare(right, 'es')),
+    [performanceReport]
+  );
+
+  const linkedAgentNames = useMemo(
+    () =>
+      new Set(
+        manualRepresentativeLinks.map((link) =>
+          normalizeRepresentativeLinkName(link.agentName)
+        )
+      ),
+    [manualRepresentativeLinks]
+  );
+
+  const pendingAgentPills = useMemo(
+    () =>
+      unresolvedAgentNames.filter(
+        (agentName) => !linkedAgentNames.has(normalizeRepresentativeLinkName(agentName))
+      ),
+    [linkedAgentNames, unresolvedAgentNames]
+  );
+
+  const comparisonLabel =
+    periodKind === 'DAY'
+      ? 'ayer'
+      : periodKind === 'WEEK'
+        ? 'la semana pasada'
+        : 'el mes pasado';
+
+  const handleSaveManualLink = () => {
+    if (!selectedAgentName || !selectedRepresentativeName) {
+      return;
+    }
+
+    upsertManualRepresentativeLink({
+      agentName: selectedAgentName,
+      representativeName: selectedRepresentativeName,
+    });
+    setSelectedAgentName('');
+    setSelectedRepresentativeName('');
+  };
+
+  const handleDownloadImage = async () => {
+    if (!exportImageRef.current || !currentPeriod) {
+      return;
+    }
+
+    setIsExportingImage(true);
+
+    try {
+      await downloadElementAsImage({
+        element: exportImageRef.current,
+        fileName: `Ranking_Operativo_${currentPeriod.from}_${currentPeriod.to}.png`,
+      });
+    } catch (error) {
+      console.error(error);
+      window.alert('No se pudo generar la imagen para compartir. Intenta de nuevo.');
+    } finally {
+      setIsExportingImage(false);
+    }
+  };
+
+  if (!hasHydrated) {
+    return (
+      <section
+        style={{
+          borderRadius: '28px',
+          padding: '24px',
+          background: '#23211f',
+          color: '#fafaf9',
+        }}
+      >
+        <div className="app-shell-loading">Preparando historial de Call Center...</div>
+      </section>
+    );
+  }
+
+  if (transactionAvailableDates.length === 0) {
+    return (
+      <section
+        style={{
+          borderRadius: '32px',
+          background: '#23211f',
+          color: '#fafaf9',
+          padding: '28px',
+          display: 'grid',
+          gap: '18px',
+        }}
+      >
+        <div>
+          <div className="text-[12px] font-black uppercase tracking-[0.16em] text-stone-400">
+            Ranking operativo
+          </div>
+          <h2 className="mt-3 text-3xl font-black tracking-[-0.04em]">
+            Falta cargar historial de Call Center
+          </h2>
+          <p className="mt-3 max-w-3xl text-sm leading-7 text-stone-300">
+            En cuanto haya jornadas cargadas, aquí se arma automáticamente el ranking
+            diario, semanal y mensual usando la misma fuente oficial del análisis de llamadas.
+          </p>
+        </div>
+
+        <button
+          type="button"
+          onClick={onOpenCallCenter}
+          style={{
+            width: 'fit-content',
+            padding: '11px 14px',
+            borderRadius: '14px',
+            border: '1px solid rgba(245,245,244,0.16)',
+            background: 'rgba(255,255,255,0.06)',
+            color: '#fafaf9',
+            fontWeight: 800,
+            cursor: 'pointer',
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '8px',
+          }}
+        >
+          Abrir Call Center
+          <ArrowRight size={16} />
+        </button>
+      </section>
+    );
+  }
+
+  return (
+    <div style={{ display: 'grid', gap: '20px' }}>
+      <section
+        style={{
+          borderRadius: '28px',
+          border: '1px solid rgba(15,23,42,0.08)',
+          background: 'white',
+          padding: '18px',
+          boxShadow: '0 18px 40px rgba(15, 23, 42, 0.05)',
+          display: 'grid',
+          gap: '16px',
+        }}
+      >
+        <div
+          style={{
+            display: 'flex',
+            flexWrap: 'wrap',
+            gap: '12px',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+          }}
+        >
+          <div className="flex flex-wrap gap-2 rounded-2xl bg-slate-100 p-1.5">
+            {([
+              { kind: 'DAY', label: 'Día' },
+              { kind: 'WEEK', label: 'Semana' },
+              { kind: 'MONTH', label: 'Mes' },
+            ] as const).map((option) => (
+              <button
+                key={option.kind}
+                type="button"
+                onClick={() => setPeriodKind(option.kind)}
+                className={periodKind === option.kind ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'}
+                style={{
+                  borderRadius: '14px',
+                  padding: '10px 16px',
+                  fontWeight: 800,
+                  fontSize: '0.9rem',
+                  border: 'none',
+                  cursor: 'pointer',
+                }}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <Select
+              value={selectedAnchorDate ?? undefined}
+              onValueChange={setSelectedAnchorDate}
+            >
+              <SelectTrigger className="min-w-[280px] rounded-xl border-slate-200 bg-white">
+                <SelectValue placeholder="Selecciona período..." />
+              </SelectTrigger>
+              <SelectContent>
+                {periodOptions.map((option) => (
+                  <SelectItem key={option.value} value={option.value}>
+                    {option.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            <button
+              type="button"
+              onClick={() => setComparisonEnabled((current) => !current)}
+              style={{
+                borderRadius: '14px',
+                padding: '10px 14px',
+                border: '1px solid rgba(148,163,184,0.22)',
+                background: comparisonEnabled ? '#111827' : 'white',
+                color: comparisonEnabled ? 'white' : '#334155',
+                fontWeight: 800,
+                cursor: 'pointer',
+              }}
+            >
+              {comparisonEnabled ? 'Comparando' : 'Sin comparar'}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => window.print()}
+              style={{
+                borderRadius: '14px',
+                padding: '10px 14px',
+                border: '1px solid rgba(148,163,184,0.22)',
+                background: 'white',
+                color: '#334155',
+                fontWeight: 800,
+                cursor: 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '8px',
+              }}
+            >
+              <Printer size={16} />
+              Imprimir
+            </button>
+
+            <button
+              type="button"
+              onClick={handleDownloadImage}
+              disabled={isExportingImage || !performanceReport}
+              style={{
+                borderRadius: '14px',
+                padding: '10px 14px',
+                border: '1px solid rgba(148,163,184,0.22)',
+                background: 'white',
+                color: '#334155',
+                fontWeight: 800,
+                cursor: 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '8px',
+                opacity: isExportingImage ? 0.6 : 1,
+              }}
+            >
+              <Download size={16} />
+              {isExportingImage ? 'Generando...' : 'Exportar imagen'}
+            </button>
+          </div>
+        </div>
+
+        {currentPeriod ? (
+          <div className="flex flex-wrap gap-2 text-[11px] font-black uppercase tracking-[0.14em] text-slate-500">
+            <span className="rounded-full bg-slate-100 px-3 py-2">
+              {currentPeriod.label}
+            </span>
+            <span className="rounded-full bg-slate-100 px-3 py-2">
+              {currentPeriod.loadedDays}/{currentPeriod.expectedDays} dias cargados
+            </span>
+            <span className="rounded-full bg-slate-100 px-3 py-2">
+              {currentTransactionCoverage.readyDates.length}/{currentPeriod.loadedDates.length} dias con transacciones
+            </span>
+          </div>
+        ) : null}
+      </section>
+
+      {!sourceData.isLoading && currentPeriod && currentTransactionCoverage.readyDates.length === 0 ? (
+        <section
+          style={{
+            borderRadius: '28px',
+            padding: '24px',
+            background: 'white',
+            border: '1px solid rgba(15,23,42,0.08)',
+            color: '#64748b',
+          }}
+        >
+          Todavía no hay transacciones cargadas para este período.
+        </section>
+      ) : sourceData.isLoading ? (
+        <div className="app-shell-loading">Cargando fuentes competitivas...</div>
+      ) : performanceReport && currentPeriod ? (
+        <>
+          <OperationalCompetitiveSurface
+            performanceReport={performanceReport}
+            currentPeriod={currentPeriod}
+            comparisonEnabled={comparisonEnabled}
+            comparisonLabel={comparisonLabel}
+            comparisonPeriod={comparisonPeriod}
+            periodKind={periodKind}
+            currentTransactionCoverage={currentTransactionCoverage}
+            onManageLinks={() => setIsLinkManagerOpen(true)}
+          />
+
+          <div
+            ref={exportImageRef}
+            aria-hidden="true"
+            style={{
+              position: 'fixed',
+              left: '-10000px',
+              top: 0,
+              width: '1680px',
+              padding: '32px',
+              background: '#f8fafc',
+            }}
+          >
+            <OperationalCompetitiveSurface
+              performanceReport={performanceReport}
+              currentPeriod={currentPeriod}
+              comparisonEnabled={comparisonEnabled}
+              comparisonLabel={comparisonLabel}
+              comparisonPeriod={comparisonPeriod}
+              periodKind={periodKind}
+              currentTransactionCoverage={currentTransactionCoverage}
+              onManageLinks={() => undefined}
+            />
+          </div>
+        </>
+      ) : (
+        <section
+          style={{
+            borderRadius: '28px',
+            padding: '24px',
+            background: 'white',
+            border: '1px solid rgba(15,23,42,0.08)',
+            color: '#64748b',
+          }}
+        >
+          No hay suficientes datos para construir el ranking operativo.
+        </section>
+      )}
 
       <Dialog open={isLinkManagerOpen} onOpenChange={setIsLinkManagerOpen}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle>Enlaces de representantes</DialogTitle>
             <DialogDescription>
-              Resuelve aquí mismo los agentes del reporte que todavía no coinciden
-              con representantes del sistema.
+              Resuelve aquí los agentes del reporte que todavía no coinciden con el
+              roster oficial, o márcalos para excluirlos del ranking.
             </DialogDescription>
           </DialogHeader>
 
@@ -1297,7 +1157,7 @@ export function OperationalCompetitivePanel({
                 <SelectValue placeholder="Selecciona agente del reporte" />
               </SelectTrigger>
               <SelectContent>
-                {unresolvedAgentNames.map(agentName => (
+                {pendingAgentPills.map((agentName) => (
                   <SelectItem key={agentName} value={agentName}>
                     {agentName}
                   </SelectItem>
@@ -1314,9 +1174,9 @@ export function OperationalCompetitivePanel({
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value={OMIT_REPRESENTATIVE_LINK}>
-                  Omitir de ranking (supervisor / apoyo)
+                  Omitir de lo oficial (supervisión / apoyo)
                 </SelectItem>
-                {activeRepresentatives.map(representative => (
+                {activeRepresentatives.map((representative) => (
                   <SelectItem key={representative.id} value={representative.name}>
                     {representative.name}
                   </SelectItem>
@@ -1324,26 +1184,6 @@ export function OperationalCompetitivePanel({
               </SelectContent>
             </Select>
           </div>
-
-          {unresolvedAgentNames.length > 0 ? (
-            <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
-              <div className="mb-2 text-xs font-black uppercase tracking-[0.12em] text-amber-700">
-                Pendientes por enlazar
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {unresolvedAgentNames.map(agentName => (
-                  <button
-                    key={agentName}
-                    type="button"
-                    onClick={() => setSelectedAgentName(agentName)}
-                    className="rounded-full border border-amber-200 bg-white px-3 py-1 text-xs font-bold text-amber-800 transition hover:border-amber-300 hover:bg-amber-100"
-                  >
-                    {agentName}
-                  </button>
-                ))}
-              </div>
-            </div>
-          ) : null}
 
           <div className="max-h-56 overflow-auto rounded-xl border border-slate-200">
             <table className="w-full text-sm">
@@ -1355,12 +1195,12 @@ export function OperationalCompetitivePanel({
                 </tr>
               </thead>
               <tbody>
-                {manualRepresentativeLinks.map(link => (
+                {manualRepresentativeLinks.map((link) => (
                   <tr key={link.agentName} className="border-t border-slate-100">
                     <td className="px-3 py-2">{link.agentName}</td>
                     <td className="px-3 py-2">
                       {link.representativeName === OMIT_REPRESENTATIVE_LINK
-                        ? 'Omitido del ranking'
+                        ? 'Omitido de lo oficial'
                         : link.representativeName}
                     </td>
                     <td className="px-3 py-2 text-right">
@@ -1399,247 +1239,10 @@ export function OperationalCompetitivePanel({
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
-      {!sourceData.isLoading && currentPeriod && !hasCurrentTransactionCoverage ? (
-        <section
-          style={{
-            ...panelShellStyle,
-            padding: '24px',
-            display: 'grid',
-            gap: '14px',
-          }}
-        >
-          <div style={{ display: 'grid', gap: '8px' }}>
-            <div
-              style={{
-                fontSize: '12px',
-                fontWeight: 800,
-                letterSpacing: '0.08em',
-                textTransform: 'uppercase',
-                color: '#b91c1c',
-              }}
-            >
-              Tabla en espera
-            </div>
-            <h3 style={{ margin: 0, fontSize: '1.2rem', color: '#0f172a' }}>
-              Todavia no hay transacciones cargadas para este periodo
-            </h3>
-            <p style={{ margin: 0, fontSize: '13px', lineHeight: 1.7, color: '#64748b' }}>
-              El periodo tiene dias presentes en el historial, pero falta la base de
-              transacciones que alimenta la tabla. En cuanto se carguen esos archivos
-              desde Call Center, aqui apareceran las tablas por turno con metas,
-              anuladas e incidencias.
-            </p>
-          </div>
-
-          <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-            <button
-              type="button"
-              onClick={onOpenCallCenter}
-              style={{
-                width: 'fit-content',
-                padding: '11px 14px',
-                borderRadius: '14px',
-                border: '1px solid rgba(185, 28, 28, 0.22)',
-                background: 'rgba(255,255,255,0.96)',
-                color: '#b91c1c',
-                fontWeight: 800,
-                cursor: 'pointer',
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '8px',
-              }}
-            >
-              Abrir Call Center
-              <ArrowRight size={16} />
-            </button>
-          </div>
-        </section>
-      ) : sourceData.isLoading ? (
-        <div className="app-shell-loading">Cargando fuentes competitivas...</div>
-      ) : competitiveReport ? (
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))',
-            gap: '18px',
-          }}
-        >
-          <OperationalCompetitiveShiftLeaderboard
-            comparisonEnabled={comparisonEnabled}
-            comparisonLabel={comparisonLabel}
-            table={competitiveReport.tables.DAY}
-          />
-          <OperationalCompetitiveShiftLeaderboard
-            comparisonEnabled={comparisonEnabled}
-            comparisonLabel={comparisonLabel}
-            table={competitiveReport.tables.NIGHT}
-          />
-        </div>
-      ) : (
-        <section
-          style={{
-            ...panelShellStyle,
-            padding: '24px',
-            color: '#64748b',
-            fontSize: '13px',
-          }}
-        >
-          No hay suficientes datos para construir la tabla operativa todavia.
-        </section>
-      )}
-
-      {competitiveReport && currentPeriod ? (
-        <div
-          ref={exportImageRef}
-          aria-hidden="true"
-          style={{
-            position: 'fixed',
-            left: '-10000px',
-            top: 0,
-            width: '1680px',
-            padding: '32px',
-            display: 'grid',
-            gap: '18px',
-            background: 'linear-gradient(180deg, #f8fafc 0%, #ffffff 100%)',
-            pointerEvents: 'none',
-          }}
-        >
-          <section
-            style={{
-              borderRadius: '26px',
-              overflow: 'hidden',
-              border: '1px solid rgba(185, 28, 28, 0.14)',
-              background: '#ffffff',
-              boxShadow: '0 24px 48px rgba(15, 23, 42, 0.08)',
-            }}
-          >
-            <div
-              style={{
-                padding: '24px 28px',
-                background: 'linear-gradient(180deg, #ef1117 0%, #a61117 100%)',
-                color: 'white',
-                display: 'grid',
-                gap: '18px',
-              }}
-            >
-              <div style={headerBadgeStyle}>Resumen operativo</div>
-              <div
-                style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'flex-end',
-                  gap: '18px',
-                  flexWrap: 'wrap',
-                }}
-              >
-                <div style={{ display: 'grid', gap: '10px', maxWidth: '70ch' }}>
-                  <h2
-                    style={{
-                      margin: 0,
-                      fontSize: '2rem',
-                      fontWeight: 800,
-                      letterSpacing: '-0.04em',
-                    }}
-                  >
-                    Ranking operativo por turno
-                  </h2>
-                  <p
-                    style={{
-                      margin: 0,
-                      fontSize: '14px',
-                      lineHeight: 1.7,
-                      color: 'rgba(255,255,255,0.92)',
-                      maxWidth: '68ch',
-                    }}
-                  >
-                    Tabla lista para compartir. Resume transacciones, cumplimiento
-                    de meta y control interno por representante.
-                  </p>
-                </div>
-
-                <div
-                  style={{
-                    minWidth: '300px',
-                    maxWidth: '360px',
-                    padding: '16px 18px',
-                    borderRadius: '20px',
-                    border: '1px solid rgba(255,255,255,0.18)',
-                    background: 'rgba(255,255,255,0.12)',
-                    display: 'grid',
-                    gap: '10px',
-                  }}
-                >
-                  <div
-                    style={{
-                      fontSize: '11px',
-                      fontWeight: 800,
-                      letterSpacing: '0.1em',
-                      textTransform: 'uppercase',
-                      color: 'rgba(255,255,255,0.76)',
-                    }}
-                  >
-                    Periodo del reporte
-                  </div>
-                  <div
-                    style={{
-                      fontSize: '1.35rem',
-                      fontWeight: 800,
-                      letterSpacing: '-0.03em',
-                    }}
-                  >
-                    {currentPeriod.label}
-                  </div>
-                  <div
-                    style={{
-                      fontSize: '12px',
-                      lineHeight: 1.65,
-                      color: 'rgba(255,255,255,0.9)',
-                    }}
-                  >
-                    {comparisonEnabled && comparisonPeriod
-                      ? `Comparado con ${comparisonPeriod.label}.`
-                      : 'Sin comparacion con periodo previo.'}
-                  </div>
-                </div>
-              </div>
-
-              <div
-                style={{
-                  display: 'flex',
-                  gap: '10px',
-                  flexWrap: 'wrap',
-                }}
-              >
-                <span style={statusChipStyle}>{currentPeriod.label}</span>
-                <span style={statusChipStyle}>
-                  {currentPeriod.loadedDays}/{currentPeriod.expectedDays} dia(s) cargados
-                </span>
-                <span style={statusChipStyle}>
-                  Transacciones listas: {currentTransactionCoverage.readyDates.length}/
-                  {currentPeriod.loadedDates.length} dia(s)
-                </span>
-                {comparisonEnabled && comparisonPeriod ? (
-                  <span style={statusChipStyle}>Comparado con: {comparisonPeriod.label}</span>
-                ) : (
-                  <span style={statusChipStyle}>Sin comparacion</span>
-                )}
-              </div>
-            </div>
-          </section>
-
-          <OperationalCompetitiveShiftLeaderboard
-            comparisonEnabled={comparisonEnabled}
-            comparisonLabel={comparisonLabel}
-            table={competitiveReport.tables.DAY}
-          />
-          <OperationalCompetitiveShiftLeaderboard
-            comparisonEnabled={comparisonEnabled}
-            comparisonLabel={comparisonLabel}
-            table={competitiveReport.tables.NIGHT}
-          />
-        </div>
-      ) : null}
     </div>
-  )
+  );
+}
+
+function formatPercent(value: number) {
+  return `${value.toFixed(1)}%`;
 }

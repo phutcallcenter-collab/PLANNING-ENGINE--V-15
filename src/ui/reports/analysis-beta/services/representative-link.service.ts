@@ -17,7 +17,23 @@ export type ManualRepresentativeLink = {
   representativeName: string;
 };
 
-function normalizeName(value: string): string {
+export type RepresentativeLinkResolution<T extends RepresentativeIdentity> =
+  | ({
+      status: 'linked';
+      representative: T;
+    } & RepresentativeLinkMatch)
+  | {
+      status: 'omitted';
+      agentName: string;
+    }
+  | {
+      status: 'unlinked';
+      agentName: string;
+    };
+
+export const OMIT_REPRESENTATIVE_LINK = '__OMITIR__';
+
+export function normalizeRepresentativeLinkName(value: string): string {
   return value
     .toLowerCase()
     .normalize('NFD')
@@ -25,46 +41,109 @@ function normalizeName(value: string): string {
     .replace(/[^a-z0-9]/g, '');
 }
 
+export function createRepresentativeLinkResolver<T extends RepresentativeIdentity>(
+  representatives: T[],
+  manualLinks: ManualRepresentativeLink[] = [],
+  options: {
+    includeInactive?: boolean;
+  } = {}
+): (agentName: string | undefined | null) => RepresentativeLinkResolution<T> {
+  const filteredRepresentatives = options.includeInactive
+    ? representatives
+    : representatives.filter((representative) => representative.isActive);
+  const representativesByNormalizedName = new Map(
+    filteredRepresentatives.map((representative) => [
+      normalizeRepresentativeLinkName(representative.name),
+      representative,
+    ])
+  );
+  const manualLinksByAgentName = new Map(
+    manualLinks.map((link) => [
+      normalizeRepresentativeLinkName(link.agentName),
+      link.representativeName,
+    ])
+  );
+
+  return (agentName) => {
+    const rawAgentName = String(agentName ?? '').trim();
+    const normalizedAgentName = normalizeRepresentativeLinkName(rawAgentName);
+
+    if (!normalizedAgentName) {
+      return {
+        status: 'unlinked',
+        agentName: rawAgentName,
+      };
+    }
+
+    const manualRepresentativeName = manualLinksByAgentName.get(normalizedAgentName);
+
+    if (manualRepresentativeName) {
+      if (
+        normalizeRepresentativeLinkName(manualRepresentativeName) ===
+        normalizeRepresentativeLinkName(OMIT_REPRESENTATIVE_LINK)
+      ) {
+        return {
+          status: 'omitted',
+          agentName: rawAgentName,
+        };
+      }
+
+      const manualRepresentative = representativesByNormalizedName.get(
+        normalizeRepresentativeLinkName(manualRepresentativeName)
+      );
+
+      if (manualRepresentative) {
+        return {
+          status: 'linked',
+          representative: manualRepresentative,
+          representativeId: manualRepresentative.id,
+          representativeName: manualRepresentative.name,
+          matchType: 'manual_override',
+        };
+      }
+    }
+
+    const matchedRepresentative = representativesByNormalizedName.get(normalizedAgentName);
+
+    if (!matchedRepresentative) {
+      return {
+        status: 'unlinked',
+        agentName: rawAgentName,
+      };
+    }
+
+    return {
+      status: 'linked',
+      representative: matchedRepresentative,
+      representativeId: matchedRepresentative.id,
+      representativeName: matchedRepresentative.name,
+      matchType: 'exact_normalized',
+    };
+  };
+}
+
 export function buildRepresentativeLinkMap(
   rows: AgentKPIs[],
   representatives: RepresentativeIdentity[],
   manualLinks: ManualRepresentativeLink[] = []
 ): Map<string, RepresentativeLinkMatch> {
-  const byNormalizedName = new Map<string, RepresentativeIdentity>();
-
-  representatives
-    .filter((rep) => rep.isActive)
-    .forEach((rep) => {
-      byNormalizedName.set(normalizeName(rep.name), rep);
-    });
-
-  const manualByAgentName = new Map(
-    manualLinks.map((item) => [normalizeName(item.agentName), item.representativeName])
+  const resolveRepresentative = createRepresentativeLinkResolver(
+    representatives,
+    manualLinks
   );
 
   const links = new Map<string, RepresentativeLinkMatch>();
 
   rows.forEach((row) => {
     if (row.tipo !== 'agente') return;
-    const manualRepresentativeName = manualByAgentName.get(normalizeName(row.agente));
-    if (manualRepresentativeName) {
-      const manualRep = byNormalizedName.get(normalizeName(manualRepresentativeName));
-      if (manualRep) {
-        links.set(row.agente, {
-          representativeId: manualRep.id,
-          representativeName: manualRep.name,
-          matchType: 'manual_override',
-        });
-        return;
-      }
-    }
+    const resolution = resolveRepresentative(row.agente);
 
-    const matched = byNormalizedName.get(normalizeName(row.agente));
-    if (!matched) return;
+    if (resolution.status !== 'linked') return;
+
     links.set(row.agente, {
-      representativeId: matched.id,
-      representativeName: matched.name,
-      matchType: 'exact_normalized',
+      representativeId: resolution.representativeId,
+      representativeName: resolution.representativeName,
+      matchType: resolution.matchType,
     });
   });
 

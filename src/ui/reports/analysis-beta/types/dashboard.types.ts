@@ -1,3 +1,5 @@
+import type { CommercialGoalSegment, ShiftType } from '@/domain/types';
+
 export type AnsweredCall = {
   id: string;
   dst: string;
@@ -114,6 +116,117 @@ export type AgentKPIs = {
   transacciones: number;
   ventas: number;
   ticketPromedio: number;
+};
+
+export type RepresentativePerformanceAssignmentRow = AgentKPIs & {
+  representativeId: string;
+  shift: ShiftType;
+  segment: CommercialGoalSegment;
+  target: number;
+  monthlyTargetPerRepresentative: number;
+  progressPct: number;
+  cancelledTransactions: number;
+  lastLoadedDayTransactions: number;
+  weeklyTransactions: number;
+  monthlyTransactions: number;
+  incidents: number;
+  errors: number;
+  absences: number;
+  tardiness: number;
+  comparisonDelta: number | null;
+  plannedDates: string[];
+  hasCoverageGap: boolean;
+};
+
+export type RepresentativePerformanceRow = AgentKPIs & {
+  representativeId: string;
+  target: number;
+  monthlyTargetPerRepresentative: number | null;
+  progressPct: number;
+  cancelledTransactions: number;
+  lastLoadedDayTransactions: number;
+  weeklyTransactions: number;
+  monthlyTransactions: number;
+  incidents: number;
+  errors: number;
+  absences: number;
+  tardiness: number;
+  comparisonDelta: number | null;
+  shifts: ShiftType[];
+  segments: CommercialGoalSegment[];
+  breakdown: RepresentativePerformanceAssignmentRow[];
+};
+
+export type RepresentativeGoalSummary = {
+  representatives: number;
+  monthlyTargetPerRepresentative: number | null;
+  target: number;
+  validTransactions: number;
+  cancelledTransactions: number;
+  progressPct: number;
+};
+
+export type RepresentativePerformanceGroup = {
+  shift: ShiftType;
+  segment: CommercialGoalSegment;
+  label: string;
+  summary: RepresentativeGoalSummary & {
+    incidents: number;
+    errors: number;
+    absences: number;
+    tardiness: number;
+    comparisonDelta: number | null;
+  };
+  rows: RepresentativePerformanceAssignmentRow[];
+};
+
+export type RepresentativePerformanceShiftGroup = {
+  shift: ShiftType;
+  label: string;
+  groups: RepresentativePerformanceGroup[];
+  pendingAgentNames: string[];
+  missingAgentRegistrations: number;
+};
+
+export type RepresentativePerformanceReconciliationReason =
+  | 'manual_omit'
+  | 'unlinked_agent'
+  | 'missing_agent';
+
+export type RepresentativeReconciliationItem = {
+  key: string;
+  reason: RepresentativePerformanceReconciliationReason;
+  shift: ShiftType | null;
+  agentName: string | null;
+  validTransactions: number;
+  cancelledTransactions: number;
+};
+
+export type RepresentativeReconciliationSummary = {
+  officialValidTransactions: number;
+  officialCancelledTransactions: number;
+  excludedValidTransactions: number;
+  excludedCancelledTransactions: number;
+  importedRepresentativeValidTransactions: number;
+  importedRepresentativeCancelledTransactions: number;
+  items: RepresentativeReconciliationItem[];
+};
+
+export type RepresentativePerformanceReport = {
+  byRepresentative: RepresentativePerformanceRow[];
+  byAssignment: RepresentativePerformanceAssignmentRow[];
+  shifts: Record<ShiftType, RepresentativePerformanceShiftGroup>;
+  globalSummary: RepresentativeGoalSummary & {
+    activeRepresentatives: number;
+    incidents: number;
+    errors: number;
+    absences: number;
+    tardiness: number;
+    comparisonDelta: number | null;
+  };
+  reconciliation: RepresentativeReconciliationSummary;
+  pendingAgentNames: string[];
+  dataQualityWarnings: string[];
 };
 
 export type SourceManifestEntry = {

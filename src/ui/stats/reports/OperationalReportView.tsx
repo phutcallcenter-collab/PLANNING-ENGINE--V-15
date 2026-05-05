@@ -41,9 +41,7 @@ export function OperationalReportView({ onOpenCallCenter }: OperationalReportVie
       {mode === 'SUMMARY' ? (
         report ? (
           <>
-            <div className="report-screen-only">
-              <OperationalCompetitivePanel onOpenCallCenter={onOpenCallCenter} />
-            </div>
+            <OperationalCompetitivePanel onOpenCallCenter={onOpenCallCenter} />
             <OperationalInstitutionalView
               report={report}
               onPeriodChange={setPeriodKind}
