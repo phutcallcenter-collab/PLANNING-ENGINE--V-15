@@ -808,6 +808,25 @@ export function OperationalCompetitivePanel({
       return;
     }
 
+    if (periodKind === 'MONTH' && selectedAnchorDate) {
+      const monthKey = selectedAnchorDate.slice(0, 7);
+      const comparisonMonthKey = comparisonPeriod
+        ? shiftUtcMonth(selectedAnchorDate, -1).slice(0, 7)
+        : null;
+
+      const filterByMonth = (transactions: Transaction[], key: string) =>
+        transactions.filter((transaction) => transaction.fecha.slice(0, 7) === key);
+
+      setSourceData({
+        isLoading: false,
+        currentTransactions: filterByMonth(rawTransactions, monthKey),
+        comparisonTransactions: comparisonMonthKey
+          ? filterByMonth(rawTransactions, comparisonMonthKey)
+          : [],
+      });
+      return;
+    }
+
     const currentDates = currentPeriod.loadedDates;
     const comparisonDates = comparisonPeriod?.loadedDates ?? [];
     const datesToLoad = [...new Set([...currentDates, ...comparisonDates])].sort();
@@ -841,13 +860,13 @@ export function OperationalCompetitivePanel({
           dates: currentDates,
           sourcesByDate,
           fallbackTransactionsByDate,
-          allowFallback: periodKind !== 'MONTH',
+          allowFallback: true,
         }),
         comparisonTransactions: mergeTransactionsForDates({
           dates: comparisonDates,
           sourcesByDate,
           fallbackTransactionsByDate,
-          allowFallback: periodKind !== 'MONTH',
+          allowFallback: true,
         }),
       });
     })();
@@ -855,7 +874,14 @@ export function OperationalCompetitivePanel({
     return () => {
       cancelled = true;
     };
-  }, [comparisonPeriod, currentPeriod, fallbackTransactionsByDate, periodKind]);
+  }, [
+    comparisonPeriod,
+    currentPeriod,
+    fallbackTransactionsByDate,
+    periodKind,
+    rawTransactions,
+    selectedAnchorDate,
+  ]);
 
   const currentTransactionCoverage = useMemo(() => {
     if (!currentPeriod) {
