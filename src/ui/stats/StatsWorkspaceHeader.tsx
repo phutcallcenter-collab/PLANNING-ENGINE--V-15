@@ -60,7 +60,6 @@ export function StatsWorkspaceHeader({
   onReportChange,
 }: StatsWorkspaceHeaderProps) {
   const monthInputRef = useRef<HTMLInputElement | null>(null)
-  const activeReportMeta = reports.find(report => report.id === activeReport) ?? reports[0]
 
   const monthControlLabel = useMemo(
     () => format(currentDate, 'MMMM yyyy', { locale: es }),
@@ -85,99 +84,24 @@ export function StatsWorkspaceHeader({
       className="report-screen-only"
       style={{
         display: 'flex',
-        flexDirection: 'column',
-        gap: '18px',
-        padding: '18px 20px',
-        borderRadius: '24px',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: '10px',
+        padding: '10px 14px',
+        borderRadius: '18px',
         border: '1px solid var(--shell-border)',
         background:
           'linear-gradient(180deg, rgba(255,255,255,0.78) 0%, rgba(248,242,233,0.52) 100%)',
         boxShadow: 'var(--shadow-sm)',
+        flexWrap: 'wrap',
       }}
     >
       <div
         style={{
           display: 'flex',
-          alignItems: 'flex-start',
-          justifyContent: 'space-between',
-          gap: '16px',
-          flexWrap: 'wrap',
-        }}
-      >
-        <div style={{ minWidth: 0 }}>
-          <div
-            style={{
-              fontSize: '11px',
-              fontWeight: 800,
-              letterSpacing: '0.08em',
-              textTransform: 'uppercase',
-              color: 'var(--accent)',
-              marginBottom: '8px',
-            }}
-          >
-            Lectura operativa
-          </div>
-          <h1
-            style={{
-              margin: 0,
-              fontSize: '1.6rem',
-              lineHeight: 1.05,
-              letterSpacing: '-0.03em',
-              color: 'var(--text-main)',
-              fontWeight: 800,
-            }}
-          >
-            Reportes unificados
-          </h1>
-          <p
-            style={{
-              margin: '6px 0 0',
-              maxWidth: '620px',
-              color: 'var(--text-muted)',
-              fontSize: '13px',
-              lineHeight: 1.5,
-            }}
-          >
-            Todos los reportes viven en la misma cinta para reducir clics. Elige la
-            vista principal aquí y entra directo al contexto correcto.
-          </p>
-        </div>
-
-        <div
-          style={{
-            padding: '10px 12px',
-            borderRadius: '16px',
-            border: '1px solid var(--shell-border)',
-            background: 'rgba(255,255,255,0.72)',
-            maxWidth: '320px',
-          }}
-        >
-          <div
-            style={{
-              fontSize: '11px',
-              fontWeight: 800,
-              letterSpacing: '0.08em',
-              textTransform: 'uppercase',
-              color: 'var(--accent)',
-              marginBottom: '6px',
-            }}
-          >
-            Vista activa
-          </div>
-          <div style={{ fontSize: '14px', fontWeight: 700, color: 'var(--text-main)' }}>
-            {activeReportMeta?.label}
-          </div>
-          <div style={{ marginTop: '4px', fontSize: '12px', color: 'var(--text-muted)' }}>
-            {activeReportMeta?.description}
-          </div>
-        </div>
-      </div>
-
-      <div
-        style={{
-          display: 'flex',
           gap: '8px',
           flexWrap: 'wrap',
+          flex: 1,
         }}
       >
         {reports.map(report => {
@@ -217,10 +141,8 @@ export function StatsWorkspaceHeader({
           style={{
             display: 'flex',
             alignItems: 'center',
-            justifyContent: 'space-between',
-            gap: '14px',
+            gap: '10px',
             flexWrap: 'wrap',
-            paddingTop: '2px',
           }}
         >
           <div
@@ -255,8 +177,8 @@ export function StatsWorkspaceHeader({
 
             <div
               style={{
-                minWidth: '170px',
-                padding: '0 12px',
+              minWidth: '170px',
+                padding: '0 10px',
                 textAlign: 'center',
                 color: 'var(--text-main)',
                 fontSize: '14px',
