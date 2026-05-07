@@ -26,10 +26,10 @@ export function OperationalReportView({ onOpenCallCenter }: OperationalReportVie
     <div
       className="report-print-root"
       style={{
-        padding: '24px',
+        padding: '16px',
         display: 'flex',
         flexDirection: 'column',
-        gap: '24px',
+        gap: '18px',
         background:
           'linear-gradient(180deg, rgba(255,255,255,0.16) 0%, rgba(255,255,255,0.04) 100%)',
       }}

@@ -80,12 +80,12 @@ export function OperationalCompetitiveShiftLeaderboard({
     <section
       className="report-shift-section report-print-avoid-break"
       style={{
-        borderRadius: '30px',
-        border: '1px solid rgba(255,255,255,0.08)',
-        background: '#23211f',
-        color: '#f5f5f4',
+        borderRadius: '22px',
+        border: '1px solid var(--shell-border)',
+        background: 'var(--surface-raised)',
+        color: 'var(--text-main)',
         overflow: 'hidden',
-        boxShadow: '0 28px 64px rgba(0,0,0,0.18)',
+        boxShadow: 'var(--shadow-sm)',
       }}
     >
       <div className="report-print-only report-print-summary-strip text-slate-700">
@@ -97,11 +97,11 @@ export function OperationalCompetitiveShiftLeaderboard({
 
       <div
         style={{
-          padding: '24px 28px 18px',
-          borderBottom: '1px solid rgba(255,255,255,0.08)',
+          padding: '16px 18px 12px',
+          borderBottom: '1px solid var(--shell-border)',
           display: 'flex',
           flexWrap: 'wrap',
-          gap: '14px',
+          gap: '10px',
           alignItems: 'baseline',
           justifyContent: 'space-between',
         }}
@@ -112,16 +112,16 @@ export function OperationalCompetitiveShiftLeaderboard({
               width: '12px',
               height: '12px',
               borderRadius: '999px',
-              background: table.shift === 'DAY' ? '#f59e0b' : '#38bdf8',
-              boxShadow: '0 0 0 6px rgba(255,255,255,0.04)',
+              background: table.shift === 'DAY' ? 'var(--accent-warm)' : 'var(--accent)',
+              boxShadow: '0 0 0 5px rgba(var(--accent-rgb),0.1)',
             }}
           />
           <h3
             style={{
               margin: 0,
-              fontSize: '1.8rem',
+              fontSize: '1.15rem',
               fontWeight: 800,
-              letterSpacing: '-0.04em',
+              letterSpacing: 0,
             }}
           >
             {table.label}
@@ -130,8 +130,8 @@ export function OperationalCompetitiveShiftLeaderboard({
 
         <div
           style={{
-            color: 'rgba(245,245,244,0.72)',
-            fontSize: '1rem',
+            color: 'var(--text-muted)',
+            fontSize: '0.82rem',
             fontWeight: 700,
             display: 'flex',
             gap: '10px',
@@ -146,7 +146,7 @@ export function OperationalCompetitiveShiftLeaderboard({
         </div>
       </div>
 
-      <div style={{ padding: '20px 28px 26px', display: 'grid', gap: '20px' }}>
+      <div style={{ padding: '14px 18px 18px', display: 'grid', gap: '16px' }}>
         {table.groups.map((group) => {
           const tone = getProgressTone(group.summary.progressPct);
 
@@ -158,38 +158,50 @@ export function OperationalCompetitiveShiftLeaderboard({
                   flexWrap: 'wrap',
                   gap: '8px',
                   alignItems: 'center',
-                  borderBottom: '1px solid rgba(255,255,255,0.08)',
-                  paddingBottom: '10px',
+                  borderBottom: '1px solid var(--shell-border)',
+                  paddingBottom: '8px',
                 }}
               >
                 <span
                   style={{
-                    color: 'rgba(245,245,244,0.56)',
-                    fontSize: '1.05rem',
+                    color: 'var(--text-muted)',
+                    fontSize: '0.82rem',
                     fontWeight: 800,
-                    letterSpacing: '0.06em',
+                    letterSpacing: '0.04em',
                     textTransform: 'uppercase',
                   }}
                 >
                   {group.label}
                 </span>
-                <span style={{ color: 'rgba(245,245,244,0.38)' }}>·</span>
+                <span style={{ color: 'var(--text-faint)' }}>·</span>
                 <span
                   style={{
-                    color: 'rgba(245,245,244,0.76)',
-                    fontSize: '1.02rem',
+                    color: 'var(--text-muted)',
+                    fontSize: '0.82rem',
+                    fontWeight: 700,
+                  }}
+                >
+                  Meta indiv.: {group.summary.monthlyTargetPerRepresentative === null
+                    ? 'variable'
+                    : formatTarget(group.summary.monthlyTargetPerRepresentative)}
+                </span>
+                <span style={{ color: 'var(--text-faint)' }}>·</span>
+                <span
+                  style={{
+                    color: 'var(--text-muted)',
+                    fontSize: '0.82rem',
                     fontWeight: 700,
                   }}
                 >
                   Meta bloque: {formatTarget(group.summary.target)}
                 </span>
-                <span style={{ color: 'rgba(245,245,244,0.38)' }}>·</span>
+                <span style={{ color: 'var(--text-faint)' }}>·</span>
                 <span
                   style={{
                     color: tone.text,
-                    fontSize: '1.02rem',
+                    fontSize: '0.82rem',
                     fontWeight: 800,
-                    letterSpacing: '0.04em',
+                    letterSpacing: '0.02em',
                     textTransform: 'uppercase',
                   }}
                 >
@@ -200,8 +212,8 @@ export function OperationalCompetitiveShiftLeaderboard({
               {group.rows.length === 0 ? (
                 <div
                   style={{
-                    padding: '18px 0 4px',
-                    color: 'rgba(245,245,244,0.54)',
+                    padding: '14px 0 2px',
+                    color: 'var(--text-muted)',
                     fontSize: '0.95rem',
                   }}
                 >
@@ -212,26 +224,29 @@ export function OperationalCompetitiveShiftLeaderboard({
                   <table
                     style={{
                       width: '100%',
-                      minWidth: comparisonEnabled ? '860px' : '740px',
+                      minWidth: comparisonEnabled ? '980px' : '860px',
                       borderCollapse: 'collapse',
                     }}
                   >
                     <thead>
-                      <tr style={{ color: 'rgba(245,245,244,0.56)' }}>
+                      <tr style={{ color: 'var(--text-muted)' }}>
                         {[
                           'Representante',
                           'Meta',
                           'Txns',
                           'Cumplimiento',
+                          'Inc.',
                           'Err.',
+                          'Aus.',
+                          'Tard.',
                           ...(comparisonEnabled ? [`vs ${comparisonLabel}`] : []),
                         ].map((column) => (
                           <th
                             key={column}
                             style={{
-                              padding: '6px 12px 10px',
+                              padding: '6px 10px 8px',
                               textAlign: column === 'Representante' ? 'left' : 'right',
-                              fontSize: '0.92rem',
+                              fontSize: '0.72rem',
                               fontWeight: 700,
                             }}
                           >
@@ -248,39 +263,39 @@ export function OperationalCompetitiveShiftLeaderboard({
                           <tr
                             key={`${row.representativeId}:${row.shift}:${row.segment}`}
                             style={{
-                              borderTop: '1px solid rgba(255,255,255,0.06)',
+                              borderTop: '1px solid var(--shell-border)',
                             }}
                           >
-                            <td style={{ padding: '16px 12px', textAlign: 'left' }}>
+                            <td style={{ padding: '12px 10px', textAlign: 'left' }}>
                               <div
                                 style={{
                                   display: 'flex',
                                   alignItems: 'center',
-                                  gap: '12px',
+                                  gap: '10px',
                                 }}
                               >
                                 <span
                                   style={{
                                     width: '28px',
                                     textAlign: 'center',
-                                    color: index < 3 ? '#f59e0b' : 'rgba(245,245,244,0.7)',
+                                    color: index < 3 ? 'var(--accent-warm)' : 'var(--text-muted)',
                                     fontWeight: 800,
-                                    fontSize: '1.15rem',
+                                    fontSize: '0.95rem',
                                   }}
                                 >
                                   {index + 1}
                                 </span>
                                 <div
                                   style={{
-                                    width: '40px',
-                                    height: '40px',
+                                    width: '34px',
+                                    height: '34px',
                                     borderRadius: '999px',
-                                    background: '#f5f5f4',
-                                    color: '#1f2937',
+                                    background: 'rgba(var(--accent-rgb),0.12)',
+                                    color: 'var(--accent-strong)',
                                     display: 'grid',
                                     placeItems: 'center',
                                     fontWeight: 800,
-                                    fontSize: '0.9rem',
+                                    fontSize: '0.78rem',
                                   }}
                                 >
                                   {row.agente
@@ -294,7 +309,7 @@ export function OperationalCompetitiveShiftLeaderboard({
                                     style={{
                                       fontSize: '1rem',
                                       fontWeight: 800,
-                                      color: '#fafaf9',
+                                      color: 'var(--text-main)',
                                     }}
                                   >
                                     {row.agente}
@@ -303,9 +318,9 @@ export function OperationalCompetitiveShiftLeaderboard({
                                     style={{
                                       fontSize: '0.78rem',
                                       fontWeight: 700,
-                                      color: 'rgba(245,245,244,0.5)',
+                                      color: 'var(--text-muted)',
                                       textTransform: 'uppercase',
-                                      letterSpacing: '0.06em',
+                                      letterSpacing: '0.04em',
                                     }}
                                   >
                                     {group.label}
@@ -315,27 +330,27 @@ export function OperationalCompetitiveShiftLeaderboard({
                             </td>
                             <td
                               style={{
-                                padding: '16px 12px',
+                                padding: '12px 10px',
                                 textAlign: 'right',
-                                fontSize: '1rem',
+                                fontSize: '0.88rem',
                                 fontWeight: 700,
-                                color: 'rgba(245,245,244,0.78)',
+                                color: 'var(--text-muted)',
                               }}
                             >
                               {formatTarget(row.target)}
                             </td>
                             <td
                               style={{
-                                padding: '16px 12px',
+                                padding: '12px 10px',
                                 textAlign: 'right',
-                                fontSize: '1.2rem',
+                                fontSize: '1rem',
                                 fontWeight: 800,
-                                color: '#fafaf9',
+                                color: 'var(--text-main)',
                               }}
                             >
                               {row.transacciones.toLocaleString('en-US')}
                             </td>
-                            <td style={{ padding: '16px 12px', textAlign: 'right', width: '220px' }}>
+                            <td style={{ padding: '12px 10px', textAlign: 'right', width: '180px' }}>
                               <div
                                 style={{
                                   display: 'grid',
@@ -347,9 +362,9 @@ export function OperationalCompetitiveShiftLeaderboard({
                                   className="report-progress-track"
                                   style={{
                                     width: '160px',
-                                    height: '10px',
+                                    height: '8px',
                                     borderRadius: '999px',
-                                    background: 'rgba(255,255,255,0.06)',
+                                    background: 'rgba(var(--accent-rgb),0.12)',
                                     overflow: 'hidden',
                                   }}
                                 >
@@ -367,7 +382,7 @@ export function OperationalCompetitiveShiftLeaderboard({
                                   style={{
                                     color: rowTone.text,
                                     fontWeight: 800,
-                                    fontSize: '1rem',
+                                    fontSize: '0.86rem',
                                   }}
                                 >
                                   {formatPercent(row.progressPct)}
@@ -376,23 +391,56 @@ export function OperationalCompetitiveShiftLeaderboard({
                             </td>
                             <td
                               style={{
-                                padding: '16px 12px',
+                                padding: '12px 10px',
                                 textAlign: 'right',
-                                color: row.errors > 0 ? '#ef4444' : 'rgba(245,245,244,0.68)',
+                                color: row.incidents > 0 ? 'var(--accent-warm)' : 'var(--text-muted)',
                                 fontWeight: 700,
-                                fontSize: '1rem',
+                                fontSize: '0.86rem',
+                              }}
+                            >
+                              {row.incidents > 0 ? row.incidents.toLocaleString('en-US') : '—'}
+                            </td>
+                            <td
+                              style={{
+                                padding: '12px 10px',
+                                textAlign: 'right',
+                                color: row.errors > 0 ? '#ef4444' : 'var(--text-muted)',
+                                fontWeight: 700,
+                                fontSize: '0.86rem',
                               }}
                             >
                               {row.errors > 0 ? row.errors.toLocaleString('en-US') : '—'}
                             </td>
+                            <td
+                              style={{
+                                padding: '12px 10px',
+                                textAlign: 'right',
+                                color: row.absences > 0 ? '#b91c1c' : 'var(--text-muted)',
+                                fontWeight: 700,
+                                fontSize: '0.86rem',
+                              }}
+                            >
+                              {row.absences > 0 ? row.absences.toLocaleString('en-US') : '—'}
+                            </td>
+                            <td
+                              style={{
+                                padding: '12px 10px',
+                                textAlign: 'right',
+                                color: row.tardiness > 0 ? '#d97706' : 'var(--text-muted)',
+                                fontWeight: 700,
+                                fontSize: '0.86rem',
+                              }}
+                            >
+                              {row.tardiness > 0 ? row.tardiness.toLocaleString('en-US') : '—'}
+                            </td>
                             {comparisonEnabled ? (
                               <td
                                 style={{
-                                  padding: '16px 12px',
+                                  padding: '12px 10px',
                                   textAlign: 'right',
                                   color: getDeltaColor(row.comparisonDelta),
                                   fontWeight: 800,
-                                  fontSize: '1rem',
+                                  fontSize: '0.86rem',
                                 }}
                               >
                                 {getDeltaLabel(row.comparisonDelta, comparisonLabel)}

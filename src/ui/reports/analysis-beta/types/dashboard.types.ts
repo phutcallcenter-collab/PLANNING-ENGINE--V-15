@@ -203,6 +203,8 @@ export type RepresentativeReconciliationItem = {
 };
 
 export type RepresentativeReconciliationSummary = {
+  sourceValidTransactions: number;
+  sourceCancelledTransactions: number;
   officialValidTransactions: number;
   officialCancelledTransactions: number;
   excludedValidTransactions: number;

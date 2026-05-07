@@ -82,6 +82,8 @@ type TransactionProcessingResult = {
   pendingAgentNames: Record<ShiftType, Set<string>>;
   missingAgentRegistrations: Record<ShiftType, number>;
   reconciliation: Map<string, ReconciliationAccumulator>;
+  sourceValidTransactions: number;
+  sourceCancelledTransactions: number;
   officialValidTransactions: number;
   officialCancelledTransactions: number;
   excludedValidTransactions: number;
@@ -162,6 +164,10 @@ function isCallCenterRepresentativeTransaction(transaction: Transaction): boolea
   }
 
   return true;
+}
+
+function isCallCenterSourceTransaction(transaction: Transaction): boolean {
+  return transaction.plataforma === 'Call center';
 }
 
 function daysInMonthFromIso(date: string): number {
@@ -412,6 +418,7 @@ function buildTargetMap(params: {
   representatives: Representative[];
   incidents: Incident[];
   commercialGoals: CommercialGoal[];
+  periodKind: OperationalCompetitiveResolvedPeriod['kind'];
   dates: string[];
   allCalendarDays: ReturnType<typeof createCalendarDaysForDates>;
   specialSchedules: SpecialSchedule[];
@@ -419,6 +426,7 @@ function buildTargetMap(params: {
 }) {
   const targetMap = new Map<string, TargetAccumulator>();
   const plannedShiftMap = buildPlannedShiftMap(params);
+  const monthlyTargetKeys = new Set<string>();
 
   params.dates.forEach((date) => {
     params.representatives.forEach((representative) => {
@@ -444,7 +452,14 @@ function buildTargetMap(params: {
         };
 
         current.monthlyTargetPerRepresentative = monthlyTargetPerRepresentative;
-        current.target += monthlyTargetPerRepresentative / daysInMonthFromIso(date);
+        if (params.periodKind === 'MONTH') {
+          if (!monthlyTargetKeys.has(key)) {
+            current.target += monthlyTargetPerRepresentative;
+            monthlyTargetKeys.add(key);
+          }
+        } else {
+          current.target += monthlyTargetPerRepresentative / daysInMonthFromIso(date);
+        }
         current.plannedDates.add(date);
         targetMap.set(key, current);
       });
@@ -564,12 +579,22 @@ function processRepresentativeTransactions(params: {
     params.representatives,
     params.manualRepresentativeLinks
   );
+  let sourceValidTransactions = 0;
+  let sourceCancelledTransactions = 0;
   let officialValidTransactions = 0;
   let officialCancelledTransactions = 0;
   let excludedValidTransactions = 0;
   let excludedCancelledTransactions = 0;
 
   periodTransactions.forEach((transaction) => {
+    if (isCallCenterSourceTransaction(transaction)) {
+      if (transaction.estatus === 'N') {
+        sourceValidTransactions += 1;
+      } else {
+        sourceCancelledTransactions += 1;
+      }
+    }
+
     const shift = resolveTransactionShift(transaction.hora);
 
     if (!shift || !isCallCenterRepresentativeTransaction(transaction)) {
@@ -704,6 +729,8 @@ function processRepresentativeTransactions(params: {
     pendingAgentNames,
     missingAgentRegistrations,
     reconciliation,
+    sourceValidTransactions,
+    sourceCancelledTransactions,
     officialValidTransactions,
     officialCancelledTransactions,
     excludedValidTransactions,
@@ -783,6 +810,7 @@ export function buildRepresentativePerformanceReport({
     representatives: eligibleRepresentatives,
     incidents,
     commercialGoals,
+    periodKind: currentPeriod.kind,
     dates: [...new Set((currentTransactionDates ?? currentPeriod.loadedDates).filter(Boolean))].sort(),
     allCalendarDays,
     specialSchedules,
@@ -1038,6 +1066,8 @@ export function buildRepresentativePerformanceReport({
           : assignmentRows.reduce((total, row) => total + (row.comparisonDelta ?? 0), 0),
     },
     reconciliation: {
+      sourceValidTransactions: currentState.sourceValidTransactions,
+      sourceCancelledTransactions: currentState.sourceCancelledTransactions,
       officialValidTransactions: currentState.officialValidTransactions,
       officialCancelledTransactions: currentState.officialCancelledTransactions,
       excludedValidTransactions: currentState.excludedValidTransactions,

@@ -203,6 +203,7 @@ describe('buildRepresentativePerformanceReport', () => {
       ],
     });
 
+    expect(report.reconciliation.sourceValidTransactions).toBe(4);
     expect(report.reconciliation.officialValidTransactions).toBe(1);
     expect(report.reconciliation.excludedValidTransactions).toBe(3);
     expect(report.pendingAgentNames).toEqual(['Agente Desconocido']);
@@ -247,6 +248,57 @@ describe('buildRepresentativePerformanceReport', () => {
     expect(report.shifts.NIGHT.groups.find((group) => group.segment === 'FULL_TIME')?.summary.target)
       .toBe(0);
     expect(report.globalSummary.target).toBeCloseTo(dayPartTarget + dayMixTarget, 5);
+  });
+
+  it('uses full individual monthly goals for every representative in monthly mode', () => {
+    const monthlyRepresentatives: Representative[] = Array.from({ length: 12 }, (_, index) => ({
+      id: `rep-month-${index + 1}`,
+      name: `Agente Mes ${index + 1}`,
+      baseShift: 'DAY',
+      role: 'SALES',
+      employmentType: 'FULL_TIME',
+      commercialEligible: true,
+      baseSchedule: fullSchedule(),
+      isActive: true,
+      orderIndex: index,
+    }));
+    const monthlyGoals: CommercialGoal[] = [
+      { id: 'DAY:PART_TIME', shift: 'DAY', segment: 'PART_TIME', monthlyTarget: 0 },
+      { id: 'DAY:FULL_TIME', shift: 'DAY', segment: 'FULL_TIME', monthlyTarget: 1000 },
+      { id: 'DAY:MIXTO', shift: 'DAY', segment: 'MIXTO', monthlyTarget: 0 },
+      { id: 'NIGHT:PART_TIME', shift: 'NIGHT', segment: 'PART_TIME', monthlyTarget: 0 },
+      { id: 'NIGHT:FULL_TIME', shift: 'NIGHT', segment: 'FULL_TIME', monthlyTarget: 0 },
+      { id: 'NIGHT:MIXTO', shift: 'NIGHT', segment: 'MIXTO', monthlyTarget: 0 },
+    ];
+
+    const report = buildRepresentativePerformanceReport({
+      representatives: monthlyRepresentatives,
+      commercialGoals: monthlyGoals,
+      incidents: [],
+      calendar: { specialDays: [] },
+      currentPeriod: buildPeriod('2026-04-01', {
+        kind: 'MONTH',
+        label: 'abril de 2026',
+        from: '2026-04-01',
+        to: '2026-04-30',
+        loadedDays: 1,
+        expectedDays: 30,
+        loadedDates: ['2026-04-01'],
+        isComplete: false,
+      }),
+      currentTransactions: [],
+      currentTransactionDates: ['2026-04-01'],
+      manualRepresentativeLinks: [],
+    });
+
+    const fullTimeGroup = report.shifts.DAY.groups.find(
+      (group) => group.segment === 'FULL_TIME'
+    );
+
+    expect(fullTimeGroup?.summary.representatives).toBe(12);
+    expect(fullTimeGroup?.summary.target).toBe(12000);
+    expect(fullTimeGroup?.rows).toHaveLength(12);
+    expect(fullTimeGroup?.rows.every((row) => row.target === 1000)).toBe(true);
   });
 
   it('does not duplicate a mixed representative across shifts when activity only exists in one shift', () => {

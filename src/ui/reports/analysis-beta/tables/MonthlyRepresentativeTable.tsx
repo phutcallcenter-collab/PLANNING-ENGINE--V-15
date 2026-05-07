@@ -31,8 +31,8 @@ import { cn } from '@/ui/reports/analysis-beta/lib/utils';
 import { useToast } from '@/ui/reports/analysis-beta/hooks/use-toast';
 import { useAppStore } from '@/store/useAppStore';
 import {
-  buildRepresentativePerformanceReport,
-} from '@/ui/reports/analysis-beta/services/representative-performance.service';
+  buildMonthlyRepresentativePerformance,
+} from '@/ui/reports/analysis-beta/services/monthly-representative-performance.service';
 import { MANUAL_REPRESENTATIVE_LINKS } from '@/ui/reports/analysis-beta/config/manualRepresentativeLinks';
 
 type SortConfig = {
@@ -44,21 +44,12 @@ type MonthlyRepresentativeTableProps = {
   embedded?: boolean;
 };
 
-function getMonthEnd(monthKey: string) {
-  const [year, month] = monthKey.split('-').map(Number);
-  return new Date(Date.UTC(year, month, 0)).toISOString().slice(0, 10);
-}
-
-function getExpectedDays(monthKey: string) {
-  const [year, month] = monthKey.split('-').map(Number);
-  return new Date(Date.UTC(year, month, 0)).getUTCDate();
-}
-
 export default function MonthlyRepresentativeTable({
   embedded = false,
 }: MonthlyRepresentativeTableProps) {
   const transactions = useDashboardStore((state) => state.rawTransactions);
   const selectedMonthKey = useDashboardStore((state) => state.selectedMonthKey);
+  const monthlyHistory = useDashboardStore((state) => state.monthlyHistory);
   const monthlySnapshots = useDashboardStore((state) => state.monthlySnapshots);
   const manualRepresentativeLinks = useDashboardStore(
     (state) => state.manualRepresentativeLinks
@@ -90,48 +81,26 @@ export default function MonthlyRepresentativeTable({
     })}`;
 
   const monthlySnapshot = useMemo(
-    () => (selectedMonthKey ? monthlySnapshots[selectedMonthKey] ?? null : null),
-    [monthlySnapshots, selectedMonthKey]
+    () =>
+      selectedMonthKey
+        ? monthlySnapshots[selectedMonthKey] ?? monthlyHistory[selectedMonthKey] ?? null
+        : null,
+    [monthlyHistory, monthlySnapshots, selectedMonthKey]
   );
 
-  const performanceReport = useMemo(() => {
-    if (!selectedMonthKey) {
+  const monthlyPerformance = useMemo(() => {
+    if (!selectedMonthKey || !monthlySnapshot) {
       return null;
     }
 
-    const monthTransactions = transactions.filter((transaction) =>
-      transaction.fecha.startsWith(`${selectedMonthKey}-`)
-    );
-    const loadedDates = [
-      ...new Set(
-        (monthlySnapshot?.loadedDates ?? monthTransactions.map((transaction) => transaction.fecha))
-          .filter((date) => date.startsWith(`${selectedMonthKey}-`))
-      ),
-    ].sort();
-
-    if (loadedDates.length === 0 || monthTransactions.length === 0) {
-      return null;
-    }
-
-    return buildRepresentativePerformanceReport({
+    return buildMonthlyRepresentativePerformance({
+      monthSnapshot: monthlySnapshot,
+      transactions,
       representatives,
       commercialGoals,
       incidents,
       calendar,
       specialSchedules,
-      currentPeriod: {
-        kind: 'MONTH',
-        anchorDate: `${selectedMonthKey}-01`,
-        label: monthlySnapshot?.monthLabel ?? selectedMonthKey,
-        from: `${selectedMonthKey}-01`,
-        to: getMonthEnd(selectedMonthKey),
-        loadedDays: loadedDates.length,
-        expectedDays: getExpectedDays(selectedMonthKey),
-        loadedDates,
-        isComplete: loadedDates.length === getExpectedDays(selectedMonthKey),
-      },
-      currentTransactions: monthTransactions,
-      currentTransactionDates: loadedDates,
       manualRepresentativeLinks: [
         ...MANUAL_REPRESENTATIVE_LINKS,
         ...manualRepresentativeLinks,
@@ -148,6 +117,7 @@ export default function MonthlyRepresentativeTable({
     specialSchedules,
     transactions,
   ]);
+  const performanceReport = monthlyPerformance?.performanceReport ?? null;
 
   const baseRows = useMemo(() => {
     if (performanceReport) {
@@ -266,7 +236,7 @@ export default function MonthlyRepresentativeTable({
               </span>
               <span className="inline-flex items-center gap-1 rounded-full bg-red-50 px-2.5 py-1 text-red-700">
                 {(monthlySnapshot?.loadedDays ?? performanceReport?.byAssignment.length ?? 0)}/
-                {monthlySnapshot?.expectedDays ?? getExpectedDays(selectedMonthKey)} dias cargados
+                {monthlySnapshot?.expectedDays ?? 0} dias cargados
               </span>
               <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2.5 py-1 text-amber-700">
                 {performanceReport?.reconciliation.excludedValidTransactions.toLocaleString('en-US') ?? '0'} fuera de lo oficial

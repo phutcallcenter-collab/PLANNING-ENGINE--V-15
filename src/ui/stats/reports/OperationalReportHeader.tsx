@@ -26,8 +26,8 @@ export function OperationalReportHeader({
   return (
     <div
       style={{
-        padding: '20px',
-        borderRadius: '22px',
+        padding: '14px 16px',
+        borderRadius: '18px',
         border: '1px solid var(--shell-border)',
         background:
           'linear-gradient(135deg, var(--surface-raised) 0%, var(--surface-tint) 60%, rgba(var(--accent-rgb), 0.06) 100%)',
@@ -43,12 +43,12 @@ export function OperationalReportHeader({
               letterSpacing: '0.08em',
               textTransform: 'uppercase',
               color: 'var(--accent)',
-              marginBottom: '8px',
+              marginBottom: '5px',
             }}
           >
             Reporte operativo
           </div>
-          <h2 style={{ fontSize: '20px', fontWeight: 700, margin: 0, color: 'var(--text-main)', letterSpacing: '-0.02em' }}>
+          <h2 style={{ fontSize: '17px', fontWeight: 700, margin: 0, color: 'var(--text-main)', letterSpacing: 0 }}>
             Resumen del equipo
           </h2>
           <p style={{ margin: '4px 0 0', color: 'var(--text-muted)', fontSize: '13px' }}>

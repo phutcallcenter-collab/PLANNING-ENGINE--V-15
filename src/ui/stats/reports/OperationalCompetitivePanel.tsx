@@ -38,11 +38,17 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/ui/reports/analysis-beta/ui/select';
-import type { Transaction } from '@/ui/reports/analysis-beta/types/dashboard.types';
+import type {
+  MonthlyOperationalSnapshot,
+  Transaction,
+} from '@/ui/reports/analysis-beta/types/dashboard.types';
 import { downloadElementAsImage } from '@/ui/lib/downloadElementAsImage';
 import {
   buildRepresentativePerformanceReport,
 } from '@/ui/reports/analysis-beta/services/representative-performance.service';
+import {
+  buildMonthlyRepresentativePerformance,
+} from '@/ui/reports/analysis-beta/services/monthly-representative-performance.service';
 import {
   normalizeRepresentativeLinkName,
   OMIT_REPRESENTATIVE_LINK,
@@ -108,12 +114,15 @@ function mergeTransactionsForDates(params: {
     }
   >;
   fallbackTransactionsByDate: Map<string, Transaction[]>;
+  allowFallback?: boolean;
 }) {
   const transactionsById = new Map<string, Transaction>();
 
   params.dates.forEach((date) => {
     const cachedTransactions = params.sourcesByDate.get(date)?.rawTransactions ?? [];
-    const fallbackTransactions = params.fallbackTransactionsByDate.get(date) ?? [];
+    const fallbackTransactions = params.allowFallback === false
+      ? []
+      : params.fallbackTransactionsByDate.get(date) ?? [];
 
     [...cachedTransactions, ...fallbackTransactions].forEach((transaction) => {
       transactionsById.set(transaction.id, transaction);
@@ -180,6 +189,22 @@ function buildResolvedPeriod(params: {
   };
 }
 
+function buildResolvedMonthlyPeriod(
+  snapshot: MonthlyOperationalSnapshot
+): OperationalCompetitiveResolvedPeriod {
+  return {
+    kind: 'MONTH',
+    anchorDate: snapshot.startDate,
+    label: snapshot.monthLabel,
+    from: snapshot.startDate,
+    to: snapshot.endDate,
+    loadedDays: snapshot.loadedDays,
+    expectedDays: snapshot.expectedDays,
+    loadedDates: [...new Set(snapshot.loadedDates)].sort(),
+    isComplete: snapshot.loadedDays >= snapshot.expectedDays,
+  };
+}
+
 type OperationalCompetitivePanelProps = {
   onOpenCallCenter: () => void;
 };
@@ -192,6 +217,7 @@ type SurfaceProps = {
   comparisonPeriod: OperationalCompetitiveResolvedPeriod | null;
   periodKind: OperationalCompetitivePeriodKind;
   currentTransactionCoverage: { readyDates: string[]; missingDates: string[] };
+  sourceValidTransactions: number;
   onManageLinks: () => void;
 };
 
@@ -203,12 +229,14 @@ function OperationalCompetitiveSurface({
   comparisonPeriod,
   periodKind,
   currentTransactionCoverage,
+  sourceValidTransactions,
   onManageLinks,
 }: SurfaceProps) {
   const pendingUnlinkedAgents = performanceReport.reconciliation.items.filter(
     (item) => item.reason === 'unlinked_agent' && item.agentName
   );
   const excludedTransactionCount = performanceReport.reconciliation.excludedValidTransactions;
+  const systemIncidents = performanceReport.globalSummary.incidents;
 
   return (
     <div
@@ -220,15 +248,15 @@ function OperationalCompetitiveSurface({
       <section
         className="report-print-avoid-break"
         style={{
-          borderRadius: '34px',
+          borderRadius: '24px',
           background:
-            'radial-gradient(circle at top right, rgba(245,158,11,0.18), transparent 30%), #23211f',
-          color: '#fafaf9',
-          padding: '28px',
-          border: '1px solid rgba(255,255,255,0.08)',
-          boxShadow: '0 36px 80px rgba(0,0,0,0.2)',
+            'linear-gradient(180deg, var(--surface-raised) 0%, var(--surface-tint) 100%)',
+          color: 'var(--text-main)',
+          padding: '20px',
+          border: '1px solid var(--shell-border)',
+          boxShadow: 'var(--shadow-sm)',
           display: 'grid',
-          gap: '22px',
+          gap: '16px',
         }}
       >
         <div
@@ -240,14 +268,14 @@ function OperationalCompetitiveSurface({
             alignItems: 'flex-start',
           }}
         >
-          <div style={{ display: 'grid', gap: '8px', maxWidth: '780px' }}>
+          <div style={{ display: 'grid', gap: '6px', maxWidth: '780px' }}>
             <div
               style={{
-                fontSize: '0.82rem',
+                fontSize: '0.72rem',
                 fontWeight: 800,
                 letterSpacing: '0.08em',
                 textTransform: 'uppercase',
-                color: 'rgba(245,245,244,0.62)',
+                color: 'var(--accent)',
               }}
             >
               Ranking operativo
@@ -255,24 +283,24 @@ function OperationalCompetitiveSurface({
             <h2
               style={{
                 margin: 0,
-                fontSize: '2.4rem',
+                fontSize: '1.35rem',
                 fontWeight: 800,
-                letterSpacing: '-0.05em',
+                letterSpacing: 0,
               }}
             >
-              Transacciones · cumplimiento · control interno
+              Transacciones del acumulado mensual · incidencias del sistema
             </h2>
             <p
               style={{
                 margin: 0,
-                color: 'rgba(245,245,244,0.75)',
-                lineHeight: 1.7,
-                fontSize: '0.98rem',
+                color: 'var(--text-muted)',
+                lineHeight: 1.55,
+                fontSize: '0.9rem',
               }}
             >
-              Fuente de verdad única: análisis de llamadas / Call Center. La vista de{' '}
+              Fuente transaccional única: análisis de llamadas / Call Center. La vista de{' '}
               {periodKind === 'DAY' ? 'día' : periodKind === 'WEEK' ? 'semana' : 'mes'} usa
-              las mismas filas oficiales que la tabla comercial.
+              el mismo acumulado operativo; las incidencias se leen del sistema.
             </p>
           </div>
 
@@ -285,10 +313,10 @@ function OperationalCompetitiveSurface({
           >
             <div
               style={{
-                borderRadius: '22px',
-                border: '1px solid rgba(255,255,255,0.08)',
-                background: 'rgba(255,255,255,0.04)',
-                padding: '16px 18px',
+                borderRadius: '18px',
+                border: '1px solid var(--shell-border)',
+                background: 'rgba(255,255,255,0.48)',
+                padding: '12px 14px',
               }}
             >
               <div
@@ -297,15 +325,15 @@ function OperationalCompetitiveSurface({
                   fontWeight: 800,
                   letterSpacing: '0.08em',
                   textTransform: 'uppercase',
-                  color: 'rgba(245,245,244,0.52)',
+                  color: 'var(--text-faint)',
                 }}
               >
                 Período
               </div>
-              <div style={{ marginTop: '6px', fontSize: '1.25rem', fontWeight: 800 }}>
+              <div style={{ marginTop: '4px', fontSize: '1rem', fontWeight: 800 }}>
                 {currentPeriod.label}
               </div>
-              <div style={{ marginTop: '6px', color: 'rgba(245,245,244,0.72)', fontSize: '0.92rem' }}>
+              <div style={{ marginTop: '4px', color: 'var(--text-muted)', fontSize: '0.82rem' }}>
                 {comparisonEnabled && comparisonPeriod
                   ? `Comparado con ${comparisonPeriod.label}.`
                   : 'Sin comparación previa.'}
@@ -325,46 +353,51 @@ function OperationalCompetitiveSurface({
             {
               label: 'Representantes activos',
               value: performanceReport.globalSummary.activeRepresentatives.toLocaleString('en-US'),
-              note: 'oficiales en este período',
+              note: 'en seguimiento operativo',
             },
             {
-              label: 'Transacciones oficiales',
+              label: periodKind === 'MONTH' ? 'Transacciones CC mensual' : 'Transacciones CC',
+              value: sourceValidTransactions.toLocaleString('en-US'),
+              note: 'total del análisis de llamadas',
+            },
+            {
+              label: 'Oficial en ranking',
               value: performanceReport.reconciliation.officialValidTransactions.toLocaleString('en-US'),
-              note: 'mismas filas del análisis',
+              note: 'con representante enlazado',
             },
             {
               label: 'Cumplimiento promedio',
               value: formatPercent(performanceReport.globalSummary.progressPct),
-              note: 'sobre metas reales del roster',
+              note: 'meta individual por representante',
             },
             {
-              label: 'Fuera de conciliación',
-              value: excludedTransactionCount.toLocaleString('en-US'),
-              note: 'separadas de lo oficial',
+              label: 'Incidencias sistema',
+              value: systemIncidents.toLocaleString('en-US'),
+              note: 'errores, ausencias y tardanzas',
             },
           ].map((card) => (
             <div
               key={card.label}
               style={{
-                borderRadius: '24px',
-                border: '1px solid rgba(255,255,255,0.08)',
-                background: 'rgba(255,255,255,0.04)',
-                padding: '18px',
+                borderRadius: '16px',
+                border: '1px solid var(--shell-border)',
+                background: 'rgba(255,255,255,0.5)',
+                padding: '14px',
               }}
             >
               <div
                 style={{
                   fontSize: '0.82rem',
                   fontWeight: 700,
-                  color: 'rgba(245,245,244,0.58)',
+                  color: 'var(--text-muted)',
                 }}
               >
                 {card.label}
               </div>
-              <div style={{ marginTop: '10px', fontSize: '2rem', fontWeight: 800 }}>
+              <div style={{ marginTop: '6px', fontSize: '1.45rem', fontWeight: 800 }}>
                 {card.value}
               </div>
-              <div style={{ marginTop: '6px', color: 'rgba(245,245,244,0.62)', fontSize: '0.86rem' }}>
+              <div style={{ marginTop: '4px', color: 'var(--text-muted)', fontSize: '0.78rem' }}>
                 {card.note}
               </div>
             </div>
@@ -448,9 +481,8 @@ function OperationalCompetitiveSurface({
                     maxWidth: '72ch',
                   }}
                 >
-                  La tabla oficial no mezcla transacciones omitidas, sin enlace o sin agente.
-                  Esas quedan separadas para que el acumulado siempre pueda cuadrar con la fuente
-                  importada.
+                  El ranking separa transacciones omitidas, sin enlace o sin agente para que
+                  el total siga cuadrando contra el acumulado mensual del análisis de llamadas.
                 </p>
               </div>
             </div>
@@ -494,7 +526,7 @@ function OperationalCompetitiveSurface({
               }}
             >
               <div className="text-[10px] font-black uppercase tracking-[0.16em] text-amber-700">
-                Transacciones fuera de lo oficial
+                Transacciones fuera del ranking
               </div>
               <div className="mt-2 text-2xl font-black text-amber-950">
                 {excludedTransactionCount.toLocaleString('en-US')}
@@ -562,6 +594,10 @@ export function OperationalCompetitivePanel({
   }));
   const availableDates = useDashboardStore((state) => state.availableDates);
   const dailyHistory = useDashboardStore((state) => state.dailyHistory);
+  const monthlyHistory = useDashboardStore((state) => state.monthlyHistory);
+  const monthlySnapshots = useDashboardStore((state) => state.monthlySnapshots);
+  const selectedMonthKey = useDashboardStore((state) => state.selectedMonthKey);
+  const setSelectedMonthKey = useDashboardStore((state) => state.setSelectedMonthKey);
   const rawTransactions = useDashboardStore((state) => state.rawTransactions);
   const manualRepresentativeLinks = useDashboardStore(
     (state) => state.manualRepresentativeLinks
@@ -609,7 +645,33 @@ export function OperationalCompetitivePanel({
       null;
   }, [availableDates, dailyHistory, transactionAvailableDates]);
 
+  const monthlyPeriodOptions = useMemo(() => {
+    const monthlySource =
+      Object.keys(monthlySnapshots).length > 0
+        ? Object.values(monthlySnapshots)
+        : Object.values(monthlyHistory);
+
+    return monthlySource
+      .sort((left, right) => right.monthKey.localeCompare(left.monthKey))
+      .map((snapshot) => ({
+        value: snapshot.startDate,
+        label: `${snapshot.monthLabel} · ${snapshot.loadedDays}/${snapshot.expectedDays} dias`,
+        summary: {
+          label: snapshot.monthLabel,
+          start: snapshot.startDate,
+          end: snapshot.endDate,
+          loadedDays: snapshot.loadedDays,
+          expectedDays: snapshot.expectedDays,
+          isComplete: snapshot.loadedDays >= snapshot.expectedDays,
+        },
+      }));
+  }, [monthlyHistory, monthlySnapshots]);
+
   const periodOptions = useMemo(() => {
+    if (periodKind === 'MONTH') {
+      return monthlyPeriodOptions;
+    }
+
     if (transactionAvailableDates.length === 0) {
       return [];
     }
@@ -618,7 +680,7 @@ export function OperationalCompetitivePanel({
       availableDates: transactionAvailableDates,
       periodMode: getComparisonMode(periodKind),
     });
-  }, [periodKind, transactionAvailableDates]);
+  }, [monthlyPeriodOptions, periodKind, transactionAvailableDates]);
 
   useEffect(() => {
     if (periodOptions.length === 0) {
@@ -626,10 +688,14 @@ export function OperationalCompetitivePanel({
       return;
     }
 
+    const selectedMonthOption =
+      periodKind === 'MONTH' && selectedMonthKey
+        ? periodOptions.find((option) => option.value.startsWith(`${selectedMonthKey}-`))
+        : undefined;
     const fallbackAnchorDate =
       periodKind === 'DAY'
         ? latestCompleteDate ?? periodOptions[0]?.value ?? null
-        : periodOptions[0]?.value ?? null;
+        : selectedMonthOption?.value ?? periodOptions[0]?.value ?? null;
 
     if (!selectedAnchorDate) {
       setSelectedAnchorDate(fallbackAnchorDate);
@@ -652,11 +718,41 @@ export function OperationalCompetitivePanel({
     if (matchingOption.value !== selectedAnchorDate) {
       setSelectedAnchorDate(matchingOption.value);
     }
-  }, [latestCompleteDate, periodKind, periodOptions, selectedAnchorDate]);
+  }, [latestCompleteDate, periodKind, periodOptions, selectedAnchorDate, selectedMonthKey]);
+
+  useEffect(() => {
+    if (periodKind !== 'MONTH' || !selectedAnchorDate) {
+      return;
+    }
+
+    const monthKey = selectedAnchorDate.slice(0, 7);
+
+    if (monthKey !== selectedMonthKey) {
+      setSelectedMonthKey(monthKey);
+    }
+  }, [periodKind, selectedAnchorDate, selectedMonthKey, setSelectedMonthKey]);
+
+  const activeMonthKey =
+    periodKind === 'MONTH'
+      ? selectedAnchorDate?.slice(0, 7) ?? selectedMonthKey
+      : null;
+  const activeMonthlySnapshot = useMemo(
+    () =>
+      activeMonthKey
+        ? monthlySnapshots[activeMonthKey] ?? monthlyHistory[activeMonthKey] ?? null
+        : null,
+    [activeMonthKey, monthlyHistory, monthlySnapshots]
+  );
 
   const currentPeriod = useMemo(() => {
     if (!selectedAnchorDate) {
       return null;
+    }
+
+    if (periodKind === 'MONTH') {
+      return activeMonthlySnapshot
+        ? buildResolvedMonthlyPeriod(activeMonthlySnapshot)
+        : null;
     }
 
     return buildResolvedPeriod({
@@ -664,7 +760,7 @@ export function OperationalCompetitivePanel({
       kind: periodKind,
       availableDates: transactionAvailableDates,
     });
-  }, [periodKind, selectedAnchorDate, transactionAvailableDates]);
+  }, [activeMonthlySnapshot, periodKind, selectedAnchorDate, transactionAvailableDates]);
 
   const comparisonPeriod = useMemo(() => {
     if (!comparisonEnabled || !selectedAnchorDate) {
@@ -676,12 +772,29 @@ export function OperationalCompetitivePanel({
         ? shiftUtcMonth(selectedAnchorDate, -1)
         : shiftUtcDate(selectedAnchorDate, periodKind === 'WEEK' ? -7 : -1);
 
+    if (periodKind === 'MONTH') {
+      const comparisonMonthKey = comparisonAnchorDate.slice(0, 7);
+      const comparisonSnapshot =
+        monthlySnapshots[comparisonMonthKey] ?? monthlyHistory[comparisonMonthKey] ?? null;
+
+      return comparisonSnapshot
+        ? buildResolvedMonthlyPeriod(comparisonSnapshot)
+        : null;
+    }
+
     return buildResolvedPeriod({
       anchorDate: comparisonAnchorDate,
       kind: periodKind,
       availableDates: transactionAvailableDates,
     });
-  }, [comparisonEnabled, periodKind, selectedAnchorDate, transactionAvailableDates]);
+  }, [
+    comparisonEnabled,
+    monthlyHistory,
+    monthlySnapshots,
+    periodKind,
+    selectedAnchorDate,
+    transactionAvailableDates,
+  ]);
 
   useEffect(() => {
     let cancelled = false;
@@ -728,11 +841,13 @@ export function OperationalCompetitivePanel({
           dates: currentDates,
           sourcesByDate,
           fallbackTransactionsByDate,
+          allowFallback: periodKind !== 'MONTH',
         }),
         comparisonTransactions: mergeTransactionsForDates({
           dates: comparisonDates,
           sourcesByDate,
           fallbackTransactionsByDate,
+          allowFallback: periodKind !== 'MONTH',
         }),
       });
     })();
@@ -740,7 +855,7 @@ export function OperationalCompetitivePanel({
     return () => {
       cancelled = true;
     };
-  }, [comparisonPeriod, currentPeriod, fallbackTransactionsByDate]);
+  }, [comparisonPeriod, currentPeriod, fallbackTransactionsByDate, periodKind]);
 
   const currentTransactionCoverage = useMemo(() => {
     if (!currentPeriod) {
@@ -763,6 +878,26 @@ export function OperationalCompetitivePanel({
       return null;
     }
 
+    if (periodKind === 'MONTH') {
+      if (!activeMonthlySnapshot) {
+        return null;
+      }
+
+      return buildMonthlyRepresentativePerformance({
+        monthSnapshot: activeMonthlySnapshot,
+        transactions: sourceData.currentTransactions,
+        representatives,
+        commercialGoals,
+        incidents,
+        calendar,
+        specialSchedules,
+        comparisonPeriod: comparisonEnabled ? comparisonPeriod : null,
+        comparisonTransactions: sourceData.comparisonTransactions,
+        comparisonTransactionDates: comparisonTransactionCoverage.readyDates,
+        manualRepresentativeLinks,
+      })?.performanceReport ?? null;
+    }
+
     return buildRepresentativePerformanceReport({
       representatives,
       commercialGoals,
@@ -779,6 +914,7 @@ export function OperationalCompetitivePanel({
       manualRepresentativeLinks,
     });
   }, [
+    activeMonthlySnapshot,
     calendar,
     commercialGoals,
     comparisonEnabled,
@@ -839,6 +975,14 @@ export function OperationalCompetitivePanel({
       : periodKind === 'WEEK'
         ? 'la semana pasada'
         : 'el mes pasado';
+  const sourceValidTransactions =
+    periodKind === 'MONTH' && activeMonthlySnapshot
+      ? activeMonthlySnapshot.kpis.transaccionesCC
+      : performanceReport?.reconciliation.sourceValidTransactions ?? 0;
+  const hasNoSourceTransactions =
+    periodKind === 'MONTH'
+      ? sourceValidTransactions === 0
+      : currentTransactionCoverage.readyDates.length === 0;
 
   const handleSaveManualLink = () => {
     if (!selectedAgentName || !selectedRepresentativeName) {
@@ -879,8 +1023,8 @@ export function OperationalCompetitivePanel({
         style={{
           borderRadius: '28px',
           padding: '24px',
-          background: '#23211f',
-          color: '#fafaf9',
+          background: 'var(--surface-raised)',
+          color: 'var(--text-main)',
         }}
       >
         <div className="app-shell-loading">Preparando historial de Call Center...</div>
@@ -888,28 +1032,29 @@ export function OperationalCompetitivePanel({
     );
   }
 
-  if (transactionAvailableDates.length === 0) {
+  if (transactionAvailableDates.length === 0 && monthlyPeriodOptions.length === 0) {
     return (
       <section
         style={{
-          borderRadius: '32px',
-          background: '#23211f',
-          color: '#fafaf9',
-          padding: '28px',
+          borderRadius: '24px',
+          background: 'var(--surface-raised)',
+          color: 'var(--text-main)',
+          padding: '22px',
+          border: '1px solid var(--shell-border)',
           display: 'grid',
-          gap: '18px',
+          gap: '14px',
         }}
       >
         <div>
-          <div className="text-[12px] font-black uppercase tracking-[0.16em] text-stone-400">
+          <div className="text-[12px] font-black uppercase tracking-[0.16em] text-slate-500">
             Ranking operativo
           </div>
-          <h2 className="mt-3 text-3xl font-black tracking-[-0.04em]">
+          <h2 className="mt-2 text-xl font-black tracking-normal">
             Falta cargar historial de Call Center
           </h2>
-          <p className="mt-3 max-w-3xl text-sm leading-7 text-stone-300">
+          <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-500">
             En cuanto haya jornadas cargadas, aquí se arma automáticamente el ranking
-            diario, semanal y mensual usando la misma fuente oficial del análisis de llamadas.
+            diario, semanal y mensual usando el acumulado del análisis de llamadas.
           </p>
         </div>
 
@@ -920,9 +1065,9 @@ export function OperationalCompetitivePanel({
             width: 'fit-content',
             padding: '11px 14px',
             borderRadius: '14px',
-            border: '1px solid rgba(245,245,244,0.16)',
-            background: 'rgba(255,255,255,0.06)',
-            color: '#fafaf9',
+            border: '1px solid var(--shell-border)',
+            background: 'var(--surface-tint)',
+            color: 'var(--text-main)',
             fontWeight: 800,
             cursor: 'pointer',
             display: 'inline-flex',
@@ -987,7 +1132,13 @@ export function OperationalCompetitivePanel({
           <div className="flex flex-wrap items-center gap-2">
             <Select
               value={selectedAnchorDate ?? undefined}
-              onValueChange={setSelectedAnchorDate}
+              onValueChange={(value) => {
+                setSelectedAnchorDate(value);
+
+                if (periodKind === 'MONTH') {
+                  setSelectedMonthKey(value.slice(0, 7));
+                }
+              }}
             >
               <SelectTrigger className="min-w-[280px] rounded-xl border-slate-200 bg-white">
                 <SelectValue placeholder="Selecciona período..." />
@@ -1070,13 +1221,15 @@ export function OperationalCompetitivePanel({
               {currentPeriod.loadedDays}/{currentPeriod.expectedDays} dias cargados
             </span>
             <span className="rounded-full bg-slate-100 px-3 py-2">
-              {currentTransactionCoverage.readyDates.length}/{currentPeriod.loadedDates.length} dias con transacciones
+              {periodKind === 'MONTH'
+                ? `${sourceValidTransactions.toLocaleString('en-US')} txns acumuladas`
+                : `${currentTransactionCoverage.readyDates.length}/${currentPeriod.loadedDates.length} dias con transacciones`}
             </span>
           </div>
         ) : null}
       </section>
 
-      {!sourceData.isLoading && currentPeriod && currentTransactionCoverage.readyDates.length === 0 ? (
+      {!sourceData.isLoading && currentPeriod && hasNoSourceTransactions ? (
         <section
           style={{
             borderRadius: '28px',
@@ -1100,6 +1253,7 @@ export function OperationalCompetitivePanel({
             comparisonPeriod={comparisonPeriod}
             periodKind={periodKind}
             currentTransactionCoverage={currentTransactionCoverage}
+            sourceValidTransactions={sourceValidTransactions}
             onManageLinks={() => setIsLinkManagerOpen(true)}
           />
 
@@ -1123,6 +1277,7 @@ export function OperationalCompetitivePanel({
               comparisonPeriod={comparisonPeriod}
               periodKind={periodKind}
               currentTransactionCoverage={currentTransactionCoverage}
+              sourceValidTransactions={sourceValidTransactions}
               onManageLinks={() => undefined}
             />
           </div>
