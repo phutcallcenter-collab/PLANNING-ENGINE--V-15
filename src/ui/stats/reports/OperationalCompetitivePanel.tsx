@@ -13,10 +13,8 @@ import { useAppStore } from '@/store/useAppStore';
 import { useDashboardStore } from '@/ui/reports/analysis-beta/store/dashboard.store';
 import {
   buildComparisonPeriodSummary,
-  buildComparisonSelectionOptions,
   resolveComparisonRange,
 } from '@/ui/reports/analysis-beta/services/comparison.service';
-import { loadCachedDailySources } from '@/ui/reports/analysis-beta/services/report-source-cache.service';
 import type {
   OperationalCompetitiveComparisonPreset,
   OperationalCompetitivePeriodKind,
@@ -82,54 +80,11 @@ function getComparisonPreset(
   return 'DAY_PREVIOUS';
 }
 
-function shiftUtcDate(dateStr: string, days: number) {
-  const [year, month, day] = dateStr.split('-').map(Number);
-  const date = new Date(Date.UTC(year, (month || 1) - 1, day || 1));
-  date.setUTCDate(date.getUTCDate() + days);
-  return date.toISOString().slice(0, 10);
-}
-
 function shiftUtcMonth(dateStr: string, months: number) {
   const [year, month, day] = dateStr.split('-').map(Number);
   const date = new Date(Date.UTC(year, (month || 1) - 1, day || 1));
   date.setUTCMonth(date.getUTCMonth() + months);
   return date.toISOString().slice(0, 10);
-}
-
-function groupTransactionsByDate(transactions: Transaction[]) {
-  return transactions.reduce<Map<string, Transaction[]>>((accumulator, transaction) => {
-    const current = accumulator.get(transaction.fecha) ?? [];
-    current.push(transaction);
-    accumulator.set(transaction.fecha, current);
-    return accumulator;
-  }, new Map());
-}
-
-function mergeTransactionsForDates(params: {
-  dates: string[];
-  sourcesByDate: Map<
-    string,
-    {
-      rawTransactions: Transaction[];
-    }
-  >;
-  fallbackTransactionsByDate: Map<string, Transaction[]>;
-  allowFallback?: boolean;
-}) {
-  const transactionsById = new Map<string, Transaction>();
-
-  params.dates.forEach((date) => {
-    const cachedTransactions = params.sourcesByDate.get(date)?.rawTransactions ?? [];
-    const fallbackTransactions = params.allowFallback === false
-      ? []
-      : params.fallbackTransactionsByDate.get(date) ?? [];
-
-    [...cachedTransactions, ...fallbackTransactions].forEach((transaction) => {
-      transactionsById.set(transaction.id, transaction);
-    });
-  });
-
-  return [...transactionsById.values()];
 }
 
 function resolveTransactionCoverageDates(
@@ -609,7 +564,7 @@ export function OperationalCompetitivePanel({
     (state) => state.removeManualRepresentativeLink
   );
   const hasHydrated = useDashboardStore((state) => state._hasHydrated);
-  const [periodKind, setPeriodKind] = useState<OperationalCompetitivePeriodKind>('DAY');
+  const periodKind: OperationalCompetitivePeriodKind = 'MONTH';
   const [selectedAnchorDate, setSelectedAnchorDate] = useState<string | null>(null);
   const [comparisonEnabled, setComparisonEnabled] = useState(true);
   const [isLinkManagerOpen, setIsLinkManagerOpen] = useState(false);
@@ -617,22 +572,8 @@ export function OperationalCompetitivePanel({
   const [selectedAgentName, setSelectedAgentName] = useState('');
   const [selectedRepresentativeName, setSelectedRepresentativeName] = useState('');
   const exportImageRef = useRef<HTMLDivElement | null>(null);
-  const [sourceData, setSourceData] = useState<{
-    isLoading: boolean;
-    currentTransactions: Transaction[];
-    comparisonTransactions: Transaction[];
-  }>({
-    isLoading: false,
-    currentTransactions: [],
-    comparisonTransactions: [],
-  });
-
   const transactionAvailableDates = useMemo(
     () => [...new Set(rawTransactions.map((transaction) => transaction.fecha))].sort(),
-    [rawTransactions]
-  );
-  const fallbackTransactionsByDate = useMemo(
-    () => groupTransactionsByDate(rawTransactions),
     [rawTransactions]
   );
 
@@ -667,20 +608,7 @@ export function OperationalCompetitivePanel({
       }));
   }, [monthlyHistory, monthlySnapshots]);
 
-  const periodOptions = useMemo(() => {
-    if (periodKind === 'MONTH') {
-      return monthlyPeriodOptions;
-    }
-
-    if (transactionAvailableDates.length === 0) {
-      return [];
-    }
-
-    return buildComparisonSelectionOptions({
-      availableDates: transactionAvailableDates,
-      periodMode: getComparisonMode(periodKind),
-    });
-  }, [monthlyPeriodOptions, periodKind, transactionAvailableDates]);
+  const periodOptions = monthlyPeriodOptions;
 
   useEffect(() => {
     if (periodOptions.length === 0) {
@@ -693,9 +621,7 @@ export function OperationalCompetitivePanel({
         ? periodOptions.find((option) => option.value.startsWith(`${selectedMonthKey}-`))
         : undefined;
     const fallbackAnchorDate =
-      periodKind === 'DAY'
-        ? latestCompleteDate ?? periodOptions[0]?.value ?? null
-        : selectedMonthOption?.value ?? periodOptions[0]?.value ?? null;
+      selectedMonthOption?.value ?? latestCompleteDate ?? periodOptions[0]?.value ?? null;
 
     if (!selectedAnchorDate) {
       setSelectedAnchorDate(fallbackAnchorDate);
@@ -744,144 +670,49 @@ export function OperationalCompetitivePanel({
     [activeMonthKey, monthlyHistory, monthlySnapshots]
   );
 
-  const currentPeriod = useMemo(() => {
-    if (!selectedAnchorDate) {
-      return null;
-    }
-
-    if (periodKind === 'MONTH') {
-      return activeMonthlySnapshot
-        ? buildResolvedMonthlyPeriod(activeMonthlySnapshot)
-        : null;
-    }
-
-    return buildResolvedPeriod({
-      anchorDate: selectedAnchorDate,
-      kind: periodKind,
-      availableDates: transactionAvailableDates,
-    });
-  }, [activeMonthlySnapshot, periodKind, selectedAnchorDate, transactionAvailableDates]);
+  const currentPeriod = useMemo(
+    () => (activeMonthlySnapshot ? buildResolvedMonthlyPeriod(activeMonthlySnapshot) : null),
+    [activeMonthlySnapshot]
+  );
 
   const comparisonPeriod = useMemo(() => {
     if (!comparisonEnabled || !selectedAnchorDate) {
       return null;
     }
 
-    const comparisonAnchorDate =
-      periodKind === 'MONTH'
-        ? shiftUtcMonth(selectedAnchorDate, -1)
-        : shiftUtcDate(selectedAnchorDate, periodKind === 'WEEK' ? -7 : -1);
+    const comparisonAnchorDate = shiftUtcMonth(selectedAnchorDate, -1);
 
-    if (periodKind === 'MONTH') {
-      const comparisonMonthKey = comparisonAnchorDate.slice(0, 7);
-      const comparisonSnapshot =
-        monthlySnapshots[comparisonMonthKey] ?? monthlyHistory[comparisonMonthKey] ?? null;
+    const comparisonMonthKey = comparisonAnchorDate.slice(0, 7);
+    const comparisonSnapshot =
+      monthlySnapshots[comparisonMonthKey] ?? monthlyHistory[comparisonMonthKey] ?? null;
 
-      return comparisonSnapshot
-        ? buildResolvedMonthlyPeriod(comparisonSnapshot)
-        : null;
-    }
-
-    return buildResolvedPeriod({
-      anchorDate: comparisonAnchorDate,
-      kind: periodKind,
-      availableDates: transactionAvailableDates,
-    });
+    return comparisonSnapshot
+      ? buildResolvedMonthlyPeriod(comparisonSnapshot)
+      : null;
   }, [
     comparisonEnabled,
     monthlyHistory,
     monthlySnapshots,
-    periodKind,
-    selectedAnchorDate,
-    transactionAvailableDates,
-  ]);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    if (!currentPeriod) {
-      setSourceData({
-        isLoading: false,
-        currentTransactions: [],
-        comparisonTransactions: [],
-      });
-      return;
-    }
-
-    if (periodKind === 'MONTH' && selectedAnchorDate) {
-      const monthKey = selectedAnchorDate.slice(0, 7);
-      const comparisonMonthKey = comparisonPeriod
-        ? shiftUtcMonth(selectedAnchorDate, -1).slice(0, 7)
-        : null;
-
-      const filterByMonth = (transactions: Transaction[], key: string) =>
-        transactions.filter((transaction) => transaction.fecha.slice(0, 7) === key);
-
-      setSourceData({
-        isLoading: false,
-        currentTransactions: filterByMonth(rawTransactions, monthKey),
-        comparisonTransactions: comparisonMonthKey
-          ? filterByMonth(rawTransactions, comparisonMonthKey)
-          : [],
-      });
-      return;
-    }
-
-    const currentDates = currentPeriod.loadedDates;
-    const comparisonDates = comparisonPeriod?.loadedDates ?? [];
-    const datesToLoad = [...new Set([...currentDates, ...comparisonDates])].sort();
-
-    if (datesToLoad.length === 0) {
-      setSourceData({
-        isLoading: false,
-        currentTransactions: [],
-        comparisonTransactions: [],
-      });
-      return;
-    }
-
-    setSourceData((current) => ({
-      ...current,
-      isLoading: true,
-    }));
-
-    void (async () => {
-      const sources = await loadCachedDailySources(datesToLoad);
-
-      if (cancelled) {
-        return;
-      }
-
-      const sourcesByDate = new Map(sources.map((source) => [source.date, source]));
-
-      setSourceData({
-        isLoading: false,
-        currentTransactions: mergeTransactionsForDates({
-          dates: currentDates,
-          sourcesByDate,
-          fallbackTransactionsByDate,
-          allowFallback: true,
-        }),
-        comparisonTransactions: mergeTransactionsForDates({
-          dates: comparisonDates,
-          sourcesByDate,
-          fallbackTransactionsByDate,
-          allowFallback: true,
-        }),
-      });
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [
-    comparisonPeriod,
-    currentPeriod,
-    fallbackTransactionsByDate,
-    periodKind,
-    rawTransactions,
     selectedAnchorDate,
   ]);
+  const currentTransactions = useMemo(() => {
+    if (!selectedMonthKey) return [];
+    return rawTransactions.filter((transaction) => transaction.fecha.slice(0, 7) === selectedMonthKey);
+  }, [rawTransactions, selectedMonthKey]);
+
+  const comparisonMonthKey = useMemo(() => {
+    if (!selectedMonthKey) return null;
+    const [year, month] = selectedMonthKey.split('-').map(Number);
+    const date = new Date(Date.UTC(year, month - 2, 1));
+    return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}`;
+  }, [selectedMonthKey]);
+
+  const comparisonTransactions = useMemo(() => {
+    if (!comparisonEnabled || !comparisonMonthKey) return [];
+    return rawTransactions.filter(
+      (transaction) => transaction.fecha.slice(0, 7) === comparisonMonthKey
+    );
+  }, [comparisonEnabled, comparisonMonthKey, rawTransactions]);
 
   const currentTransactionCoverage = useMemo(() => {
     if (!currentPeriod) {
@@ -900,60 +731,32 @@ export function OperationalCompetitivePanel({
   }, [comparisonPeriod, dailyHistory]);
 
   const performanceReport = useMemo(() => {
-    if (!currentPeriod) {
-      return null;
-    }
+    if (!activeMonthlySnapshot) return null;
 
-    if (periodKind === 'MONTH') {
-      if (!activeMonthlySnapshot) {
-        return null;
-      }
-
-      return buildMonthlyRepresentativePerformance({
-        monthSnapshot: activeMonthlySnapshot,
-        transactions: sourceData.currentTransactions,
-        representatives,
-        commercialGoals,
-        incidents,
-        calendar,
-        specialSchedules,
-        comparisonPeriod: comparisonEnabled ? comparisonPeriod : null,
-        comparisonTransactions: sourceData.comparisonTransactions,
-        comparisonTransactionDates: comparisonTransactionCoverage.readyDates,
-        manualRepresentativeLinks,
-      })?.performanceReport ?? null;
-    }
-
-    return buildRepresentativePerformanceReport({
+    return buildMonthlyRepresentativePerformance({
+      monthSnapshot: activeMonthlySnapshot,
+      transactions: currentTransactions,
       representatives,
       commercialGoals,
       incidents,
       calendar,
       specialSchedules,
-      currentPeriod,
-      currentTransactionDates: currentTransactionCoverage.readyDates,
-      comparisonPreset: comparisonEnabled ? getComparisonPreset(periodKind) : 'NONE',
       comparisonPeriod: comparisonEnabled ? comparisonPeriod : null,
-      comparisonTransactionDates: comparisonTransactionCoverage.readyDates,
-      currentTransactions: sourceData.currentTransactions,
-      comparisonTransactions: sourceData.comparisonTransactions,
+      comparisonTransactions,
+      comparisonTransactionDates: comparisonPeriod?.loadedDates ?? [],
       manualRepresentativeLinks,
-    });
+    })?.performanceReport ?? null;
   }, [
     activeMonthlySnapshot,
     calendar,
     commercialGoals,
     comparisonEnabled,
     comparisonPeriod,
-    comparisonTransactionCoverage.readyDates,
-    currentPeriod,
-    currentTransactionCoverage.readyDates,
+    comparisonTransactions,
+    currentTransactions,
     incidents,
     manualRepresentativeLinks,
-    periodKind,
     representatives,
-    sourceData.comparisonTransactions,
-    sourceData.currentTransactions,
     specialSchedules,
   ]);
 
@@ -995,12 +798,7 @@ export function OperationalCompetitivePanel({
     [linkedAgentNames, unresolvedAgentNames]
   );
 
-  const comparisonLabel =
-    periodKind === 'DAY'
-      ? 'ayer'
-      : periodKind === 'WEEK'
-        ? 'la semana pasada'
-        : 'el mes pasado';
+  const comparisonLabel = 'el mes pasado';
   const sourceValidTransactions =
     periodKind === 'MONTH' && activeMonthlySnapshot
       ? activeMonthlySnapshot.kpis.transaccionesCC
@@ -1130,29 +928,8 @@ export function OperationalCompetitivePanel({
             alignItems: 'center',
           }}
         >
-          <div className="flex flex-wrap gap-2 rounded-2xl bg-slate-100 p-1.5">
-            {([
-              { kind: 'DAY', label: 'Día' },
-              { kind: 'WEEK', label: 'Semana' },
-              { kind: 'MONTH', label: 'Mes' },
-            ] as const).map((option) => (
-              <button
-                key={option.kind}
-                type="button"
-                onClick={() => setPeriodKind(option.kind)}
-                className={periodKind === option.kind ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'}
-                style={{
-                  borderRadius: '14px',
-                  padding: '10px 16px',
-                  fontWeight: 800,
-                  fontSize: '0.9rem',
-                  border: 'none',
-                  cursor: 'pointer',
-                }}
-              >
-                {option.label}
-              </button>
-            ))}
+          <div className="rounded-2xl bg-slate-100 px-4 py-3 text-sm font-black text-slate-700">
+            Vista mensual
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
@@ -1255,7 +1032,7 @@ export function OperationalCompetitivePanel({
         ) : null}
       </section>
 
-      {!sourceData.isLoading && currentPeriod && hasNoSourceTransactions ? (
+      {currentPeriod && hasNoSourceTransactions ? (
         <section
           style={{
             borderRadius: '28px',
@@ -1267,8 +1044,6 @@ export function OperationalCompetitivePanel({
         >
           Todavía no hay transacciones cargadas para este período.
         </section>
-      ) : sourceData.isLoading ? (
-        <div className="app-shell-loading">Cargando fuentes competitivas...</div>
       ) : performanceReport && currentPeriod ? (
         <>
           <OperationalCompetitiveSurface
