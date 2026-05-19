@@ -276,13 +276,13 @@ export default function AgentPerformanceTable({
 
             <div className="rounded-2xl border border-amber-200 bg-amber-50/70 px-4 py-3">
               <div className="text-[10px] font-black uppercase tracking-[0.16em] text-amber-700">
-                Pendientes de conciliación
+                Fuera de lo oficial
               </div>
               <div className="mt-1 text-xl font-black text-amber-900">
                 {performanceReport.reconciliation.excludedValidTransactions.toLocaleString('en-US')}
               </div>
               <div className="mt-1 text-xs text-amber-800">
-                No desaparecen: quedan separados de lo oficial.
+                Separado por nombres sin enlace, omisiones o registros sin agente.
               </div>
             </div>
 

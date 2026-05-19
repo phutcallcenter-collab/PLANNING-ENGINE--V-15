@@ -161,7 +161,10 @@ export function RepresentativeDetailPanel({
                   fontWeight: 700,
                 }}
               >
-                {getRepresentativeEmploymentLabel(representative.employmentType)}
+                {getRepresentativeEmploymentLabel(
+                  representative.employmentType,
+                  representative.mixProfile
+                )}
               </span>
               <span
                 style={{

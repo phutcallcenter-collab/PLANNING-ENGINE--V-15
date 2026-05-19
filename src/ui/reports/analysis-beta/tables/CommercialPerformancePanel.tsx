@@ -29,8 +29,19 @@ import AgentPerformanceTable from './AgentPerformanceTable';
 import MonthlyRepresentativeTable from './MonthlyRepresentativeTable';
 import {
   OMIT_REPRESENTATIVE_LINK,
-  normalizeRepresentativeLinkName,
 } from '@/ui/reports/analysis-beta/services/representative-link.service';
+import type {
+  RepresentativePerformanceReconciliationReason,
+} from '@/ui/reports/analysis-beta/types/dashboard.types';
+
+const RECONCILIATION_REASON_LABELS: Record<
+  RepresentativePerformanceReconciliationReason,
+  string
+> = {
+  manual_omit: 'Omitidas manualmente',
+  unlinked_agent: 'Nombres sin enlace',
+  missing_agent: 'Sin agente identificado',
+};
 
 const tabs = [
   {
@@ -79,7 +90,7 @@ export default function CommercialPerformancePanel() {
   const activeRepresentatives = useMemo(
     () =>
       representatives
-        .filter((rep) => rep.isActive)
+        .filter((rep) => rep.isActive && rep.commercialEligible === true)
         .sort((left, right) => left.name.localeCompare(right.name, 'es')),
     [representatives]
   );
@@ -146,23 +157,34 @@ export default function CommercialPerformancePanel() {
     setSelectedRepresentativeName('');
   };
 
-  const linkedAgentNames = useMemo(
-    () =>
-      new Set(
-        manualRepresentativeLinks.map((link) =>
-          normalizeRepresentativeLinkName(link.agentName)
-        )
-      ),
-    [manualRepresentativeLinks]
-  );
+  const reconciliationSummary = useMemo(() => {
+    if (!dayPerformanceReport) {
+      return [];
+    }
 
-  const pendingAgentPills = useMemo(
-    () =>
-      unresolvedAgentNames.filter(
-        (agentName) => !linkedAgentNames.has(normalizeRepresentativeLinkName(agentName))
-      ),
-    [linkedAgentNames, unresolvedAgentNames]
-  );
+    return Object.entries(
+      dayPerformanceReport.reconciliation.items.reduce<
+        Record<RepresentativePerformanceReconciliationReason, number>
+      >(
+        (accumulator, item) => {
+          accumulator[item.reason] += item.validTransactions;
+          return accumulator;
+        },
+        {
+          manual_omit: 0,
+          unlinked_agent: 0,
+          missing_agent: 0,
+        }
+      )
+    )
+      .filter(([, total]) => total > 0)
+      .map(([reason, total]) => ({
+        reason: reason as RepresentativePerformanceReconciliationReason,
+        total,
+      }));
+  }, [dayPerformanceReport]);
+
+  const pendingAgentPills = unresolvedAgentNames;
 
   return (
     <section className="space-y-4">
@@ -223,9 +245,21 @@ export default function CommercialPerformancePanel() {
             </div>
             <p className="mt-2 text-sm text-amber-900">
               {dayPerformanceReport.reconciliation.excludedValidTransactions.toLocaleString('en-US')} transacciones
-              siguen fuera de lo oficial por enlace pendiente, omisión manual o falta
-              de agente. No se mezclan con la tabla final.
+              siguen fuera de lo oficial. Abajo se separa si son nombres por enlazar,
+              omisiones manuales o registros sin agente; no se mezclan con la tabla final.
             </p>
+            {reconciliationSummary.length > 0 ? (
+              <div className="mt-3 flex flex-wrap gap-2">
+                {reconciliationSummary.map((item) => (
+                  <span
+                    key={item.reason}
+                    className="inline-flex rounded-full border border-amber-200 bg-white px-3 py-1 text-[10px] font-black uppercase tracking-[0.12em] text-amber-800"
+                  >
+                    {RECONCILIATION_REASON_LABELS[item.reason]}: {item.total.toLocaleString('en-US')}
+                  </span>
+                ))}
+              </div>
+            ) : null}
             {pendingAgentPills.length > 0 ? (
               <div className="mt-3 flex flex-wrap gap-2">
                 {pendingAgentPills.map((name) => (
@@ -242,7 +276,11 @@ export default function CommercialPerformancePanel() {
                   </button>
                 ))}
               </div>
-            ) : null}
+            ) : (
+              <p className="mt-3 text-xs font-bold text-amber-900">
+                No quedan nombres disponibles para enlazar en esta fecha; lo restante no es enlazable desde este modal.
+              </p>
+            )}
           </div>
         ) : null}
 
@@ -276,11 +314,17 @@ export default function CommercialPerformancePanel() {
                 <SelectValue placeholder="Selecciona agente del reporte" />
               </SelectTrigger>
               <SelectContent>
-                {pendingAgentPills.map((agentName) => (
-                  <SelectItem key={agentName} value={agentName}>
-                    {agentName}
-                  </SelectItem>
-                ))}
+                {pendingAgentPills.length > 0 ? (
+                  pendingAgentPills.map((agentName) => (
+                    <SelectItem key={agentName} value={agentName}>
+                      {agentName}
+                    </SelectItem>
+                  ))
+                ) : (
+                  <div className="px-3 py-2 text-sm text-slate-500">
+                    No hay nombres pendientes de enlace.
+                  </div>
+                )}
               </SelectContent>
             </Select>
 
@@ -297,6 +341,11 @@ export default function CommercialPerformancePanel() {
                     {representative.name}
                   </SelectItem>
                 ))}
+                {activeRepresentatives.length === 0 ? (
+                  <div className="px-3 py-2 text-sm text-slate-500">
+                    No hay representantes activos con ranking comercial.
+                  </div>
+                ) : null}
               </SelectContent>
             </Select>
           </div>

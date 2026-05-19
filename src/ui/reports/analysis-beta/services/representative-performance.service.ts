@@ -1,5 +1,4 @@
 import { getPlannedAgentsForDay } from '@/application/ui-adapters/getPlannedAgentsForDay';
-import { getEffectiveSchedule } from '@/application/scheduling/specialScheduleAdapter';
 import { generateMonthDays } from '@/domain/calendar/state';
 import { getCommercialGoalTarget } from '@/domain/commercialGoals/defaults';
 import { resolveIncidentDates } from '@/domain/incidents/resolveIncidentDates';
@@ -78,7 +77,6 @@ type TransactionProcessingResult = {
   assignmentStats: Map<string, AssignmentAccumulator>;
   validTransactionsByRepresentative: Map<string, number>;
   validTransactionsByAssignment: Map<string, number>;
-  activityShiftsByRepresentativeDate: Map<string, Set<ShiftType>>;
   pendingAgentNames: Record<ShiftType, Set<string>>;
   missingAgentRegistrations: Record<ShiftType, number>;
   reconciliation: Map<string, ReconciliationAccumulator>;
@@ -204,19 +202,10 @@ function createCalendarDaysForDates(
   return [...allDays.values()].sort((left, right) => left.date.localeCompare(right.date));
 }
 
-function getRepresentativeSegment(
-  representative: Representative,
-  date: string,
-  specialSchedules: SpecialSchedule[] = []
+function getRepresentativeCommercialSegment(
+  representative: Representative
 ): CommercialGoalSegment {
-  const effective = getEffectiveSchedule({
-    representative,
-    dateStr: date,
-    baseSchedule: representative.baseSchedule,
-    specialSchedules,
-  });
-
-  if (effective.type === 'MIXTO') {
+  if (representative.mixProfile) {
     return 'MIXTO';
   }
 
@@ -263,18 +252,6 @@ function ensureAssignmentAccumulator(
 
   map.set(key, next);
   return next;
-}
-
-function addShiftActivity(
-  map: Map<string, Set<ShiftType>>,
-  representativeId: string,
-  date: string,
-  shift: ShiftType
-) {
-  const key = buildRepresentativeDateKey(representativeId, date);
-  const current = map.get(key) ?? new Set<ShiftType>();
-  current.add(shift);
-  map.set(key, current);
 }
 
 function addReconciliationRecord(
@@ -351,7 +328,6 @@ function buildPlannedShiftMap(params: {
   dates: string[];
   allCalendarDays: ReturnType<typeof createCalendarDaysForDates>;
   specialSchedules: SpecialSchedule[];
-  activityShiftsByRepresentativeDate: Map<string, Set<ShiftType>>;
 }) {
   const planned = new Map<string, ShiftType[]>();
 
@@ -378,35 +354,13 @@ function buildPlannedShiftMap(params: {
     );
 
     params.representatives.forEach((representative) => {
-      const shifts: ShiftType[] = [];
-
-      if (dayIds.has(representative.id)) {
-        shifts.push('DAY');
-      }
-
-      if (nightIds.has(representative.id)) {
-        shifts.push('NIGHT');
-      }
-
-      if (shifts.length === 0) {
+      if (!dayIds.has(representative.id) && !nightIds.has(representative.id)) {
         return;
       }
-
-      if (shifts.length === 1) {
-        planned.set(buildRepresentativeDateKey(representative.id, date), shifts);
-        return;
-      }
-
-      const activityShifts = params.activityShiftsByRepresentativeDate.get(
-        buildRepresentativeDateKey(representative.id, date)
-      );
-      const resolvedShifts = activityShifts
-        ? shifts.filter((shift) => activityShifts.has(shift))
-        : [];
 
       planned.set(
         buildRepresentativeDateKey(representative.id, date),
-        resolvedShifts.length > 0 ? resolvedShifts : [representative.baseShift]
+        [representative.baseShift]
       );
     });
   });
@@ -422,7 +376,6 @@ function buildTargetMap(params: {
   dates: string[];
   allCalendarDays: ReturnType<typeof createCalendarDaysForDates>;
   specialSchedules: SpecialSchedule[];
-  activityShiftsByRepresentativeDate: Map<string, Set<ShiftType>>;
 }) {
   const targetMap = new Map<string, TargetAccumulator>();
   const plannedShiftMap = buildPlannedShiftMap(params);
@@ -434,11 +387,7 @@ function buildTargetMap(params: {
         plannedShiftMap.get(buildRepresentativeDateKey(representative.id, date)) ?? [];
 
       shifts.forEach((shift) => {
-        const segment = getRepresentativeSegment(
-          representative,
-          date,
-          params.specialSchedules
-        );
+        const segment = getRepresentativeCommercialSegment(representative);
         const key = buildAssignmentKey(representative.id, shift, segment);
         const monthlyTargetPerRepresentative = getCommercialGoalTarget(
           params.commercialGoals,
@@ -500,17 +449,10 @@ function buildIncidentMap(params: {
       return;
     }
 
-    const shift =
-      incident.assignment?.type === 'SINGLE'
-        ? incident.assignment.shift
-        : representative.baseShift;
+    const shift = representative.baseShift;
 
     resolvedDates.forEach((date) => {
-      const segment = getRepresentativeSegment(
-        representative,
-        date,
-        params.specialSchedules
-      );
+      const segment = getRepresentativeCommercialSegment(representative);
       const key = buildAssignmentKey(representative.id, shift, segment);
       const current = incidentMap.get(key) ?? {
         incidents: 0,
@@ -545,13 +487,11 @@ function processRepresentativeTransactions(params: {
   representatives: Representative[];
   manualRepresentativeLinks: ManualRepresentativeLink[];
   period: OperationalCompetitiveResolvedPeriod;
-  specialSchedules: SpecialSchedule[];
   collectWarnings: boolean;
 }) {
   const assignmentStats = new Map<string, AssignmentAccumulator>();
   const validTransactionsByRepresentative = new Map<string, number>();
   const validTransactionsByAssignment = new Map<string, number>();
-  const activityShiftsByRepresentativeDate = new Map<string, Set<ShiftType>>();
   const pendingAgentNames: Record<ShiftType, Set<string>> = {
     DAY: new Set<string>(),
     NIGHT: new Set<string>(),
@@ -666,23 +606,13 @@ function processRepresentativeTransactions(params: {
     }
 
     const representative = resolution.representative;
-    const segment = getRepresentativeSegment(
-      representative,
-      transaction.fecha,
-      params.specialSchedules
-    );
+    const assignmentShift = representative.baseShift;
+    const segment = getRepresentativeCommercialSegment(representative);
     const current = ensureAssignmentAccumulator(
       assignmentStats,
       representative,
-      shift,
+      assignmentShift,
       segment
-    );
-
-    addShiftActivity(
-      activityShiftsByRepresentativeDate,
-      representative.id,
-      transaction.fecha,
-      shift
     );
 
     if (isValidTransaction) {
@@ -709,9 +639,9 @@ function processRepresentativeTransactions(params: {
         (validTransactionsByRepresentative.get(representative.id) ?? 0) + 1
       );
       validTransactionsByAssignment.set(
-        buildAssignmentKey(representative.id, shift, segment),
+        buildAssignmentKey(representative.id, assignmentShift, segment),
         (validTransactionsByAssignment.get(
-          buildAssignmentKey(representative.id, shift, segment)
+          buildAssignmentKey(representative.id, assignmentShift, segment)
         ) ?? 0) + 1
       );
       officialValidTransactions += 1;
@@ -725,7 +655,6 @@ function processRepresentativeTransactions(params: {
     assignmentStats,
     validTransactionsByRepresentative,
     validTransactionsByAssignment,
-    activityShiftsByRepresentativeDate,
     pendingAgentNames,
     missingAgentRegistrations,
     reconciliation,
@@ -793,7 +722,6 @@ export function buildRepresentativePerformanceReport({
     representatives: eligibleRepresentatives,
     manualRepresentativeLinks,
     period: currentPeriod,
-    specialSchedules,
     collectWarnings: true,
   });
   const comparisonState = comparisonPeriod
@@ -802,7 +730,6 @@ export function buildRepresentativePerformanceReport({
         representatives: eligibleRepresentatives,
         manualRepresentativeLinks,
         period: comparisonPeriod,
-        specialSchedules,
         collectWarnings: false,
       })
     : null;
@@ -814,7 +741,6 @@ export function buildRepresentativePerformanceReport({
     dates: [...new Set((currentTransactionDates ?? currentPeriod.loadedDates).filter(Boolean))].sort(),
     allCalendarDays,
     specialSchedules,
-    activityShiftsByRepresentativeDate: currentState.activityShiftsByRepresentativeDate,
   });
   const incidentMap = buildIncidentMap({
     representativesById,

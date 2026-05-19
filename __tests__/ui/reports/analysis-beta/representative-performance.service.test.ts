@@ -301,13 +301,23 @@ describe('buildRepresentativePerformanceReport', () => {
     expect(fullTimeGroup?.rows.every((row) => row.target === 1000)).toBe(true);
   });
 
-  it('does not duplicate a mixed representative across shifts when activity only exists in one shift', () => {
+  it('keeps a mixed representative only in the mixed table for their base shift', () => {
+    const nightError: Incident = {
+      id: 'err-mix-night',
+      representativeId: 'rep-mix',
+      type: 'ERROR',
+      startDate: '2026-04-10',
+      duration: 1,
+      createdAt: '2026-04-10T20:00:00.000Z',
+      assignment: { type: 'SINGLE', shift: 'NIGHT' },
+    };
+
     const report = buildRepresentativePerformanceReport({
       representatives,
       commercialGoals: buildCommercialGoals(),
-      incidents: [],
+      incidents: [nightError],
       calendar: { specialDays: [] },
-      currentPeriod: buildPeriod('2026-04-09'),
+      currentPeriod: buildPeriod('2026-04-10'),
       currentTransactions: [
         {
           id: 'tx-1',
@@ -316,31 +326,57 @@ describe('buildRepresentativePerformanceReport', () => {
           canalReal: 'CC',
           plataforma: 'Call center',
           plataformaCode: 'CC',
-          fecha: '2026-04-09',
+          fecha: '2026-04-10',
+          hora: '10:10:00',
+          estatus: 'N',
+          valor: 100,
+        },
+        {
+          id: 'tx-2',
+          sucursal: 'S1',
+          agente: 'Mia Mixta',
+          canalReal: 'CC',
+          plataforma: 'Call center',
+          plataformaCode: 'CC',
+          fecha: '2026-04-10',
           hora: '19:10:00',
           estatus: 'N',
           valor: 100,
         },
       ],
-      currentTransactionDates: ['2026-04-09'],
+      currentTransactionDates: ['2026-04-10'],
       manualRepresentativeLinks: [],
     });
 
+    const mixedRows = report.byAssignment.filter(
+      (row) => row.representativeId === 'rep-mix'
+    );
+
+    expect(mixedRows).toHaveLength(1);
+    expect(mixedRows[0]).toEqual(
+      expect.objectContaining({
+        representativeId: 'rep-mix',
+        shift: 'DAY',
+        segment: 'MIXTO',
+        transacciones: 2,
+        incidents: 1,
+        errors: 1,
+      })
+    );
+    expect(mixedRows[0].target).toBeCloseTo(900 / 30, 5);
     expect(
-      report.byAssignment.filter((row) => row.representativeId === 'rep-mix')
-    ).toHaveLength(1);
+      report.shifts.DAY.groups.find((group) => group.segment === 'MIXTO')?.rows
+    ).toEqual([mixedRows[0]]);
     expect(
-      report.shifts.DAY.groups.every((group) =>
+      report.shifts.DAY.groups
+        .filter((group) => group.segment !== 'MIXTO')
+        .every((group) => group.rows.every((row) => row.representativeId !== 'rep-mix'))
+    ).toBe(true);
+    expect(
+      report.shifts.NIGHT.groups.every((group) =>
         group.rows.every((row) => row.representativeId !== 'rep-mix')
       )
     ).toBe(true);
-    expect(
-      report.shifts.NIGHT.groups.find((group) => group.segment === 'MIXTO')?.rows[0]
-    ).toEqual(
-      expect.objectContaining({
-        representativeId: 'rep-mix',
-        transacciones: 1,
-      })
-    );
+    expect(report.reconciliation.officialValidTransactions).toBe(2);
   });
 });

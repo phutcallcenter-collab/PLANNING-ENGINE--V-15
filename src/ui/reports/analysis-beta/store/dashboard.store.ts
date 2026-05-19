@@ -22,7 +22,10 @@ import type {
 } from '@/ui/reports/analysis-beta/types/dashboard.types';
 import { buildDailySnapshot } from '@/ui/reports/analysis-beta/services/kpi.service';
 import { buildComparisonResult } from '@/ui/reports/analysis-beta/services/comparison.service';
-import type { ManualRepresentativeLink } from '@/ui/reports/analysis-beta/services/representative-link.service';
+import {
+  normalizeRepresentativeLinkName,
+  type ManualRepresentativeLink,
+} from '@/ui/reports/analysis-beta/services/representative-link.service';
 import { buildMonthlyOperationalHistory } from '@/ui/reports/analysis-beta/services/monthly-report.service';
 import {
   buildMonthlyOperationalHistoryFromReportSnapshots,
@@ -432,10 +435,10 @@ function mergeManualRepresentativeLinks(
   remoteLinks: ManualRepresentativeLink[]
 ): ManualRepresentativeLink[] {
   const localAgentNames = new Set(
-    localLinks.map((link) => link.agentName.trim().toLowerCase())
+    localLinks.map((link) => normalizeRepresentativeLinkName(link.agentName))
   );
   const remoteOnlyLinks = remoteLinks.filter(
-    (link) => !localAgentNames.has(link.agentName.trim().toLowerCase())
+    (link) => !localAgentNames.has(normalizeRepresentativeLinkName(link.agentName))
   );
 
   return [...remoteOnlyLinks, ...localLinks].sort((left, right) =>
@@ -937,7 +940,9 @@ export const useDashboardStore = create<DashboardState>()(
         set((state) => ({
           manualRepresentativeLinks: [
             ...state.manualRepresentativeLinks.filter(
-              (item) => item.agentName !== link.agentName
+              (item) =>
+                normalizeRepresentativeLinkName(item.agentName) !==
+                normalizeRepresentativeLinkName(link.agentName)
             ),
             link,
           ],
@@ -951,7 +956,9 @@ export const useDashboardStore = create<DashboardState>()(
 
         set((state) => ({
           manualRepresentativeLinks: state.manualRepresentativeLinks.filter(
-            (item) => item.agentName !== agentName
+            (item) =>
+              normalizeRepresentativeLinkName(item.agentName) !==
+              normalizeRepresentativeLinkName(agentName)
           ),
         }));
       },

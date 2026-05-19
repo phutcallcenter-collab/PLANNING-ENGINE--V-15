@@ -30,7 +30,7 @@ export function createRepresentativeDraft(
     baseSchedule: { ...(rep?.baseSchedule ?? createBaseSchedule([1])) },
     mixProfile: rep?.mixProfile ? { ...rep.mixProfile } : undefined,
     employmentType: rep ? rep.employmentType : 'FULL_TIME',
-    commercialEligible: rep?.commercialEligible === true,
+    commercialEligible: rep ? rep.commercialEligible === true : true,
   }
 }
 
@@ -51,7 +51,14 @@ export function getRepresentativeRoleLabel(role: RepresentativeRole) {
   }
 }
 
-export function getRepresentativeEmploymentLabel(employmentType?: EmploymentType) {
+export function getRepresentativeEmploymentLabel(
+  employmentType?: EmploymentType,
+  mixProfile?: Representative['mixProfile']
+) {
+  if (mixProfile) {
+    return 'Mixto'
+  }
+
   if (!employmentType) {
     return 'Sin jornada'
   }

@@ -1,13 +1,25 @@
 'use client'
 
 import { useMemo, useState } from 'react'
-import type { EmploymentType, Representative } from '@/domain/types'
+import type { Representative } from '@/domain/types'
+import type { RepresentativeWorkloadSelection } from '@/store/representativeSlice'
 import { resolveBulkEmploymentAssignment } from './bulkRepresentativeEmploymentAssignment'
 
 type RepresentativeBulkEmploymentPanelProps = {
   canEditData: boolean
   representatives: Representative[]
-  onApply: (representativeIds: string[], employmentType: EmploymentType) => void
+  onApply: (
+    representativeIds: string[],
+    employmentType: RepresentativeWorkloadSelection
+  ) => void
+}
+
+function formatWorkloadSelection(selection: RepresentativeWorkloadSelection) {
+  if (selection === 'MIXTO') {
+    return 'Mixto'
+  }
+
+  return selection === 'PART_TIME' ? 'Part Time' : 'Full Time'
 }
 
 export function RepresentativeBulkEmploymentPanel({
@@ -16,7 +28,8 @@ export function RepresentativeBulkEmploymentPanel({
   onApply,
 }: RepresentativeBulkEmploymentPanelProps) {
   const [value, setValue] = useState('')
-  const [employmentType, setEmploymentType] = useState<EmploymentType>('FULL_TIME')
+  const [employmentType, setEmploymentType] =
+    useState<RepresentativeWorkloadSelection>('FULL_TIME')
   const result = useMemo(
     () =>
       resolveBulkEmploymentAssignment({
@@ -32,9 +45,7 @@ export function RepresentativeBulkEmploymentPanel({
     }
 
     const confirmed = confirm(
-      `Se asignará ${
-        employmentType === 'PART_TIME' ? 'Part Time' : 'Full Time'
-      } a ${result.uniqueRepresentativeIds.length} representante(s) coincidente(s).\n\n¿Deseas continuar?`
+      `Se asignará ${formatWorkloadSelection(employmentType)} a ${result.uniqueRepresentativeIds.length} representante(s) coincidente(s).\n\n¿Deseas continuar?`
     )
 
     if (!confirmed) {
@@ -91,7 +102,7 @@ export function RepresentativeBulkEmploymentPanel({
             }}
           >
             Pega nombres separados por línea, coma o punto y coma. El sistema busca
-            coincidencias normalizadas y te deja aplicar `Full Time` o `Part Time` de
+            coincidencias normalizadas y te deja aplicar `Full Time`, `Part Time` o `Mixto` de
             una sola vez.
           </p>
         </div>
@@ -160,7 +171,11 @@ export function RepresentativeBulkEmploymentPanel({
             </label>
             <select
               value={employmentType}
-              onChange={event => setEmploymentType(event.target.value as EmploymentType)}
+              onChange={event =>
+                setEmploymentType(
+                  event.target.value as RepresentativeWorkloadSelection
+                )
+              }
               style={{
                 width: '100%',
                 marginTop: '8px',
@@ -174,6 +189,7 @@ export function RepresentativeBulkEmploymentPanel({
             >
               <option value="FULL_TIME">Full Time</option>
               <option value="PART_TIME">Part Time</option>
+              <option value="MIXTO">Mixto</option>
             </select>
           </div>
 

@@ -176,4 +176,87 @@ describe('buildMonthlyRepresentativePerformance', () => {
       result?.performanceReport.byRepresentative.find((row) => row.representativeId === 'rep-1')
     ).toEqual(expect.objectContaining({ transacciones: 1, incidents: 1, errors: 1 }));
   });
+
+  it('keeps each monthly representative total identical to its operational assignment total', () => {
+    const mixedRepresentative: Representative = {
+      id: 'rep-mix',
+      name: 'Mia Mixta',
+      baseShift: 'DAY',
+      role: 'SALES',
+      employmentType: 'FULL_TIME',
+      commercialEligible: true,
+      mixProfile: { type: 'WEEKEND' },
+      baseSchedule: fullSchedule(),
+      isActive: true,
+      orderIndex: 2,
+    };
+    const monthSnapshot = {
+      ...buildMonthSnapshot(),
+      loadedDays: 2,
+      loadedDates: ['2026-04-01', '2026-04-02'],
+      kpis: {
+        ...buildMonthSnapshot().kpis,
+        transaccionesCC: 2,
+      },
+    };
+    const monthlyTransactions: Transaction[] = [
+      {
+        id: 'tx-mix-day',
+        sucursal: 'S1',
+        agente: 'Mia Mixta',
+        canalReal: 'CC',
+        plataforma: 'Call center',
+        plataformaCode: 'CC',
+        fecha: '2026-04-01',
+        hora: '10:00:00',
+        estatus: 'N',
+        valor: 100,
+      },
+      {
+        id: 'tx-mix-night',
+        sucursal: 'S1',
+        agente: 'Mia Mixta',
+        canalReal: 'CC',
+        plataforma: 'Call center',
+        plataformaCode: 'CC',
+        fecha: '2026-04-02',
+        hora: '20:00:00',
+        estatus: 'N',
+        valor: 100,
+      },
+    ];
+
+    const result = buildMonthlyRepresentativePerformance({
+      monthSnapshot,
+      transactions: monthlyTransactions,
+      representatives: [mixedRepresentative],
+      commercialGoals: buildGoals(),
+      incidents: [],
+      calendar: { specialDays: [] },
+    });
+
+    const accumulatedRow = result?.performanceReport.byRepresentative.find(
+      (row) => row.representativeId === 'rep-mix'
+    );
+    const assignmentRows = result?.performanceReport.byAssignment.filter(
+      (row) => row.representativeId === 'rep-mix'
+    ) ?? [];
+    const assignmentTotal = assignmentRows.reduce(
+      (total, row) => total + row.transacciones,
+      0
+    );
+
+    expect(assignmentRows).toHaveLength(1);
+    expect(assignmentRows[0]).toEqual(
+      expect.objectContaining({
+        shift: 'DAY',
+        segment: 'MIXTO',
+        transacciones: 2,
+      })
+    );
+    expect(accumulatedRow?.transacciones).toBe(assignmentTotal);
+    expect(accumulatedRow?.transacciones).toBe(
+      result?.performanceReport.reconciliation.officialValidTransactions
+    );
+  });
 });

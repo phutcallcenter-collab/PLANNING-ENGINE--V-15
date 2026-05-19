@@ -14,7 +14,7 @@ describe('representativeEditorSchema', () => {
     expect(draft.baseShift).toBe('DAY')
     expect(draft.role).toBe('SALES')
     expect(draft.employmentType).toBe('FULL_TIME')
-    expect(draft.commercialEligible).toBe(false)
+    expect(draft.commercialEligible).toBe(true)
     expect(getRepresentativeOffDayLabels(draft.baseSchedule)).toEqual(['Lun'])
   })
 

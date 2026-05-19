@@ -5,6 +5,7 @@ import { useAppStore } from '@/store/useAppStore'
 import { useEditMode } from '@/hooks/useEditMode'
 import { useAccess } from '@/hooks/useAccess'
 import { Representative, ShiftType } from '@/domain/types'
+import type { RepresentativeWorkloadSelection } from '@/store/representativeSlice'
 import { getRepresentativesByShift } from '@/domain/representatives/getRepresentativesByShift'
 import { InactiveRepresentativesPanel } from './InactiveRepresentativesPanel'
 import { RepresentativeDetailPanel } from './RepresentativeDetailPanel'
@@ -27,6 +28,14 @@ type RepresentativeModalState =
   | { kind: 'create' }
   | { kind: 'detail'; repId: string }
   | { kind: 'edit'; repId: string }
+
+function formatWorkloadSelection(selection: RepresentativeWorkloadSelection) {
+  if (selection === 'MIXTO') {
+    return 'Mixto'
+  }
+
+  return selection === 'PART_TIME' ? 'Part Time' : 'Full Time'
+}
 
 export function RepresentativeManagement() {
   const {
@@ -264,16 +273,14 @@ export function RepresentativeManagement() {
   }
 
   const handleBulkEmploymentAssignment = (
-    employmentType: 'FULL_TIME' | 'PART_TIME'
+    employmentType: RepresentativeWorkloadSelection
   ) => {
     if (selectedRepresentativeIds.length === 0) {
       return
     }
 
     const confirmed = confirm(
-      `Se asignará ${
-        employmentType === 'PART_TIME' ? 'Part Time' : 'Full Time'
-      } a ${selectedRepresentativeIds.length} representante(s) seleccionado(s).\n\n¿Deseas continuar?`
+      `Se asignará ${formatWorkloadSelection(employmentType)} a ${selectedRepresentativeIds.length} representante(s) seleccionado(s).\n\n¿Deseas continuar?`
     )
 
     if (!confirmed) {
@@ -738,6 +745,28 @@ export function RepresentativeManagement() {
               }}
             >
               Aplicar Part Time
+            </button>
+            <button
+              type="button"
+              onClick={() => handleBulkEmploymentAssignment('MIXTO')}
+              disabled={!canEditData || selectedRepresentativeIds.length === 0}
+              style={{
+                border: 'none',
+                background:
+                  !canEditData || selectedRepresentativeIds.length === 0
+                    ? '#cbd5e1'
+                    : '#0f766e',
+                color: 'white',
+                borderRadius: '12px',
+                padding: '10px 14px',
+                fontWeight: 700,
+                cursor:
+                  !canEditData || selectedRepresentativeIds.length === 0
+                    ? 'not-allowed'
+                    : 'pointer',
+              }}
+            >
+              Aplicar Mixto
             </button>
           </div>
         </div>

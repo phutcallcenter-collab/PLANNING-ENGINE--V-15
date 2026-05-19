@@ -5,12 +5,14 @@ import { repName } from '@/application/presenters/humanizeStore'
 import type { AppState } from './useAppStore'
 import { canCurrentUserEditData } from './useAccessStore'
 
+export type RepresentativeWorkloadSelection = EmploymentType | 'MIXTO'
+
 export interface RepresentativeSlice {
   addRepresentative: (data: Omit<Representative, 'id' | 'isActive'>) => void
   updateRepresentative: (rep: Representative) => void
   bulkAssignEmploymentType: (
     representativeIds: string[],
-    employmentType: EmploymentType
+    employmentType: RepresentativeWorkloadSelection
   ) => void
   deactivateRepresentative: (repId: string) => Promise<void>
   reactivateRepresentative: (repId: string) => Promise<void>
@@ -37,6 +39,7 @@ export const createRepresentativeSlice: StateCreator<
       state.representatives.push({
         id: crypto.randomUUID(),
         ...data,
+        commercialEligible: data.commercialEligible ?? true,
         isActive: true,
       })
     })
@@ -80,15 +83,29 @@ export const createRepresentativeSlice: StateCreator<
     set(state => {
       state.representatives.forEach(representative => {
         if (uniqueIds.includes(representative.id)) {
+          if (employmentType === 'MIXTO') {
+            representative.employmentType = representative.employmentType ?? 'FULL_TIME'
+            representative.mixProfile = representative.mixProfile ?? { type: 'WEEKEND' }
+            return
+          }
+
           representative.employmentType = employmentType
+          representative.mixProfile = undefined
         }
       })
     })
 
+    const workloadLabel =
+      employmentType === 'MIXTO'
+        ? 'Mixto'
+        : employmentType === 'PART_TIME'
+          ? 'Part Time'
+          : 'Full Time'
+
     get().addHistoryEvent({
       category: 'SETTINGS',
       title: 'Jornadas actualizadas por lote',
-      description: `Se asignó ${employmentType === 'PART_TIME' ? 'Part Time' : 'Full Time'} a ${uniqueIds.length} representante(s).`,
+      description: `Se asignó ${workloadLabel} a ${uniqueIds.length} representante(s).`,
     })
   },
 

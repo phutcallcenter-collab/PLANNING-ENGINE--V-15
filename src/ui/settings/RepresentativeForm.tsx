@@ -26,6 +26,8 @@ import {
 } from './representativeEditorSchema'
 import { representativeFormStyles } from './representativeFormStyles'
 
+type WorkloadSelection = EmploymentType | 'MIXTO' | ''
+
 interface RepresentativeFormProps {
   onDirtyChange?: (isDirty: boolean) => void
   rep?: Representative
@@ -87,6 +89,9 @@ export function RepresentativeForm({
     () => countRepresentativeDayOffs(baseSchedule),
     [baseSchedule]
   )
+  const workloadSelection: WorkloadSelection = mixProfile
+    ? 'MIXTO'
+    : employmentType
 
   useEffect(() => {
     onDirtyChange?.(isDirty)
@@ -124,6 +129,17 @@ export function RepresentativeForm({
     setCommercialEligible(initialDraft.commercialEligible === true)
   }
 
+  const handleWorkloadChange = (value: WorkloadSelection) => {
+    if (value === 'MIXTO') {
+      setEmploymentType(current => current || 'FULL_TIME')
+      setMixProfile(current => current || 'WEEKEND')
+      return
+    }
+
+    setEmploymentType(value)
+    setMixProfile('')
+  }
+
   const handleCancel = () => {
     if (isDirty) {
       const confirmed = confirm(
@@ -156,11 +172,18 @@ export function RepresentativeForm({
         {[
           `Turno ${getRepresentativeShiftLabel(baseShift)}`,
           getRepresentativeRoleLabel(role),
-          getRepresentativeEmploymentLabel(employmentType || undefined),
+          getRepresentativeEmploymentLabel(
+            employmentType || undefined,
+            mixProfile ? { type: mixProfile } : undefined
+          ),
           `${dayOffCount} dia(s) OFF base`,
-          getRepresentativeMixLabel({ mixProfile: mixProfile ? { type: mixProfile } : undefined }),
+          mixProfile
+            ? getRepresentativeMixLabel({
+                mixProfile: { type: mixProfile },
+              })
+            : null,
           getRepresentativeCommercialLabel(commercialEligible),
-        ].map(item => (
+        ].filter(Boolean).map(item => (
           <span key={item} style={representativeFormStyles.liveSummaryChip}>
             {item}
           </span>
@@ -216,24 +239,27 @@ export function RepresentativeForm({
           baseShift={baseShift}
           onChange={setBaseShift}
         />
-        <RepresentativeMixProfileField
-          mixProfile={mixProfile}
-          onChange={setMixProfile}
-        />
         <div>
           <label style={representativeFormStyles.sectionTitle}>Jornada</label>
           <select
-            value={employmentType}
+            value={workloadSelection}
             onChange={event =>
-              setEmploymentType(event.target.value as EmploymentType | '')
+              handleWorkloadChange(event.target.value as WorkloadSelection)
             }
             style={representativeFormStyles.select}
           >
             <option value="">Sin definir</option>
             <option value="FULL_TIME">Full Time</option>
             <option value="PART_TIME">Part Time</option>
+            <option value="MIXTO">Mixto</option>
           </select>
         </div>
+        {mixProfile ? (
+          <RepresentativeMixProfileField
+            mixProfile={mixProfile}
+            onChange={setMixProfile}
+          />
+        ) : null}
         <div>
           <label style={representativeFormStyles.sectionTitle}>
             Ranking comercial
