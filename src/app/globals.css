@@ -218,6 +218,89 @@
     page-break-before: always;
   }
 
+  .report-print-root .operational-competitive-shift-stack {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) !important;
+    gap: 12px !important;
+    width: 100% !important;
+  }
+
+  .report-print-root .operational-competitive-shift-section {
+    break-inside: auto !important;
+    page-break-inside: auto !important;
+    overflow: visible !important;
+    border-radius: 10px !important;
+  }
+
+  .report-print-root .operational-competitive-table-wrap {
+    overflow: visible !important;
+    width: 100% !important;
+  }
+
+  .report-print-root .operational-competitive-table {
+    table-layout: fixed !important;
+    min-width: 0 !important;
+    width: 100% !important;
+  }
+
+  .report-print-root .operational-competitive-table th,
+  .report-print-root .operational-competitive-table td {
+    padding: 5px 4px !important;
+    font-size: 9px !important;
+    line-height: 1.2 !important;
+    vertical-align: middle !important;
+  }
+
+  .report-print-root .operational-competitive-table th:first-child,
+  .report-print-root .operational-competitive-table td:first-child {
+    width: 28% !important;
+  }
+
+  .report-print-root .operational-competitive-table th:nth-child(4),
+  .report-print-root .operational-competitive-table td:nth-child(4) {
+    width: 15% !important;
+  }
+
+  .report-print-root .operational-competitive-table th:last-child,
+  .report-print-root .operational-competitive-table td:last-child {
+    width: 10% !important;
+  }
+
+  .report-print-root .operational-competitive-table td:first-child > div {
+    gap: 4px !important;
+    min-width: 0 !important;
+  }
+
+  .report-print-root .operational-competitive-table td:first-child > div > span:first-child {
+    width: 16px !important;
+    font-size: 9px !important;
+  }
+
+  .report-print-root .operational-competitive-table td:first-child > div > div:first-of-type {
+    width: 22px !important;
+    height: 22px !important;
+    font-size: 7px !important;
+  }
+
+  .report-print-root .operational-competitive-table td:first-child > div > div:last-child {
+    gap: 1px !important;
+    min-width: 0 !important;
+  }
+
+  .report-print-root .operational-competitive-table td:first-child > div > div:last-child span:first-child {
+    overflow-wrap: anywhere !important;
+    font-size: 9px !important;
+  }
+
+  .report-print-root .operational-competitive-table td:first-child > div > div:last-child span:last-child {
+    display: none !important;
+  }
+
+  .report-print-root .operational-competitive-table .report-progress-track {
+    width: 72px !important;
+    height: 5px !important;
+  }
+
   .report-print-hide {
     /* Mantener: usado por tablas densas para ocultar columnas secundarias solo en impresión */
     display: none !important;

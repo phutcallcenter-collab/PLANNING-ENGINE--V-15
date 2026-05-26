@@ -3,8 +3,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import dynamic from 'next/dynamic';
 import { useAccess } from '@/hooks/useAccess';
-import { CalendarRange, Eye, EyeOff, History } from 'lucide-react';
+import { CalendarRange, Eye, EyeOff, History, Info } from 'lucide-react';
 import KPISummary from '@/ui/reports/analysis-beta/kpis/KPISummary';
+import { Tooltip } from '@/ui/components/Tooltip';
 import ShiftGrid from '@/ui/reports/analysis-beta/shifts/ShiftGrid';
 import KPIObserver from '@/ui/reports/analysis-beta/kpis/KPIObserver';
 import { useDashboardStore } from '@/ui/reports/analysis-beta/store/dashboard.store';
@@ -158,17 +159,17 @@ export function CallCenterAnalysisView() {
         </div>
       </header>
 
-      <div className="w-full px-4 md:px-8 mt-8 space-y-10">
+      <div className="w-full px-4 md:px-8 mt-5 space-y-7">
         {!dataDate ? (
-          <section className="rounded-[2rem] border border-dashed border-slate-300 bg-white px-6 py-12 shadow-sm">
+          <section className="rounded-[1.5rem] border border-dashed border-slate-300 bg-white px-6 py-8 shadow-sm">
             <div className="mx-auto flex max-w-3xl flex-col items-center gap-4 text-center">
-              <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-red-50 text-red-600">
+              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-red-50 text-red-600">
                 <CalendarRange className="h-6 w-6" />
               </div>
               <span className="rounded-full bg-slate-100 px-3 py-1 text-[10px] font-black uppercase tracking-[0.18em] text-slate-500">
                 Vista limpia
               </span>
-              <h2 className="text-2xl font-black text-slate-900">
+              <h2 className="text-lg font-black text-slate-900">
                 La vista principal está vacía, pero el historial sigue guardado.
               </h2>
               <p className="max-w-2xl text-sm text-slate-500">
@@ -194,7 +195,7 @@ export function CallCenterAnalysisView() {
             }
             className="w-full"
           >
-            <div className="mb-8 flex flex-col gap-5 xl:flex-row xl:items-center xl:justify-between">
+            <div className="mb-5 flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
               <DateRangeBadge />
               <TabsList className="report-screen-only">
                 <TabsTrigger value="executive">Resumen ejecutivo</TabsTrigger>
@@ -203,7 +204,7 @@ export function CallCenterAnalysisView() {
               </TabsList>
             </div>
 
-            <TabsContent value="executive" className="space-y-10 focus-visible:outline-none">
+            <TabsContent value="executive" className="space-y-7 focus-visible:outline-none">
               <section className="rounded-[1.75rem] border border-slate-200 bg-white p-5 shadow-sm">
                 <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                   <div className="space-y-1">
@@ -267,12 +268,20 @@ export function CallCenterAnalysisView() {
                   {currentDailySnapshot ? (
                     <div className="space-y-5">
                       <div className="space-y-1">
-                        <h3 className="text-lg font-black text-slate-900">
-                          Detalle operativo de la jornada
-                        </h3>
-                        <p className="text-sm text-slate-500">
-                          Aquí se ve cómo se repartieron las llamadas y los abandonos por franja en el día activo.
-                        </p>
+                        <div className="flex items-center gap-2">
+                          <h3 className="text-base font-black text-slate-900">
+                            Detalle operativo de la jornada
+                          </h3>
+                          <Tooltip content="Distribución de llamadas y abandonos por franja en el día activo.">
+                            <span
+                              className="inline-grid h-6 w-6 place-items-center rounded-full border border-slate-200 bg-slate-50 text-slate-500"
+                              tabIndex={0}
+                              aria-label="Contexto del detalle operativo"
+                            >
+                              <Info className="h-3.5 w-3.5" aria-hidden="true" />
+                            </span>
+                          </Tooltip>
+                        </div>
                       </div>
                       <ShiftTablesContainer detail={currentDailySnapshot.operationalDetail} />
                     </div>
@@ -300,19 +309,27 @@ export function CallCenterAnalysisView() {
               </section>
             </TabsContent>
 
-            <TabsContent value="operation" className="space-y-10 focus-visible:outline-none">
+            <TabsContent value="operation" className="space-y-7 focus-visible:outline-none">
               <section className="space-y-4">
                 <div className="report-screen-only flex flex-col gap-3 rounded-[1.75rem] border border-slate-200 bg-white p-5 shadow-sm">
                   <div className="space-y-1">
                     <p className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">
                       Operación
                     </p>
-                    <h2 className="text-lg font-black text-slate-900">
-                      Workspace operativo
-                    </h2>
-                    <p className="text-sm text-slate-500">
-                      Aquí manda el acumulado del mes. El seguimiento por representante queda como apoyo para revisar quién vende más en el día y en el mes.
-                    </p>
+                    <div className="flex items-center gap-2">
+                      <h2 className="text-base font-black text-slate-900">
+                        Workspace operativo
+                      </h2>
+                      <Tooltip content="Aquí manda el acumulado del mes. El seguimiento por representante queda como apoyo para revisar quién vende más en el día y en el mes.">
+                        <span
+                          className="inline-grid h-6 w-6 place-items-center rounded-full border border-slate-200 bg-slate-50 text-slate-500"
+                          tabIndex={0}
+                          aria-label="Contexto del workspace operativo"
+                        >
+                          <Info className="h-3.5 w-3.5" aria-hidden="true" />
+                        </span>
+                      </Tooltip>
+                    </div>
                   </div>
 
                   <div className="flex flex-wrap gap-2 rounded-2xl bg-slate-100 p-1.5">

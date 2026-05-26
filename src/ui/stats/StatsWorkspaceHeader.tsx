@@ -4,7 +4,8 @@ import type { ComponentType } from 'react'
 import { useMemo, useRef } from 'react'
 import { addMonths, format, subMonths } from 'date-fns'
 import { es } from 'date-fns/locale'
-import { CalendarDays, ChevronLeft, ChevronRight } from 'lucide-react'
+import { CalendarDays, ChevronLeft, ChevronRight, Info } from 'lucide-react'
+import { Tooltip } from '@/ui/components/Tooltip'
 
 export type StatsWorkspaceReportId =
   | 'monthly'
@@ -30,7 +31,7 @@ interface StatsWorkspaceHeaderProps {
 
 function reportButtonStyle(isActive: boolean) {
   return {
-    padding: '10px 14px',
+    padding: '9px 12px',
     cursor: 'pointer',
     border: `1px solid ${
       isActive ? 'rgba(var(--accent-rgb), 0.18)' : 'rgba(202, 189, 168, 0.3)'
@@ -41,13 +42,14 @@ function reportButtonStyle(isActive: boolean) {
       ? 'linear-gradient(180deg, var(--surface-raised) 0%, rgba(255,255,255,0.68) 100%)'
       : 'rgba(255,255,255,0.52)',
     fontSize: '13px',
-    borderRadius: '14px',
+    borderRadius: '12px',
     boxShadow: isActive ? '0 10px 20px rgba(var(--accent-rgb), 0.1)' : 'none',
     display: 'flex',
-    flexDirection: 'column',
-    gap: '4px',
-    minWidth: '180px',
+    alignItems: 'center',
+    gap: '8px',
+    minHeight: '40px',
     textAlign: 'left',
+    whiteSpace: 'nowrap',
   } as const
 }
 
@@ -108,30 +110,22 @@ export function StatsWorkspaceHeader({
           const Icon = report.icon
 
           return (
-            <button
-              key={report.id}
-              type="button"
-              style={reportButtonStyle(activeReport === report.id)}
-              aria-pressed={activeReport === report.id}
-              onClick={() => onReportChange(report.id)}
-            >
-              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
-                <Icon size={14} />
-                <span>{report.label}</span>
-              </span>
-              <span
-                style={{
-                  fontSize: '11px',
-                  fontWeight: 600,
-                  color:
-                    activeReport === report.id
-                      ? 'var(--text-main)'
-                      : 'var(--text-muted)',
-                }}
+            <Tooltip key={report.id} content={report.description}>
+              <button
+                type="button"
+                style={reportButtonStyle(activeReport === report.id)}
+                aria-pressed={activeReport === report.id}
+                aria-label={`${report.label}: ${report.description}`}
+                title={report.description}
+                onClick={() => onReportChange(report.id)}
               >
-                {report.description}
-              </span>
-            </button>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
+                  <Icon size={14} />
+                  <span>{report.label}</span>
+                  <Info size={12} aria-hidden="true" />
+                </span>
+              </button>
+            </Tooltip>
           )
         })}
       </div>
@@ -177,14 +171,14 @@ export function StatsWorkspaceHeader({
 
             <div
               style={{
-              minWidth: '170px',
+                minWidth: '170px',
                 padding: '0 10px',
                 textAlign: 'center',
                 color: 'var(--text-main)',
                 fontSize: '14px',
                 fontWeight: 800,
                 textTransform: 'capitalize',
-                letterSpacing: '-0.02em',
+                letterSpacing: 0,
               }}
             >
               {monthControlLabel}
@@ -261,27 +255,34 @@ export function StatsWorkspaceHeader({
             flexWrap: 'wrap',
           }}
         >
-          <div
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '8px',
-              padding: '9px 12px',
-              borderRadius: '14px',
-              border: '1px solid var(--shell-border)',
-              background: 'rgba(255,255,255,0.72)',
-              color: 'var(--text-main)',
-              fontSize: '13px',
-              fontWeight: 700,
-            }}
+          <Tooltip
+            content={
+              activeReport === 'operational'
+                ? 'Resumen operativo alineado con el historial cargado de Call Center.'
+                : 'Call Center mantiene sus subpestañas internas dentro de esta misma entrada.'
+            }
           >
-            {activeReport === 'operational'
-              ? 'Resumen operativo alineado con el historial cargado de Call Center'
-              : 'Call Center mantiene sus subpestañas internas dentro de esta misma entrada'}
-          </div>
-          <div style={{ color: 'var(--text-muted)', fontSize: '13px' }}>
-            Sin controles temporales duplicados en la cinta principal.
-          </div>
+            <div
+              tabIndex={0}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '8px',
+                padding: '9px 12px',
+                borderRadius: '14px',
+                border: '1px solid var(--shell-border)',
+                background: 'rgba(255,255,255,0.72)',
+                color: 'var(--text-main)',
+                fontSize: '13px',
+                fontWeight: 700,
+              }}
+            >
+              {activeReport === 'operational'
+                ? 'Historial Call Center'
+                : 'Subpestañas internas'}
+              <Info size={13} aria-hidden="true" />
+            </div>
+          </Tooltip>
         </div>
       )}
     </section>

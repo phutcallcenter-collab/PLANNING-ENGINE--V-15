@@ -8,9 +8,9 @@ export const metadata: Metadata = {
   title: 'Nexo — Control Operativo',
   description: 'Operación diaria y planificación en un solo lugar.',
   icons: {
-    icon: '/icon_final.jpg',
-    apple: '/icon_final.jpg',
-    shortcut: '/icon_final.jpg'
+    icon: '/icon-192.png',
+    apple: '/apple-touch-icon.png',
+    shortcut: '/icon-192.png'
   },
   manifest: '/manifest.json',
 }

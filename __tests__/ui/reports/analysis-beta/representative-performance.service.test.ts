@@ -5,6 +5,7 @@ import type {
   CommercialGoal,
   Incident,
   Representative,
+  SpecialSchedule,
 } from '@/domain/types';
 import type { OperationalCompetitiveResolvedPeriod } from '@/domain/reports/operationalTypes';
 import type { Transaction } from '@/ui/reports/analysis-beta/types/dashboard.types';
@@ -301,7 +302,23 @@ describe('buildRepresentativePerformanceReport', () => {
     expect(fullTimeGroup?.rows.every((row) => row.target === 1000)).toBe(true);
   });
 
-  it('keeps a mixed representative only in the mixed table for their base shift', () => {
+  it('keeps a mixed representative in the real planned shift instead of their base shift', () => {
+    const nightOnlySchedule: SpecialSchedule = {
+      id: 'schedule-mix-night',
+      scope: 'INDIVIDUAL',
+      targetId: 'rep-mix',
+      from: '2026-04-10',
+      to: '2026-04-10',
+      weeklyPattern: {
+        0: 'DAY',
+        1: 'DAY',
+        2: 'DAY',
+        3: 'DAY',
+        4: 'DAY',
+        5: 'NIGHT',
+        6: 'DAY',
+      },
+    };
     const nightError: Incident = {
       id: 'err-mix-night',
       representativeId: 'rep-mix',
@@ -317,20 +334,9 @@ describe('buildRepresentativePerformanceReport', () => {
       commercialGoals: buildCommercialGoals(),
       incidents: [nightError],
       calendar: { specialDays: [] },
+      specialSchedules: [nightOnlySchedule],
       currentPeriod: buildPeriod('2026-04-10'),
       currentTransactions: [
-        {
-          id: 'tx-1',
-          sucursal: 'S1',
-          agente: 'Mia Mixta',
-          canalReal: 'CC',
-          plataforma: 'Call center',
-          plataformaCode: 'CC',
-          fecha: '2026-04-10',
-          hora: '10:10:00',
-          estatus: 'N',
-          valor: 100,
-        },
         {
           id: 'tx-2',
           sucursal: 'S1',
@@ -356,27 +362,27 @@ describe('buildRepresentativePerformanceReport', () => {
     expect(mixedRows[0]).toEqual(
       expect.objectContaining({
         representativeId: 'rep-mix',
-        shift: 'DAY',
+        shift: 'NIGHT',
         segment: 'MIXTO',
-        transacciones: 2,
+        transacciones: 1,
         incidents: 1,
         errors: 1,
       })
     );
-    expect(mixedRows[0].target).toBeCloseTo(900 / 30, 5);
+    expect(mixedRows[0].target).toBeCloseTo(500 / 30, 5);
     expect(
-      report.shifts.DAY.groups.find((group) => group.segment === 'MIXTO')?.rows
+      report.shifts.NIGHT.groups.find((group) => group.segment === 'MIXTO')?.rows
     ).toEqual([mixedRows[0]]);
     expect(
       report.shifts.DAY.groups
+        .flatMap((group) => group.rows)
+        .every((row) => row.representativeId !== 'rep-mix')
+    ).toBe(true);
+    expect(
+      report.shifts.NIGHT.groups
         .filter((group) => group.segment !== 'MIXTO')
         .every((group) => group.rows.every((row) => row.representativeId !== 'rep-mix'))
     ).toBe(true);
-    expect(
-      report.shifts.NIGHT.groups.every((group) =>
-        group.rows.every((row) => row.representativeId !== 'rep-mix')
-      )
-    ).toBe(true);
-    expect(report.reconciliation.officialValidTransactions).toBe(2);
+    expect(report.reconciliation.officialValidTransactions).toBe(1);
   });
 });

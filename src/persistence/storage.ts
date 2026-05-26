@@ -18,8 +18,6 @@ const isBrowserWithLocalStorage =
   typeof window !== 'undefined' && typeof window.localStorage !== 'undefined'
 
 function normalizeLoadedState(state: PlanningBaseState): PlanningBaseState {
-  const initialState = createInitialState()
-
   state.incidents ??= []
   state.historyEvents ??= []
   state.auditLog = normalizeAuditLog(state.auditLog)
@@ -27,9 +25,7 @@ function normalizeLoadedState(state: PlanningBaseState): PlanningBaseState {
   state.specialSchedules ??= []
   state.coverageRules ??= []
   state.representatives = normalizeRepresentatives(state.representatives)
-  state.commercialGoals = normalizeCommercialGoals(
-    state.commercialGoals ?? initialState.commercialGoals
-  )
+  state.commercialGoals = normalizeCommercialGoals(state.commercialGoals)
   state.managers ??= []
   state.managementSchedules ??= {}
   state.version = DOMAIN_VERSION
@@ -133,7 +129,7 @@ export async function loadState(): Promise<PlanningBaseState | null> {
     db.close()
 
     if (!state) {
-      const initialState = createInitialState()
+      const initialState = normalizeLoadedState(createInitialState())
       await saveState(initialState)
       return initialState
     }

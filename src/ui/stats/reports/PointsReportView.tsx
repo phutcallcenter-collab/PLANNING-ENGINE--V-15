@@ -2,6 +2,7 @@
 
 import { useAccess } from '@/hooks/useAccess'
 import { ReportExportActions } from '@/ui/components/ReportExportActions'
+import { Tooltip } from '@/ui/components/Tooltip'
 import { exportPointsReport } from './exportPointsReport'
 import { ReorderAgentsModal } from './components/ReorderAgentsModal'
 import { PointsReportActions } from './PointsReportActions'
@@ -9,6 +10,7 @@ import { PointsReportCopyToast } from './PointsReportCopyToast'
 import { PointsReportTable } from './PointsReportTable'
 import { usePointsReportView } from './usePointsReportView'
 import { useState } from 'react'
+import { Info } from 'lucide-react'
 
 interface PointsReportViewProps {
   currentDate: Date
@@ -45,7 +47,7 @@ export function PointsReportView({ currentDate }: PointsReportViewProps) {
           gap: '12px',
           flexWrap: 'wrap',
         }}
-        >
+      >
         <div>
           <div
             style={{
@@ -59,20 +61,39 @@ export function PointsReportView({ currentDate }: PointsReportViewProps) {
           >
             Incidencias del mes
           </div>
-          <h2
-            style={{
-              margin: 0,
-              fontSize: '1.15rem',
-              fontWeight: 800,
-              color: 'var(--text-main)',
-              letterSpacing: '-0.02em',
-            }}
-          >
-            Incidencias y puntos por turno
-          </h2>
-          <p style={{ margin: '6px 0 0', color: 'var(--text-muted)', fontSize: '13px' }}>
-            Vista mensual compacta de {monthLabel} para copiar, revisar y reordenar sin navegar dentro del panel.
-          </p>
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+            <h2
+              style={{
+                margin: 0,
+                fontSize: '1.08rem',
+                fontWeight: 800,
+                color: 'var(--text-main)',
+                letterSpacing: 0,
+              }}
+            >
+              Puntos por turno
+            </h2>
+            <Tooltip
+              content={`Vista mensual compacta de ${monthLabel} para copiar, revisar y reordenar sin navegar dentro del panel.`}
+            >
+              <span
+                tabIndex={0}
+                style={{
+                  width: '24px',
+                  height: '24px',
+                  borderRadius: '999px',
+                  display: 'inline-grid',
+                  placeItems: 'center',
+                  color: 'var(--text-muted)',
+                  background: 'rgba(var(--accent-rgb),0.08)',
+                  border: '1px solid rgba(var(--accent-rgb),0.14)',
+                }}
+                aria-label="Contexto del reporte de puntos"
+              >
+                <Info size={13} aria-hidden="true" />
+              </span>
+            </Tooltip>
+          </div>
         </div>
         <ReportExportActions
           isExportingPdf={isExportingPdf}

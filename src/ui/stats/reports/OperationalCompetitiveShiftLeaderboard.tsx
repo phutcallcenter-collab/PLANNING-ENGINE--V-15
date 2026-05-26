@@ -78,7 +78,7 @@ export function OperationalCompetitiveShiftLeaderboard({
 
   return (
     <section
-      className="report-shift-section report-print-avoid-break"
+      className="report-shift-section operational-competitive-shift-section report-print-avoid-break"
       style={{
         borderRadius: '22px',
         border: '1px solid var(--shell-border)',
@@ -220,8 +220,9 @@ export function OperationalCompetitiveShiftLeaderboard({
                   No hay representantes oficiales en este bloque para el período seleccionado.
                 </div>
               ) : (
-                <div style={{ overflowX: 'auto' }}>
+                <div className="operational-competitive-table-wrap" style={{ overflowX: 'auto' }}>
                   <table
+                    className="operational-competitive-table"
                     style={{
                       width: '100%',
                       minWidth: comparisonEnabled ? '980px' : '860px',

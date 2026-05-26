@@ -75,6 +75,7 @@ type ReconciliationAccumulator = RepresentativeReconciliationItem;
 
 type TransactionProcessingResult = {
   assignmentStats: Map<string, AssignmentAccumulator>;
+  assignmentShiftsByDate: Map<string, Set<ShiftType>>;
   validTransactionsByRepresentative: Map<string, number>;
   validTransactionsByAssignment: Map<string, number>;
   pendingAgentNames: Record<ShiftType, Set<string>>;
@@ -127,6 +128,66 @@ function buildAssignmentKey(
 
 function buildRepresentativeDateKey(representativeId: string, date: string) {
   return `${representativeId}:${date}`;
+}
+
+function resolveMixedAssignmentShift(params: {
+  representative: Representative;
+  date: string;
+  transactionShift: ShiftType;
+  plannedShiftMap: Map<string, ShiftType[]>;
+}): ShiftType {
+  const plannedShifts =
+    params.plannedShiftMap.get(
+      buildRepresentativeDateKey(params.representative.id, params.date)
+    ) ?? [];
+
+  if (plannedShifts.length === 1) {
+    return plannedShifts[0];
+  }
+
+  if (plannedShifts.includes(params.transactionShift)) {
+    return params.transactionShift;
+  }
+
+  if (plannedShifts.includes(params.representative.baseShift)) {
+    return params.representative.baseShift;
+  }
+
+  return params.transactionShift;
+}
+
+function resolveIncidentShifts(params: {
+  representative: Representative;
+  incident: Incident;
+  date: string;
+  plannedShiftMap: Map<string, ShiftType[]>;
+}): ShiftType[] {
+  if (!params.representative.mixProfile) {
+    return [params.representative.baseShift];
+  }
+
+  if (params.incident.assignment?.type === 'SINGLE') {
+    return [params.incident.assignment.shift];
+  }
+
+  if (params.incident.assignment?.type === 'BOTH') {
+    return ['DAY', 'NIGHT'];
+  }
+
+  const plannedShifts =
+    params.plannedShiftMap.get(
+      buildRepresentativeDateKey(params.representative.id, params.date)
+    ) ?? [];
+
+  if (plannedShifts.length === 1) {
+    return plannedShifts;
+  }
+
+  if (plannedShifts.includes(params.representative.baseShift)) {
+    return [params.representative.baseShift];
+  }
+
+  return plannedShifts.length ? plannedShifts : [params.representative.baseShift];
 }
 
 function resolveTransactionShift(time: string): ShiftType | null {
@@ -354,14 +415,21 @@ function buildPlannedShiftMap(params: {
     );
 
     params.representatives.forEach((representative) => {
-      if (!dayIds.has(representative.id) && !nightIds.has(representative.id)) {
+      const shifts: ShiftType[] = [];
+
+      if (dayIds.has(representative.id)) {
+        shifts.push('DAY');
+      }
+
+      if (nightIds.has(representative.id)) {
+        shifts.push('NIGHT');
+      }
+
+      if (shifts.length === 0) {
         return;
       }
 
-      planned.set(
-        buildRepresentativeDateKey(representative.id, date),
-        [representative.baseShift]
-      );
+      planned.set(buildRepresentativeDateKey(representative.id, date), shifts);
     });
   });
 
@@ -376,6 +444,7 @@ function buildTargetMap(params: {
   dates: string[];
   allCalendarDays: ReturnType<typeof createCalendarDaysForDates>;
   specialSchedules: SpecialSchedule[];
+  assignmentShiftsByDate?: Map<string, Set<ShiftType>>;
 }) {
   const targetMap = new Map<string, TargetAccumulator>();
   const plannedShiftMap = buildPlannedShiftMap(params);
@@ -383,8 +452,17 @@ function buildTargetMap(params: {
 
   params.dates.forEach((date) => {
     params.representatives.forEach((representative) => {
-      const shifts =
+      const plannedShifts =
         plannedShiftMap.get(buildRepresentativeDateKey(representative.id, date)) ?? [];
+      const assignedShifts = params.assignmentShiftsByDate?.get(
+        buildRepresentativeDateKey(representative.id, date)
+      );
+      const shifts =
+        representative.mixProfile && assignedShifts?.size
+          ? [...assignedShifts]
+          : representative.mixProfile && plannedShifts.includes(representative.baseShift)
+            ? [representative.baseShift]
+            : plannedShifts;
 
       shifts.forEach((shift) => {
         const segment = getRepresentativeCommercialSegment(representative);
@@ -424,6 +502,7 @@ function buildIncidentMap(params: {
   period: OperationalCompetitiveResolvedPeriod;
   allCalendarDays: ReturnType<typeof createCalendarDaysForDates>;
   specialSchedules: SpecialSchedule[];
+  plannedShiftMap: Map<string, ShiftType[]>;
 }) {
   const incidentMap = new Map<string, IncidentAccumulator>();
   const periodDateSet = new Set(params.period.loadedDates);
@@ -449,33 +528,40 @@ function buildIncidentMap(params: {
       return;
     }
 
-    const shift = representative.baseShift;
-
     resolvedDates.forEach((date) => {
       const segment = getRepresentativeCommercialSegment(representative);
-      const key = buildAssignmentKey(representative.id, shift, segment);
-      const current = incidentMap.get(key) ?? {
-        incidents: 0,
-        errors: 0,
-        absences: 0,
-        tardiness: 0,
-      };
+      const shifts = resolveIncidentShifts({
+        representative,
+        incident,
+        date,
+        plannedShiftMap: params.plannedShiftMap,
+      });
 
-      current.incidents += 1;
+      shifts.forEach((shift) => {
+        const key = buildAssignmentKey(representative.id, shift, segment);
+        const current = incidentMap.get(key) ?? {
+          incidents: 0,
+          errors: 0,
+          absences: 0,
+          tardiness: 0,
+        };
 
-      if (incident.type === 'ERROR') {
-        current.errors += 1;
-      }
+        current.incidents += 1;
 
-      if (incident.type === 'AUSENCIA') {
-        current.absences += 1;
-      }
+        if (incident.type === 'ERROR') {
+          current.errors += 1;
+        }
 
-      if (incident.type === 'TARDANZA') {
-        current.tardiness += 1;
-      }
+        if (incident.type === 'AUSENCIA') {
+          current.absences += 1;
+        }
 
-      incidentMap.set(key, current);
+        if (incident.type === 'TARDANZA') {
+          current.tardiness += 1;
+        }
+
+        incidentMap.set(key, current);
+      });
     });
   });
 
@@ -487,9 +573,11 @@ function processRepresentativeTransactions(params: {
   representatives: Representative[];
   manualRepresentativeLinks: ManualRepresentativeLink[];
   period: OperationalCompetitiveResolvedPeriod;
+  plannedShiftMap: Map<string, ShiftType[]>;
   collectWarnings: boolean;
 }) {
   const assignmentStats = new Map<string, AssignmentAccumulator>();
+  const assignmentShiftsByDate = new Map<string, Set<ShiftType>>();
   const validTransactionsByRepresentative = new Map<string, number>();
   const validTransactionsByAssignment = new Map<string, number>();
   const pendingAgentNames: Record<ShiftType, Set<string>> = {
@@ -606,8 +694,24 @@ function processRepresentativeTransactions(params: {
     }
 
     const representative = resolution.representative;
-    const assignmentShift = representative.baseShift;
+    const assignmentShift = representative.mixProfile
+      ? resolveMixedAssignmentShift({
+          representative,
+          date: transaction.fecha,
+          transactionShift: shift,
+          plannedShiftMap: params.plannedShiftMap,
+        })
+      : representative.baseShift;
     const segment = getRepresentativeCommercialSegment(representative);
+    const representativeDateKey = buildRepresentativeDateKey(
+      representative.id,
+      transaction.fecha
+    );
+    const currentShifts = assignmentShiftsByDate.get(representativeDateKey) ?? new Set<ShiftType>();
+
+    currentShifts.add(assignmentShift);
+    assignmentShiftsByDate.set(representativeDateKey, currentShifts);
+
     const current = ensureAssignmentAccumulator(
       assignmentStats,
       representative,
@@ -653,6 +757,7 @@ function processRepresentativeTransactions(params: {
 
   return {
     assignmentStats,
+    assignmentShiftsByDate,
     validTransactionsByRepresentative,
     validTransactionsByAssignment,
     pendingAgentNames,
@@ -717,11 +822,19 @@ export function buildRepresentativePerformanceReport({
     ...(comparisonTransactionDates ?? []),
   ];
   const allCalendarDays = createCalendarDaysForDates(relevantDates, calendar);
+  const plannedShiftMap = buildPlannedShiftMap({
+    representatives: eligibleRepresentatives,
+    incidents,
+    dates: [...new Set(relevantDates.filter(Boolean))].sort(),
+    allCalendarDays,
+    specialSchedules,
+  });
   const currentState = processRepresentativeTransactions({
     transactions: currentTransactions,
     representatives: eligibleRepresentatives,
     manualRepresentativeLinks,
     period: currentPeriod,
+    plannedShiftMap,
     collectWarnings: true,
   });
   const comparisonState = comparisonPeriod
@@ -730,6 +843,7 @@ export function buildRepresentativePerformanceReport({
         representatives: eligibleRepresentatives,
         manualRepresentativeLinks,
         period: comparisonPeriod,
+        plannedShiftMap,
         collectWarnings: false,
       })
     : null;
@@ -741,6 +855,7 @@ export function buildRepresentativePerformanceReport({
     dates: [...new Set((currentTransactionDates ?? currentPeriod.loadedDates).filter(Boolean))].sort(),
     allCalendarDays,
     specialSchedules,
+    assignmentShiftsByDate: currentState.assignmentShiftsByDate,
   });
   const incidentMap = buildIncidentMap({
     representativesById,
@@ -748,6 +863,7 @@ export function buildRepresentativePerformanceReport({
     period: currentPeriod,
     allCalendarDays,
     specialSchedules,
+    plannedShiftMap,
   });
   const visibleKeys = [
     ...new Set([

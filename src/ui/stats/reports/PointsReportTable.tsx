@@ -1,7 +1,8 @@
-import { Download } from 'lucide-react'
+import { Download, Info } from 'lucide-react'
 import type { PayrollRow } from '@/application/stats/getMonthlyPointsSummary'
 import type { CSSProperties } from 'react'
 import { UI_GLOSSARY } from '@/ui/copy/glossary'
+import { Tooltip } from '@/ui/components/Tooltip'
 
 interface PointsReportTableProps {
   data: PayrollRow[]
@@ -103,20 +104,38 @@ export function PointsReportTable({
           >
             Tabla exportable
           </div>
-          <h3
-            style={{
-              fontSize: '18px',
-              fontWeight: 700,
-              margin: 0,
-              color: 'var(--text-main)',
-              letterSpacing: '-0.02em',
-            }}
-          >
-            {title}
-          </h3>
-          <p style={{ margin: '6px 0 0', color: 'var(--text-muted)', fontSize: '13px' }}>
-            Matriz lista para revisar y copiar rápidamente a Excel.
-          </p>
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+            <h3
+              style={{
+                fontSize: '17px',
+                fontWeight: 700,
+                margin: 0,
+                color: 'var(--text-main)',
+                letterSpacing: 0,
+              }}
+            >
+              {title}
+            </h3>
+            <Tooltip content="Matriz lista para revisar y copiar rapidamente a Excel.">
+              <span
+                className="report-screen-only"
+                tabIndex={0}
+                style={{
+                  width: '22px',
+                  height: '22px',
+                  borderRadius: '999px',
+                  display: 'inline-grid',
+                  placeItems: 'center',
+                  color: 'var(--text-muted)',
+                  background: 'rgba(var(--accent-rgb),0.08)',
+                  border: '1px solid rgba(var(--accent-rgb),0.14)',
+                }}
+                aria-label="Contexto de tabla exportable"
+              >
+                <Info size={12} aria-hidden="true" />
+              </span>
+            </Tooltip>
+          </div>
         </div>
         <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'center' }}>
           <div

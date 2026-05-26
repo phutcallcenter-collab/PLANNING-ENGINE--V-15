@@ -5,11 +5,13 @@ import {
   AlertTriangle,
   ArrowRight,
   Download,
+  Info,
   Link2,
   Printer,
   Trash2,
 } from 'lucide-react';
 import { useAppStore } from '@/store/useAppStore';
+import { Tooltip } from '@/ui/components/Tooltip';
 import { useDashboardStore } from '@/ui/reports/analysis-beta/store/dashboard.store';
 import {
   buildComparisonPeriodSummary,
@@ -223,7 +225,7 @@ function OperationalCompetitiveSurface({
             alignItems: 'flex-start',
           }}
         >
-          <div style={{ display: 'grid', gap: '6px', maxWidth: '780px' }}>
+          <div style={{ display: 'grid', gap: '6px', maxWidth: '720px' }}>
             <div
               style={{
                 fontSize: '0.72rem',
@@ -235,35 +237,47 @@ function OperationalCompetitiveSurface({
             >
               Ranking operativo
             </div>
-            <h2
-              style={{
-                margin: 0,
-                fontSize: '1.35rem',
-                fontWeight: 800,
-                letterSpacing: 0,
-              }}
-            >
-              Transacciones del acumulado mensual · incidencias del sistema
-            </h2>
-            <p
-              style={{
-                margin: 0,
-                color: 'var(--text-muted)',
-                lineHeight: 1.55,
-                fontSize: '0.9rem',
-              }}
-            >
-              Fuente transaccional única: análisis de llamadas / Call Center. La vista de{' '}
-              {periodKind === 'DAY' ? 'día' : periodKind === 'WEEK' ? 'semana' : 'mes'} usa
-              el mismo acumulado operativo; las incidencias se leen del sistema.
-            </p>
+            <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+              <h2
+                style={{
+                  margin: 0,
+                  fontSize: '1.12rem',
+                  fontWeight: 800,
+                  letterSpacing: 0,
+                }}
+              >
+                Acumulado por representante
+              </h2>
+              <Tooltip
+                content={`Fuente transaccional única: análisis de llamadas / Call Center. La vista de ${
+                  periodKind === 'DAY' ? 'día' : periodKind === 'WEEK' ? 'semana' : 'mes'
+                } usa el mismo acumulado operativo; las incidencias se leen del sistema.`}
+              >
+                <span
+                  tabIndex={0}
+                  style={{
+                    width: '24px',
+                    height: '24px',
+                    borderRadius: '999px',
+                    display: 'inline-grid',
+                    placeItems: 'center',
+                    color: 'var(--text-muted)',
+                    background: 'rgba(var(--accent-rgb),0.08)',
+                    border: '1px solid rgba(var(--accent-rgb),0.14)',
+                  }}
+                  aria-label="Contexto del ranking operativo"
+                >
+                  <Info size={13} aria-hidden="true" />
+                </span>
+              </Tooltip>
+            </div>
           </div>
 
           <div
             style={{
               display: 'grid',
               gap: '10px',
-              minWidth: '260px',
+              minWidth: '220px',
             }}
           >
             <div
@@ -271,7 +285,7 @@ function OperationalCompetitiveSurface({
                 borderRadius: '18px',
                 border: '1px solid var(--shell-border)',
                 background: 'rgba(255,255,255,0.48)',
-                padding: '12px 14px',
+                padding: '10px 12px',
               }}
             >
               <div
@@ -285,7 +299,7 @@ function OperationalCompetitiveSurface({
               >
                 Período
               </div>
-              <div style={{ marginTop: '4px', fontSize: '1rem', fontWeight: 800 }}>
+              <div style={{ marginTop: '4px', fontSize: '0.95rem', fontWeight: 800 }}>
                 {currentPeriod.label}
               </div>
               <div style={{ marginTop: '4px', color: 'var(--text-muted)', fontSize: '0.82rem' }}>
@@ -361,10 +375,12 @@ function OperationalCompetitiveSurface({
       </section>
 
       <div
+        className="operational-competitive-shift-stack"
         style={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(420px, 1fr))',
+          gridTemplateColumns: 'minmax(0, 1fr)',
           gap: '18px',
+          width: '100%',
         }}
       >
         <OperationalCompetitiveShiftLeaderboard
@@ -907,7 +923,7 @@ export function OperationalCompetitivePanel({
   }
 
   return (
-    <div style={{ display: 'grid', gap: '20px' }}>
+    <div className="report-print-root" style={{ display: 'grid', gap: '20px' }}>
       <section
         style={{
           borderRadius: '28px',
